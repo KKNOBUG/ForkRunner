@@ -12,13 +12,12 @@ from typing import List
 from fastapi import FastAPI
 from tortoise.expressions import Q
 
-from applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate
+from applications.aotutest.models.autotest_model import (
+    AutoTestApiTagInfo,
+)
 from applications.aotutest.schemas.autotest_project_schema import AutoTestApiProjectCreate
-from applications.aotutest.schemas.autotest_step_schema import AutoTestApiStepCreate
 from applications.aotutest.schemas.autotest_tag_schema import AutoTestApiTagCreate
-from applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
 from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
-from applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
 from applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
 from applications.base.models.menu_model import Menu
 from applications.base.models.router_model import Router
@@ -32,7 +31,6 @@ from applications.department.services.department_crud import DepartmentCrud
 from applications.user.schemas.user_schema import UserCreate
 from applications.user.services.user_crud import UserCrud
 from configure import LOGGER
-from enums import AutoTestStepType
 from enums import MenuType
 
 
@@ -45,20 +43,28 @@ async def init_database_role():
 
     admin_role = await role_crud.create_role(
         RoleCreate(
-            code="ROLE-9999",
-            name="超级用户",
-            description="超级用户角色"
+            code="Administrators",
+            name="管理员",
+            description="拥有完整系统权限"
         )
     )
-    normal_role = await role_crud.create_role(
+    user_role = await role_crud.create_role(
         RoleCreate(
-            code="ROLE-1001",
-            name="普通用户",
-            description="普通用户角色"
+            code="Users",
+            name="标准用户",
+            description="不能随意修改系统设置"
+        )
+    )
+    guest_role = await role_crud.create_role(
+        RoleCreate(
+            code="Guests",
+            name="宾客用户",
+            description="权限极低，受限访问，默认禁用"
         )
     )
     LOGGER.info(f"创建[超级用户]角色成功: {admin_role.name} (id: {admin_role.id}, code: {admin_role.code})")
-    LOGGER.info(f"创建[普通用户]角色成功: {normal_role.name} (id: {normal_role.id}, code: {normal_role.code})")
+    LOGGER.info(f"创建[普通用户]角色成功: {user_role.name} (id: {user_role.id}, code: {user_role.code})")
+    LOGGER.info(f"创建[普通用户]角色成功: {guest_role.name} (id: {guest_role.id}, code: {guest_role.code})")
 
     # 为超级用户角色分配所有的路由
     all_routers = await Router.all()
@@ -69,13 +75,13 @@ async def init_database_role():
     # Router.tags 来自 FastAPI include_router 的 tags（如“基础服务”“用户服务”），
     # 因此这里使用模糊匹配“基础”，避免精确字符串不一致导致普通用户无法访问。
     basic_routers = await Router.filter(Q(method__in=["GET"]) | Q(tags__icontains="基础"))
-    await normal_role.routers.add(*basic_routers)
+    await user_role.routers.add(*basic_routers)
     LOGGER.info(f"角色[超级用户]绑定路由成功, 共计{len(basic_routers)}个")
 
     # 为超级用户角色和普通用户角色分配所有的菜单
     all_menus = await Menu.all()
     await admin_role.menus.add(*all_menus)
-    await normal_role.menus.add(*all_menus)
+    await user_role.menus.add(*all_menus)
     LOGGER.info(f"角色[超级用户]绑定菜单成功, 共计{len(all_menus)}个")
     LOGGER.info(f"角色[普通用户]绑定菜单成功, 共计{len(all_menus)}个")
 
@@ -676,12 +682,6 @@ async def init_database_tag():
         ),
         AutoTestApiTagCreate(
             tag_project=1,
-            tag_mode="技术研发部",
-            tag_name="运维工程师",
-            tag_desc=None,
-        ),
-        AutoTestApiTagCreate(
-            tag_project=1,
             tag_mode="市场营销部",
             tag_name="新媒体运营",
             tag_desc=None,
@@ -699,148 +699,10 @@ async def init_database_tag():
             tag_desc=None,
         ),
     ]
-    await tag_crud.model.bulk_create(*tag_data)
+    await tag_crud.model.bulk_create(
+        [AutoTestApiTagInfo(**tag.model_dump()) for tag in tag_data]
+    )
     LOGGER.info(f"创建[标签]成功")
-
-
-async def init_database_case():
-    case_crud = AutoTestApiCaseCrud()
-    case_table = await case_crud.model.exists()
-    if case_table:
-        LOGGER.info("[用例]数据表已存在，跳过初始化")
-        return
-
-    cases: List[AutoTestApiCaseCreate] = [
-
-    ]
-    await case_crud.model.bulk_create(*cases)
-    LOGGER.info(f"创建[用例]成功")
-
-
-async def init_database_step():
-    step_crud = AutoTestApiStepCrud()
-    step_table = await step_crud.model.exists()
-    if step_table:
-        LOGGER.info("[步骤]数据表已存在，跳过初始化")
-        return
-
-    steps: List[AutoTestApiStepCreate] = [
-        AutoTestApiStepCreate(
-            case_id=1,
-            step_no=1,
-            step_name="用户自定义变量池",
-            step_type=AutoTestStepType.USER_VARIABLES,
-            step_desc="用户自定义的变量, 提供后续步骤使用",
-            created_user="admin",
-            session_variables=[
-                {
-                    "key": "name",
-                    "desc": "姓名",
-                    "value": "${generate_name()}"
-                },
-                {
-                    "key": "ident",
-                    "desc": "年龄",
-                    "value": "${generate_ident_card_number_condition(min_age=18, max_age=18)}"
-                },
-                {
-                    "key": "city",
-                    "desc": "城市",
-                    "value": "${generate_city()}"
-                },
-                {
-                    "key": "country",
-                    "desc": "国家",
-                    "value": "${generate_country()}"
-                },
-                {
-                    "key": "province",
-                    "desc": "省份",
-                    "value": "${generate_province()}"
-                },
-                {
-                    "key": "address",
-                    "desc": "地址",
-                    "value": "${generate_address()}"
-                },
-                {
-                    "key": "age_phone",
-                    "desc": "",
-                    "value": "18_${generate_phone()}"
-                },
-                {
-                    "key": "randomNum",
-                    "desc": "",
-                    "value": "${generate_datetime(year=0, month=0, day=0, hour=0, minute=0, second=0, fmt=52, isMicrosecond=False)}"
-                }
-            ]
-        ),
-        AutoTestApiStepCreate(
-            case_id=1,
-            step_no=2,
-            step_name="登录KRUN测管平台",
-            step_type=AutoTestStepType.HTTP,
-            step_desc="输入正确的账号和密码完成登录",
-            created_user="admin",
-            request_url="http://172.20.10.2:8518/base/auth/access_token",
-            request_method="POST",
-            request_args_type="json",
-            request_header=[
-                {
-                    "key": "X-name",
-                    "desc": "自定义请求头参数姓名",
-                    "value": "张三"
-                },
-                {
-                    "key": "X-random",
-                    "desc": "自定义请求头参数随机数",
-                    "value": "${generate_random_int(min_=1, max_=10)}"
-                }
-            ],
-            request_body={
-                "password": "${password}",
-                "username": "${username}"
-            },
-            defined_variables=[
-                {
-                    "key": "username",
-                    "desc": "",
-                    "value": "admin"
-                },
-                {
-                    "key": "password",
-                    "desc": "",
-                    "value": "123456"
-                }
-            ],
-            extract_variables=[
-                {
-                    "expr": "$.data.access_token",
-                    "name": "access_token",
-                    "index": 0,
-                    "range": "SOME",
-                    "source": "Response Json"
-                }
-            ],
-            assert_validators=[
-                {
-                    "expr": "$.code",
-                    "name": "code",
-                    "source": "Response Json",
-                    "operation": "等于",
-                    "except_value": "000000"
-                },
-                {
-                    "expr": "$.message",
-                    "name": "message",
-                    "source": "Response Json",
-                    "operation": "等于",
-                    "except_value": "请求成功"
-                }
-            ],
-        ),
-    ]
-    await step_crud.model.bulk_create(*steps)
 
 
 async def init_database_table(app: FastAPI):
@@ -851,4 +713,3 @@ async def init_database_table(app: FastAPI):
     await init_database_router(app)
     await init_database_project()
     await init_database_tag()
-    await init_database_case()
