@@ -41,7 +41,7 @@ from applications.aotutest.schemas.autotest_step_schema import (
     StepsExecuteConfigBase,
 )
 from applications.aotutest.services.autotest_data_source_crud import delete_step_create
-from applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
+from applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine, RedisStepExecutor
 from applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from common import AioTcpClient, TcpFrameMode, AsyncTcpUtils
 from common.cache.redis_connection_pool import get_app_redis_pool
@@ -543,35 +543,18 @@ async def validate_step_tree(
 
         is_valid: bool = is_valid_structure and not field_errors and not variable_errors
 
-        # 摘要
-        def _count_steps(items: List[AutoTestStepTreeUpdateItem]) -> int:
-            """
-            递归统计步骤树节点总数（含children/quote_steps）。
-
-            :param items: 步骤列表
-            :return: 节点总数
-            """
-            total: int = 0
-            for s in items:
-                total += 1
-                total += _count_steps(s.children or [])
-                total += _count_steps(s.quote_steps or [])
-            return total
-
+        total_steps: int = 0
         step_types: List[str] = []
+        walk: List[AutoTestStepTreeUpdateItem] = list(steps)
+        while walk:
+            node = walk.pop()
+            total_steps += 1
+            step_types.append(str(node.step_type) if node.step_type else "N/A")
+            if node.children:
+                walk.extend(node.children)
+            if node.quote_steps:
+                walk.extend(node.quote_steps)
 
-        def _collect_types(items: List[AutoTestStepTreeUpdateItem]) -> None:
-            """
-            递归收集步骤树中各节点的step_type到外层step_types。
-
-            :param items: 步骤列表
-            """
-            for s in items:
-                step_types.append(str(s.step_type) if s.step_type else "N/A")
-                _collect_types(s.children or [])
-                _collect_types(s.quote_steps or [])
-
-        _collect_types(steps)
         has_container: bool = any(
             str(s.step_type) in (str(AutoTestStepType.LOOP), str(AutoTestStepType.IF))
             for s in steps
@@ -583,7 +566,7 @@ async def validate_step_tree(
             "field_errors": field_errors,
             "variable_errors": variable_errors,
             "summary": {
-                "total_steps": _count_steps(steps),
+                "total_steps": total_steps,
                 "step_types": step_types,
                 "has_container": has_container,
             },
@@ -689,16 +672,10 @@ async def debug_http_request(
                 LOGGER.error(f"HTTP请求调试失败, 异常描述: {e}\n{traceback.format_exc()}")
                 return FailureResponse(message=f"HTTP请求调试失败，异常描述: {e}")
 
-        # 记录执行日志，用于前端反馈
         debugging_logs: List[str] = []
 
-        # 日志辅助函数：添加时间戳和步骤名称
         def append_debugging_log(message: str) -> None:
-            """
-            将带时间戳与步骤名的调试日志追加到debugging_logs。
-
-            :param message: 日志内容
-            """
+            """追加带时间戳与步骤名的调试日志。"""
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
             debugging_logs.append(f"[{timestamp}] [{step_name}] {message}")
 
@@ -710,13 +687,12 @@ async def debug_http_request(
                     f"请求方法: {request_method}\n\t"
                     f"请求地址: {request_url}"
         )
-        # 解析请求参数（列表格式）及request_body、request_text中的占位符
         finished_variables: List[StepVariablesBase] = AutoTestToolService.resolve_placeholders(
             value=initial_var_models,
             logger_object=append_debugging_log,
             finished_variables={}
         )
-        # 变量池提取/断言使用解析后的值（否则仍会命中 ${generate_xxx(...)} 原文）
+        # resolve_placeholders 结果回写变量池，避免断言/提取仍命中未解析占位符
         for item in finished_variables:
             if isinstance(item, StepVariablesBase) and item.key:
                 merged_all_variables[item.key] = item.value
@@ -1024,16 +1000,10 @@ async def debug_tcp_request(
             StepVariablesBase(key=k, value=v, desc="") for k, v in merge_all_variables.items()
         ]
 
-        # 记录执行日志，用于前端反馈
         debugging_logs: List[str] = []
 
-        # 日志辅助函数：添加时间戳和步骤名称
         def append_debugging_log(message: str) -> None:
-            """
-            将带时间戳与步骤名的调试日志追加到debugging_logs。
-
-            :param message: 日志内容
-            """
+            """追加带时间戳与步骤名的调试日志。"""
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
             debugging_logs.append(f"[{timestamp}] [{step_name}] {message}")
 
@@ -1124,16 +1094,18 @@ async def debug_tcp_request(
         max_response_bytes = step_data.tcp_max_response_bytes or (10 * 1024 * 1024)
         response_type = (step_data.tcp_response_type or "text").strip().lower()
 
-        def _to_timedelta(v: Any) -> Optional[timedelta]:
-            if v is None or v == "":
-                return None
+        connect_td: Optional[timedelta] = None
+        if step_data.tcp_connect_timeout not in (None, ""):
             try:
-                return timedelta(seconds=float(v))
+                connect_td = timedelta(seconds=float(step_data.tcp_connect_timeout))
             except Exception:
-                return None
-
-        connect_td = _to_timedelta(step_data.tcp_connect_timeout)
-        read_td = _to_timedelta(step_data.tcp_read_timeout)
+                connect_td = None
+        read_td: Optional[timedelta] = None
+        if step_data.tcp_read_timeout not in (None, ""):
+            try:
+                read_td = timedelta(seconds=float(step_data.tcp_read_timeout))
+            except Exception:
+                read_td = None
 
         start_time = time.time()
         async with AioTcpClient(
@@ -1381,26 +1353,6 @@ async def debug_python_code(
         return FailureResponse(message=f"Python代码调试异常", data=response_data)
 
 
-def _has_effective_redis_result(command_results: Optional[List[Any]]) -> bool:
-    """
-    判断 Redis 命令结果列表中是否存在有效（非空）结果。
-
-    :param command_results: 命令返回值列表
-    :return: 存在有效结果则为 True
-    """
-    if not command_results:
-        return False
-    for result in command_results:
-        if result is None:
-            continue
-        if isinstance(result, (list, tuple, dict)) and len(result) == 0:
-            continue
-        if isinstance(result, str) and not str(result).strip():
-            continue
-        return True
-    return False
-
-
 @autotest_step.post("/redis_debugging", summary="调试Redis请求")
 async def debug_redis_request(
         step_data: AutoTestRedisDebugRequest = Body(..., description="Redis请求步骤数据"),
@@ -1437,11 +1389,7 @@ async def debug_redis_request(
         debugging_logs: List[str] = []
 
         def append_debugging_log(message: str) -> None:
-            """
-            将带时间戳与步骤名的调试日志追加到debugging_logs。
-
-            :param message: 日志内容
-            """
+            """追加带时间戳与步骤名的调试日志。"""
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
             debugging_logs.append(f"[{timestamp}] [{step_name}] {message}")
 
@@ -1627,7 +1575,7 @@ async def debug_redis_request(
                 })
                 append_debugging_log(message=f"{operate_no}：执行完成, 命令数={redis_count}")
 
-                if redis_searched and _has_effective_redis_result(redis_data):
+                if redis_searched and RedisStepExecutor._has_effective_redis_result(redis_data):
                     append_debugging_log(
                         message=f"【Redis请求】查到即止：{operate_no}已返回有效结果，已终止后续命令"
                     )
@@ -1733,10 +1681,7 @@ async def execute_step_tree(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    执行或调试步骤树。
-
-    入参与 yangkai execute_step_tree 对齐：不传 execute_type，
-    由是否携带 steps 判定运行模式 / 调试模式；执行逻辑沿用本项目实现。
+    执行或调试步骤树。无 steps 为运行模式，有 steps 为调试模式。
 
     :param request: 业务入参
     :param services: 自动化测试CRUD依赖聚合
@@ -1758,7 +1703,7 @@ async def execute_step_tree(
             )
 
         def serialize_result(r: Any) -> Dict[str, Any]:
-            """将步骤执行结果对象递归序列化为可返回的字典。"""
+            """递归序列化步骤执行结果（含 children）。"""
             return {
                 "case_id": r.case_id,
                 "step_id": r.step_id,
@@ -1872,21 +1817,15 @@ async def execute_step_tree(
                 "case_name": case_instance.case_name,
             }
 
-        def merge_variable_lists(*variables: List[StepVariablesBase]) -> List[StepVariablesBase]:
-            """根据 key 合并多组变量，后者覆盖前者。"""
-            merged: Dict[str, StepVariablesBase] = {}
-            for variable in variables:
-                for var in variable:
-                    key: str = var.key
-                    if key:
-                        merged[key] = var
-            return list(merged.values())
-
         collected_session_variables: List[StepVariablesBase] = AutoTestToolService.collect_session_variables(steps)
-        merged_variables: List[StepVariablesBase] = merge_variable_lists(
-            collected_session_variables,
-            initial_variables or [],
-        )
+        merged_map: Dict[str, StepVariablesBase] = {}
+        for var in collected_session_variables:
+            if var.key:
+                merged_map[var.key] = var
+        for var in (initial_variables or []):
+            if var.key:
+                merged_map[var.key] = var
+        merged_variables: List[StepVariablesBase] = list(merged_map.values())
         all_root_steps: List[AutoTestStepTreeUpdateItem] = [step for step in steps if step.parent_step_id is None]
         if not all_root_steps:
             return BadReqResponse(message="没有可执行的根步骤")

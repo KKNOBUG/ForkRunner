@@ -511,13 +511,7 @@ class AutoTestCaseRunInfo(BaseModel):
 
 
 class AutoTestStepTreeExecute(BaseModel):
-    """
-    步骤树执行/调试入参（与 yangkai AutoTestStepTreeExecute 对齐）。
-
-    模式判定（不传 execute_type）：
-    - 运行模式：仅传 case_id，不传 steps（或 steps 为空）
-    - 调试模式：传 case_id + steps
-    """
+    """步骤树执行/调试入参。无由视图根据是否携带 steps 判定运行/调试模式。"""
 
     case_id: int = Field(..., description="用例ID(运行模式和调试模式都必填)")
     steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(
@@ -528,7 +522,6 @@ class AutoTestStepTreeExecute(BaseModel):
         None,
         description="会话变量(初始变量池), 列表项含key、value、desc字段",
     )
-    # 脚本执行配置: { step_id 或 @@step_name: {env_name, config_type(APP|FILE|DB|REDIS), ...} }
     steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = Field(
         default=None,
         description="脚本执行配置作用环境",
@@ -537,13 +530,6 @@ class AutoTestStepTreeExecute(BaseModel):
         None,
         description="选中的数据集名称列表，运行模式可选多条，调试模式仅可选1条",
     )
-
-    @model_validator(mode="after")
-    def validate_case_id(self):
-        """运行/调试均要求 case_id。"""
-        if self.case_id is None:
-            raise ValueError("必须提供[case_id]参数（运行模式和调试模式都需要）")
-        return self
 
 
 class AutoTestBatchExecuteCases(BaseModel):

@@ -246,15 +246,14 @@ class AutoTestApiDetailVarBase(BaseModel):
         if executive_logger:
             base = v.get("step_exec_logger")
             extra = "\n".join(str(x) for x in executive_logger if x is not None and str(x) != "")
-            if not extra:
-                pass
-            elif base is None or base == "":
-                v["step_exec_logger"] = extra
-            elif isinstance(base, list):
-                base_list = [str(x) for x in base if x is not None and str(x) != ""]
-                v["step_exec_logger"] = "\n".join(base_list + [str(x) for x in executive_logger])
-            else:
-                v["step_exec_logger"] = f"{base}\n{extra}"
+            if extra:
+                if base is None or base == "":
+                    v["step_exec_logger"] = extra
+                elif isinstance(base, list):
+                    base_list = [str(x) for x in base if x is not None and str(x) != ""]
+                    v["step_exec_logger"] = "\n".join(base_list + [str(x) for x in executive_logger])
+                else:
+                    v["step_exec_logger"] = f"{base}\n{extra}"
 
         return v
 

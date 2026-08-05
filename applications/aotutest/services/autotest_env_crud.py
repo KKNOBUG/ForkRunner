@@ -346,11 +346,8 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         """
         按节点类型聚合环境名称（直接读环境主表）。
 
-        :param project_id:
-            - None: 返回 {APP/FILE/DB: [env_name, ...]}
-            - []: 返回库中全部 project_id 的映射
-            - [ids]: 返回指定应用映射（无数据时对应 value 为空字典）
-        :return: 聚合后的环境名称结构
+        :param project_id: None=全局聚合；[]=全部应用；[ids]=指定应用
+        :return: {APP/FILE/DB: [...]} 或 {project_id: {APP/FILE/DB: [...]}}
         :raises ParameterException: 查询异常
         """
         try:

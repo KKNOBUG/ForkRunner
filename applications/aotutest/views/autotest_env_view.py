@@ -198,6 +198,13 @@ async def query_classify_env_config(
         env_config_in: AutoTestApiEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按应用ID列表查询环境配置并分类返回。
+
+    :param env_config_in: 含 project_ids 的查询入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
     try:
         data = await services.env_config_curd.query_classified_by_project_ids(
             project_ids=env_config_in.project_ids,

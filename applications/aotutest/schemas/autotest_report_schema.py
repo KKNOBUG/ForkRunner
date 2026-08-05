@@ -62,9 +62,7 @@ class AutoTestApiReportUpdate(AutoTestApiReportBase):
 
 
 class AutoTestApiReportSelect(BaseModel):
-    """
-    分页查询测试报告入参。
-    """
+    """分页查询测试报告入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=5, description="每页数量")
@@ -77,11 +75,10 @@ class AutoTestApiReportSelect(BaseModel):
     report_code: Optional[str] = Field(None, description="报告标识代码")
     report_type: Optional[AutoTestReportType] = Field(
         default=AutoTestReportType.ASYNC_EXEC,
-        description="报告类型（默认异步执行，与 zzt/autoapitool 一致）",
+        description="报告类型（默认异步执行）",
     )
     task_code: Optional[str] = Field(None, description="任务标识代码（未传则仅查 task_code 为空的报告）")
     batch_code: Optional[str] = Field(None, description="批次标识代码")
-    # True：仅用例页执行/调试产生的报告（task_code 为空或空串），优先于 task_code 精确匹配
     exclude_task_code: Optional[bool] = Field(None, description="是否排除带任务标识的报告")
 
     case_state: Optional[bool] = Field(None, description="用例执行状态(True:成功, False:失败)")
@@ -90,9 +87,8 @@ class AutoTestApiReportSelect(BaseModel):
     step_pass_ratio: Optional[float] = Field(None, ge=0, description="用例步骤成功率(含所有子级步骤)")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
-    # 执行时间范围（根据用例执行开始时间case_st_time筛选，格式YYYY-MM-DD或YYYY-MM-DD HH:mm:ss）
-    date_from: Optional[str] = Field(None, description="执行开始时间-起")
-    date_to: Optional[str] = Field(None, description="执行开始时间-止")
+    date_from: Optional[str] = Field(None, description="执行开始时间-起(YYYY-MM-DD或带时分秒)")
+    date_to: Optional[str] = Field(None, description="执行开始时间-止(YYYY-MM-DD或带时分秒)")
 
 
 class AutoTestApiReportBatchSelect(BaseModel):

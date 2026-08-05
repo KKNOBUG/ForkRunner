@@ -316,10 +316,11 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             project_ids: List[int],
     ) -> Dict[int, Dict[str, Dict[str, Dict[str, Dict[str, Any]]]]]:
         """
-        按应用ID列表查询未删除配置，并按 yangkai 兼容结构分类。
+        按应用ID列表查询未删除配置并分类。
 
-        返回：project_id -> env_name -> APP|FILE|DB -> config_name ->
-        {config_host, config_port, database_name}
+        :param project_ids: 应用ID列表
+        :return: project_id -> env_name -> APP|FILE|DB -> config_name -> 主机信息
+        :raises ParameterException: project_ids为空
         """
         if not project_ids:
             error_message: str = "按应用列表查询环境配置失败, 参数(project_ids)不允许为空"
@@ -450,7 +451,14 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         return fields
 
     def _serialize_typed_config(self, instance: AutoTestApiEnvConfigInfo, env_name: str, env_type: int) -> Dict[str, Any]:
-        """将配置实例序列化为按节点类型拆分字段的响应结构。"""
+        """
+        将配置实例序列化为按节点类型拆分字段的响应结构。
+
+        :param instance: 配置ORM实例
+        :param env_name: 环境名称
+        :param env_type: 节点类型 1/2/3
+        :return: 前端约定字段字典
+        """
         host = instance.config_host
         port = instance.config_port
         return {
@@ -479,7 +487,16 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             env_type: int,
             user: str,
     ) -> AutoTestApiEnvEnumInfo:
-        """按应用+环境名+节点类型获取或创建环境主表记录。"""
+        """
+        按应用+环境名+节点类型获取或创建环境主表记录。
+
+        :param project_id: 应用ID
+        :param env_name: 环境名称（会规范化为大写）
+        :param env_type: 节点类型 1/2/3
+        :param user: 操作人
+        :return: 环境主表实例
+        :raises ParameterException: env_name为空
+        """
         name = (env_name or "").strip().upper()
         if not name:
             raise ParameterException(message="参数[env]不允许为空")
@@ -503,7 +520,18 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             mapped: Dict[str, Any],
             exclude_id: Optional[int] = None,
     ) -> None:
-        """校验同应用+环境+类型下 host/port(/database_name) 唯一。"""
+        """
+        校验同应用+环境+类型下 host/port(/database_name) 唯一。
+
+        :param project_id: 应用ID
+        :param env_id: 环境ID
+        :param config_type: 配置类型枚举值
+        :param env_type: 节点类型编码
+        :param mapped: 已映射的落库字段
+        :param exclude_id: 更新时排除的配置ID
+        :return: None
+        :raises DataAlreadyExistsException: 主机配置冲突
+        """
         host = mapped.get("config_host")
         if not host:
             return
@@ -793,9 +821,14 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     async def test_db_connection(self, config_id: int, app_id: str, env: str, config_name: str, db_name: str) -> Dict[str, Any]:
         """
-        校验 DB 配置存在后创建连接池。
+        校验DB配置存在后创建连接池。
 
-        :return: {code, status, message, data} 结构字典
+        :param config_id: 配置ID
+        :param app_id: 应用ID
+        :param env: 环境名称
+        :param config_name: 配置名称
+        :param db_name: 数据库名称
+        :return: {code, status, message, data}
         """
         try:
             app_id_int = int(str(app_id).strip())

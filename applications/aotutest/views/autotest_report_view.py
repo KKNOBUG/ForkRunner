@@ -190,15 +190,9 @@ async def search_reports(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据条件查询报告。
+    按条件分页查询报告列表（筛选与出参对齐 zzt/autoapitool/report/search）。
 
-    筛选/出参与 /zzt/autoapitool/report/search 对齐，便于前端仅切换 URL：
-    - task_code 始终精确匹配（未传则 task_code IS NULL）
-    - report_type 默认异步执行并参与过滤
-    - step_pass_ratio 返回如 "85.00%" 的字符串
-    - 保留 updated_time；隐藏 created_user/created_time
-
-    :param report_in: 报告入参
+    :param report_in: 报告查询入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """

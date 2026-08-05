@@ -142,7 +142,6 @@ async def search_env_info(
                     state__not=1
                 ).values_list("id", "env_name")
             )
-        # 并发执行所有 to_dict 操作（核心：用gather批量处理异步任务）
         report_instances = await asyncio.gather(*[
             obj.to_dict(
                 exclude_fields={"state", "reserve_1", "reserve_2", "reserve_3"},
@@ -150,7 +149,6 @@ async def search_env_info(
             )
             for obj in instances
         ])
-        # 用列表推导式填充 case_name 并生成最终数据
         data = [
             {
                 **item,
@@ -425,11 +423,26 @@ async def test_db_connection(
         data: TestDBConnectionRequest,
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    """测试数据库连接并创建连接池。"""
-    return await services.env_config_curd.test_db_connection(
-        config_id=data.id,
-        app_id=data.app_id,
-        env=data.env,
-        config_name=data.config_name,
-        db_name=data.db_name,
-    )
+    """
+    测试数据库连接并创建连接池（出参为业务字典，非统一包装）。
+
+    :param data: 连接测试入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: {code, status, message, data}
+    """
+    try:
+        return await services.env_config_curd.test_db_connection(
+            config_id=data.id,
+            app_id=data.app_id,
+            env=data.env,
+            config_name=data.config_name,
+            db_name=data.db_name,
+        )
+    except Exception as e:
+        LOGGER.error(f"测试数据库连接失败: {e}\n{traceback.format_exc()}")
+        return {
+            "code": "999999",
+            "status": "failure",
+            "message": f"测试数据库连接失败：{e}",
+            "data": None,
+        }

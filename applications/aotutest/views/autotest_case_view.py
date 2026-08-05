@@ -417,7 +417,7 @@ async def search_cases(
                 else str(instance.case_type or "")
             )
             if is_public_api_query or instance_type == AutoTestCaseType.PUBLIC_API.value:
-                serialize["protocol"] = _protocol_from_step_type(case_step_type_map.get(case_id))
+                serialize["step_type"] = _protocol_from_step_type(case_step_type_map.get(case_id))
             case_serializes.append(serialize)
         LOGGER.info(f"按条件查询用例成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=case_serializes, total=total)

@@ -2481,17 +2481,18 @@ class TcpStepExecutor(BaseStepExecutor):
             max_response_bytes = self.step.tcp_max_response_bytes or (10 * 1024 * 1024)
             response_type = (self.step.tcp_response_type or "text").strip().lower()
 
-            def _to_timedelta(v: Any) -> Optional["timedelta"]:
-                """将秒数字符串/数值转为timedelta；空或非法返回None。"""
-                if v is None or v == "":
-                    return None
+            connect_td: Optional[timedelta] = None
+            if connect_timeout not in (None, ""):
                 try:
-                    return timedelta(seconds=float(v))
+                    connect_td = timedelta(seconds=float(connect_timeout))
                 except Exception:
-                    return None
-
-            connect_td = _to_timedelta(connect_timeout)
-            read_td = _to_timedelta(read_timeout)
+                    connect_td = None
+            read_td: Optional[timedelta] = None
+            if read_timeout not in (None, ""):
+                try:
+                    read_td = timedelta(seconds=float(read_timeout))
+                except Exception:
+                    read_td = None
 
             start = time.perf_counter()
             async with AioTcpClient(
@@ -3139,7 +3140,6 @@ class HttpStepExecutor(BaseStepExecutor):
         :raises StepExecutionError: URL/环境非法、请求配置或数据源处理异常、响应解析失败时抛出
         """
         try:
-            # 获取当前步骤的执行配置并处理请求URL
             request_url: str = (self.step.request_url or "").strip().lstrip("/")
             request_method: HTTPMethod = self.step.request_method
             current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config()
@@ -3151,7 +3151,6 @@ class HttpStepExecutor(BaseStepExecutor):
                     config_host: str = (current_step_config.config_host or "").strip().rstrip("/").rstrip(":")
                     config_port: str = (str(current_step_config.config_port).strip() if current_step_config.config_port else "")
                     self.step.request_config_name = config_name
-                    # 与 http_debugging / yangkai 一致：host 无协议时补 http://
                     if config_host and not config_host.lower().startswith(("http://", "https://")):
                         config_host = f"http://{config_host}"
                     request_url = (
