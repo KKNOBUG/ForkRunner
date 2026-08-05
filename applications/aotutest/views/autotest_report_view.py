@@ -192,6 +192,12 @@ async def search_reports(
     """
     根据条件查询报告。
 
+    筛选/出参与 /zzt/autoapitool/report/search 对齐，便于前端仅切换 URL：
+    - task_code 始终精确匹配（未传则 task_code IS NULL）
+    - report_type 默认异步执行并参与过滤
+    - step_pass_ratio 返回如 "85.00%" 的字符串
+    - 保留 updated_time；隐藏 created_user/created_time
+
     :param report_in: 报告入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
@@ -217,11 +223,11 @@ async def search_reports(
             q &= Q(report_code__contains=report_in.report_code)
         if report_in.report_type:
             q &= Q(report_type=report_in.report_type.value)
-        if report_in.task_code:
-            q &= Q(task_code__contains=report_in.task_code)
+        # 与 zzt 一致：始终按 task_code 精确匹配；未传时等价于 IS NULL
         if report_in.exclude_task_code:
-            # 用例执行历史：排除任务调度产生的报告（task_code 为空或未设置）
             q &= Q(task_code__isnull=True) | Q(task_code="")
+        else:
+            q &= Q(task_code=report_in.task_code)
         if report_in.batch_code:
             q &= Q(batch_code__contains=report_in.batch_code)
         if report_in.case_state is not None:
@@ -250,8 +256,6 @@ async def search_reports(
             page_size=report_in.page_size,
             order=report_in.order
         )
-        # 批量获取case_id并查询case_name
-        data = []
         case_ids = [obj.case_id for obj in instances]
         unique_case_ids = list(set(case_ids))
         case_name_map = {}
@@ -262,21 +266,31 @@ async def search_reports(
                     state__not=1
                 ).values_list("id", "case_name")
             )
-        # 并发执行所有to_dict操作（核心：用gather批量处理异步任务）
         report_instances = await asyncio.gather(*[
             obj.to_dict(
-                exclude_fields={"state", "created_time", "updated_time", "reserve_1", "reserve_2", "reserve_3"},
-                replace_fields={"id": "report_id"}
+                exclude_fields={
+                    "state",
+                    "created_user",
+                    "created_time",
+                    "reserve_1",
+                    "reserve_2",
+                    "reserve_3",
+                },
+                replace_fields={"id": "report_id"},
             )
             for obj in instances
         ])
-        # 用列表推导式填充case_name并生成最终数据
-        data = [
-            {**item, "case_name": case_name_map.get(item["case_id"], "")}
-            for item in report_instances
-        ]
+        data = []
+        for item in report_instances:
+            ratio = item.get("step_pass_ratio", 0) or 0
+            try:
+                item["step_pass_ratio"] = f"{round(float(ratio), 2)}%"
+            except (TypeError, ValueError):
+                item["step_pass_ratio"] = "0.0%"
+            item["case_name"] = case_name_map.get(item["case_id"], "")
+            data.append(item)
         LOGGER.info(f"根据条件查询报告成功, 结果数量: {total}")
-        return SuccessResponse(message="查询成功", data=data, total=total)
+        return SuccessResponse(message="报告列表查询成功", data=data, total=total)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:

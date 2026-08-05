@@ -1245,7 +1245,7 @@ class BaseStepExecutor:
         step_ed_time_str: str = step_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
         step_elapsed: str = f"{result.elapsed:.3f}" if result.elapsed is not None else "0.000"
         step_logs: List[str] = self.context.logs.get(self.step_code, [])
-        step_exec_logger: Optional[List[str]] = list(step_logs) if step_logs else None
+        step_exec_logger: Optional[str] = "\n".join(step_logs) if step_logs else None
         response_body = None
         response_text = None
         response_header = None
@@ -3146,12 +3146,19 @@ class HttpStepExecutor(BaseStepExecutor):
             env_name: Optional[str] = None
             if current_step_config:
                 if current_step_config.config_type == AutoTestConfigNodeType.API:
-                    env_name: str = current_step_config.env_name
+                    env_name = current_step_config.env_name
                     config_name: str = current_step_config.config_name
-                    config_host: str = current_step_config.config_host
-                    config_port: str = current_step_config.config_port
+                    config_host: str = (current_step_config.config_host or "").strip().rstrip("/").rstrip(":")
+                    config_port: str = (str(current_step_config.config_port).strip() if current_step_config.config_port else "")
                     self.step.request_config_name = config_name
-                    request_url = f"{config_host}:{config_port}/{request_url}"
+                    # 与 http_debugging / yangkai 一致：host 无协议时补 http://
+                    if config_host and not config_host.lower().startswith(("http://", "https://")):
+                        config_host = f"http://{config_host}"
+                    request_url = (
+                        f"{config_host}/{request_url}"
+                        if not config_port
+                        else f"{config_host}:{config_port}/{request_url}"
+                    )
 
             if not request_url or not request_url.lower().startswith("http") or not env_name:
                 raise StepExecutionError(f"【HTTP请求】URL[{request_url!r}]不是有效的HTTP/HTTPS地址或未明确执行环境")

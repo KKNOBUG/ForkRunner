@@ -64,7 +64,6 @@ from core.responses import (
     BadReqResponse
 )
 from enums import AutoTestReportType, AutoTestReqArgsType, AutoTestStepType, AutoTestConfigNodeType
-from services.ctx import get_current_username
 
 autotest_step = APIRouter()
 
@@ -1728,50 +1727,6 @@ async def debug_redis_request(
         return FailureResponse(message=f"Redis请求调试失败，异常描述: {e}")
 
 
-def _serialize_for_celery_initial_variables(
-        items: Optional[List[StepVariablesBase]],
-) -> List[Dict[str, Any]]:
-    """
-    将初始变量列表序列化为Celery可传递的纯dict列表。
-
-    :param items: StepVariablesBase或dict列表
-    :return: 序列化后的变量列表
-    """
-    if not items:
-        return []
-    out: List[Dict[str, Any]] = []
-    for it in items:
-        if hasattr(it, "model_dump"):
-            out.append(it.model_dump())
-        elif isinstance(it, dict):
-            out.append(it)
-        else:
-            out.append(dict(it))
-    return out
-
-
-def _serialize_for_celery_steps_execute_config(
-        cfg: Optional[Dict[str, StepsExecuteConfigBase]],
-) -> Optional[Dict[str, Any]]:
-    """
-    将步骤执行配置序列化为Celery可传递的纯dict。
-
-    :param cfg: 步骤执行配置映射
-    :return: 序列化后的配置，空则返回None
-    """
-    if not cfg:
-        return None
-    serialized: Dict[str, Any] = {}
-    for key, val in cfg.items():
-        if hasattr(val, "model_dump"):
-            serialized[key] = val.model_dump()
-        elif isinstance(val, dict):
-            serialized[key] = val
-        else:
-            serialized[key] = val
-    return serialized
-
-
 @autotest_step.post("/execute_or_debugging", summary="执行步骤树", description="执行或调试步骤树")
 async def execute_step_tree(
         request: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
@@ -1780,29 +1735,30 @@ async def execute_step_tree(
     """
     执行或调试步骤树。
 
+    入参与 yangkai execute_step_tree 对齐：不传 execute_type，
+    由是否携带 steps 判定运行模式 / 调试模式；执行逻辑沿用本项目实现。
+
     :param request: 业务入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
         case_id: int = request.case_id
-        execute_type: AutoTestReportType = request.execute_type
         steps: Optional[List[AutoTestStepTreeUpdateItem]] = request.steps
         initial_variables: Optional[List[StepVariablesBase]] = request.initial_variables
         steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = request.steps_execute_config
         selected_dataset_names: Optional[List[str]] = request.selected_dataset_names
 
-        if execute_type == AutoTestReportType.SYNC_EXEC:
-            return SuccessResponse(message="同步执行暂未开放", data=None, total=0)
+        # 与 yangkai 一致：无 steps → 运行模式；有 steps → 调试模式
+        is_run_mode = case_id is not None and (steps is None or len(steps) == 0)
+        is_debug_mode = case_id is not None and steps is not None and len(steps) > 0
+        if not is_run_mode and not is_debug_mode:
+            return BadReqResponse(
+                message="必须提供case_id参数，运行模式不传递steps，调试模式需要传递steps"
+            )
 
-        # 序列化执行结果
         def serialize_result(r: Any) -> Dict[str, Any]:
-            """
-            将步骤执行结果对象递归序列化为可返回的字典。
-
-            :param r: 单步执行结果
-            :return: 序列化后的结果字典（含 children）
-            """
+            """将步骤执行结果对象递归序列化为可返回的字典。"""
             return {
                 "case_id": r.case_id,
                 "step_id": r.step_id,
@@ -1820,49 +1776,10 @@ async def execute_step_tree(
                 "children": [serialize_result(c) for c in r.children],
             }
 
-        # ========== SCHEDULE_EXEC：Celery 后台执行 ==========
-        if execute_type == AutoTestReportType.SCHEDULE_EXEC:
+        # ========== 运行模式（本项目：同步执行已保存步骤树）==========
+        if is_run_mode:
             try:
-                from celery_scheduler.tasks.task_execute_assign_case import execute_step_tree_task
-
-                # 与 ASYNC_EXEC / 任务批量执行一致：同一次触发共用 batch_code，
-                # 多数据源时各报告才能归为「同一次执行」。
-                batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
-                celery_kwargs: Dict[str, Any] = {
-                    "case_id": case_id,
-                    "initial_variables": _serialize_for_celery_initial_variables(initial_variables),
-                    "report_type": AutoTestReportType.SCHEDULE_EXEC.value,
-                    "batch_code": batch_code,
-                    "selected_dataset_names": list(selected_dataset_names or []),
-                    "steps_execute_config": _serialize_for_celery_steps_execute_config(steps_execute_config),
-                    "created_user": get_current_username(),
-                }
-                apply_async_result = execute_step_tree_task.apply_async(
-                    kwargs=celery_kwargs,
-                    expires=3600,
-                )
-                exec_result = {
-                    "celery_task_id": apply_async_result.task_id,
-                    "task_state": apply_async_result.state,
-                    "case_id": case_id,
-                    "batch_code": batch_code,
-                    "execute_type": execute_type.value,
-                }
-                return SuccessResponse(
-                    message="任务已提交后台执行, 请稍候至报告中心查看结果",
-                    data=exec_result,
-                    total=1,
-                )
-            except Exception as e:
-                LOGGER.error(f"提交定时执行任务失败, case_id={case_id}, err={e}\n{traceback.format_exc()}")
-                return FailureResponse(message=f"提交后台执行失败，异常描述: {e}")
-
-        # ========== ASYNC_EXEC：运行模式（同步执行已保存步骤树）==========
-        if execute_type == AutoTestReportType.ASYNC_EXEC:
-            try:
-                # 参数化执行：根据 selected_dataset_names 长度循环，每次将 dataset_name 传入执行逻辑；数据在 HTTP 步骤执行器内根据 case_id/step_no/step_code/dataset_name 查表获取
                 if not selected_dataset_names:
-                    # 普通单次执行（无选中数据集）
                     batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
                     result_data: Dict[str, Any] = await services.step_curd.execute_single_case(
                         case_id=case_id,
@@ -1884,7 +1801,7 @@ async def execute_step_tree(
                         total=1,
                     )
 
-                # 参数化驱动执行（选中数据）；批次级用用例指标，details 内为各轮步骤指标
+                # 参数化驱动：本项目按数据集同步循环执行（非 yangkai Celery 下发）
                 details: List[Dict[str, Any]] = []
                 batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
                 for dataset_name in selected_dataset_names:
@@ -1934,116 +1851,110 @@ async def execute_step_tree(
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 return FailureResponse(message=f"执行步骤过程中发生异常，事务已回滚: {str(e)}")
 
-        # ========== DEBUG_EXEC：调试模式 ==========
-        if execute_type == AutoTestReportType.DEBUG_EXEC:
-            case_info: Optional[Dict[str, Any]] = None
-            if steps and getattr(steps[0], "case", None) and isinstance(steps[0].case, dict):
-                first_step: Dict[str, Any] = steps[0].case
-                case_info = {
-                    "case_id": first_step.get("case_id"),
-                    "case_code": first_step.get("case_code"),
-                    "case_name": first_step.get("case_name"),
-                }
-            if not case_info:
-                case_instance: AutoTestApiCaseInfo = await services.case_curd.get_by_id(
-                    case_id=case_id,
-                    on_error=True,
-                    state__not=1
-                )
-                case_info = {
-                    "case_id": case_id,
-                    "case_code": case_instance.case_code,
-                    "case_name": case_instance.case_name,
-                }
-
-            def merged_variables(*variables: List[StepVariablesBase]) -> List[StepVariablesBase]:
-                """
-                根据 key 合并多组变量，后者覆盖前者。
-
-                :param variables: 多组 StepVariablesBase 列表
-                :return: 去重合并后的变量列表
-                """
-                merged: Dict[str, StepVariablesBase] = {}
-                builtin_merged_append = merged.__setitem__
-                for variable in variables:
-                    for var in variable:
-                        key: str = var.key
-                        key and builtin_merged_append(key, var)
-                return list(merged.values())
-
-            collected_session_variables: List[StepVariablesBase] = AutoTestToolService.collect_session_variables(steps)
-            merged_variables: List[StepVariablesBase] = merged_variables(collected_session_variables, initial_variables)
-            all_root_steps: List[AutoTestStepTreeUpdateItem] = [step for step in steps if step.parent_step_id is None]
-            if not all_root_steps:
-                return BadReqResponse(message="没有可执行的根步骤")
-
-            # 6. 调试模式执行：选中的数据集名称必须且只能有一条，数据在 HTTP 步骤执行器内根据 case_id/step_no/step_code/dataset_name 查表获取
-            if selected_dataset_names:
-                if len(selected_dataset_names) != 1:
-                    return BadReqResponse(message="调试模式下 selected_dataset_names 必须且只能选择一条数据集")
-                debug_dataset_name: str = selected_dataset_names[0]
-            else:
-                debug_dataset_name: Optional[str] = None
-            # 与 ASYNC_EXEC / SCHEDULE_EXEC 一致：调试落库报告写入 batch_code，供历史记录根据批次聚合
-            batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
-            engine = AutoTestStepExecutionEngine(save_report=True, batch_code=batch_code)
-            results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
-                case=case_info,
-                steps=all_root_steps,
-                report_type=AutoTestReportType.DEBUG_EXEC,
-                steps_execute_config=steps_execute_config,
-                initial_variables=merged_variables,
-                dataset_name=debug_dataset_name,
-            )
-            async with in_transaction():
-                report_instance = await services.report_curd.create_report(report_in=defer_create_report)
-                for detail_create in (pending_create_details or []):
-                    await services.detail_curd.create_detail(detail_in=detail_create)
-                case_state: bool = statistics.get("failed_steps", 0) == 0
-                case_last_time: str = defer_create_report.case_ed_time
-                await services.case_curd.update_case(AutoTestApiCaseUpdate(
-                    case_id=case_id,
-                    case_state=case_state,
-                    case_last_time=case_last_time,
-                ))
-            # 7. 获取最终会话变量：merged_variables 与引擎返回的 session_variables（均为模型列表）根据 key 合并
-            final_m: Dict[str, StepVariablesBase] = {}
-            for it in merged_variables:
-                if it.key:
-                    final_m[it.key] = it
-            for it in (session_variables or []):
-                if isinstance(it, StepVariablesBase) and it.key:
-                    final_m[it.key] = it
-            final_session_variables = [v.model_dump(mode="json") for v in final_m.values()]
-
-            # 8. 返回调试模式的详细结果
-            total_steps: int = statistics.get("total_steps", 0)
-            success_steps: int = statistics.get("success_steps", 0)
-            failed_steps: int = statistics.get("failed_steps", 0)
-            passed_ratio: float = statistics.get("passed_ratio", 0.0)
-            result_data = {
-                "total_steps": total_steps,
-                "success_steps": success_steps,
-                "failed_steps": failed_steps,
-                "passed_ratio": passed_ratio,
-                "success": failed_steps == 0,
-                "results": [serialize_result(r) for r in results],
-                "logs": {str(k): v for k, v in logs.items()},
-                "session_variables": final_session_variables,
-                "saved_to_database": True,
-                "batch_code": batch_code,
-                "report_code": report_code,
+        # ========== 调试模式 ==========
+        case_info: Optional[Dict[str, Any]] = None
+        if steps and getattr(steps[0], "case", None) and isinstance(steps[0].case, dict):
+            first_step: Dict[str, Any] = steps[0].case
+            case_info = {
+                "case_id": first_step.get("case_id"),
+                "case_code": first_step.get("case_code"),
+                "case_name": first_step.get("case_name"),
             }
-            return SuccessResponse(
-                message=(
-                    f"调试完成, 共{total_steps}步骤, 成功{success_steps}步, "
-                    f"失败{failed_steps}步, 步骤通过率: {passed_ratio}%"
-                ),
-                data=result_data,
-                total=total_steps,
+        if not case_info:
+            case_instance: AutoTestApiCaseInfo = await services.case_curd.get_by_id(
+                case_id=case_id,
+                on_error=True,
+                state__not=1
             )
+            case_info = {
+                "case_id": case_id,
+                "case_code": case_instance.case_code,
+                "case_name": case_instance.case_name,
+            }
 
-        return BadReqResponse(message=f"不支持的执行类型: {execute_type}")
+        def merge_variable_lists(*variables: List[StepVariablesBase]) -> List[StepVariablesBase]:
+            """根据 key 合并多组变量，后者覆盖前者。"""
+            merged: Dict[str, StepVariablesBase] = {}
+            for variable in variables:
+                for var in variable:
+                    key: str = var.key
+                    if key:
+                        merged[key] = var
+            return list(merged.values())
+
+        collected_session_variables: List[StepVariablesBase] = AutoTestToolService.collect_session_variables(steps)
+        merged_variables: List[StepVariablesBase] = merge_variable_lists(
+            collected_session_variables,
+            initial_variables or [],
+        )
+        all_root_steps: List[AutoTestStepTreeUpdateItem] = [step for step in steps if step.parent_step_id is None]
+        if not all_root_steps:
+            return BadReqResponse(message="没有可执行的根步骤")
+
+        if selected_dataset_names:
+            if len(selected_dataset_names) != 1:
+                return BadReqResponse(message="调试模式下 selected_dataset_names 必须且只能选择一条数据集")
+            debug_dataset_name: str = selected_dataset_names[0]
+        else:
+            debug_dataset_name: Optional[str] = None
+
+        batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
+        engine = AutoTestStepExecutionEngine(save_report=True, batch_code=batch_code)
+        results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
+            case=case_info,
+            steps=all_root_steps,
+            report_type=AutoTestReportType.DEBUG_EXEC,
+            steps_execute_config=steps_execute_config,
+            initial_variables=merged_variables,
+            dataset_name=debug_dataset_name,
+        )
+        async with in_transaction():
+            report_instance = await services.report_curd.create_report(report_in=defer_create_report)
+            for detail_create in (pending_create_details or []):
+                await services.detail_curd.create_detail(detail_in=detail_create)
+            case_state: bool = statistics.get("failed_steps", 0) == 0
+            case_last_time: str = defer_create_report.case_ed_time
+            await services.case_curd.update_case(AutoTestApiCaseUpdate(
+                case_id=case_id,
+                case_state=case_state,
+                case_last_time=case_last_time,
+            ))
+
+        final_m: Dict[str, StepVariablesBase] = {}
+        for it in merged_variables:
+            if it.key:
+                final_m[it.key] = it
+        for it in (session_variables or []):
+            if isinstance(it, StepVariablesBase) and it.key:
+                final_m[it.key] = it
+        final_session_variables = [v.model_dump(mode="json") for v in final_m.values()]
+
+        total_steps: int = statistics.get("total_steps", 0)
+        success_steps: int = statistics.get("success_steps", 0)
+        failed_steps: int = statistics.get("failed_steps", 0)
+        passed_ratio: float = statistics.get("passed_ratio", 0.0)
+        # 出参字段与 yangkai 调试响应对齐；batch_code/report_code 为本项目扩展
+        result_data = {
+            "total_steps": total_steps,
+            "failed_steps": failed_steps,
+            "passed_ratio": passed_ratio,
+            "success_steps": success_steps,
+            "success": failed_steps == 0,
+            "results": [serialize_result(r) for r in results],
+            "logs": {str(k): v for k, v in logs.items()},
+            "session_variables": final_session_variables,
+            "saved_to_database": True,
+            "batch_code": batch_code,
+            "report_code": report_code or getattr(report_instance, "report_code", None),
+        }
+        return SuccessResponse(
+            message=(
+                f"调试完成, 共{total_steps}步骤, 成功{success_steps}步, "
+                f"失败{failed_steps}步, 成功率: {passed_ratio}%"
+            ),
+            data=result_data,
+            total=1,
+        )
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:

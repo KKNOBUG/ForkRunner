@@ -19,7 +19,6 @@ from enums import (
     AutoTestLoopErrorStrategy,
     AutoTestAssertionOperation,
     AutoTestConfigNodeType,
-    AutoTestReportType,
 )
 from enums import HTTPMethod
 
@@ -107,15 +106,36 @@ class StepVariablesBase(BaseModel):
     desc: Optional[str] = Field(None, max_length=2048, description="会话变量(描述)")
 
 
+# yangkai 前端固定传 APP/FILE/DB；归一为本项目枚举 api/file/database。REDIS 为本项目扩展。
+_STEPS_EXECUTE_CONFIG_TYPE_ALIASES: Dict[str, str] = {
+    "APP": AutoTestConfigNodeType.API.value,
+    "FILE": AutoTestConfigNodeType.FILE.value,
+    "DB": AutoTestConfigNodeType.DB.value,
+    "REDIS": AutoTestConfigNodeType.REDIS.value,
+}
+
+
 class StepsExecuteConfigBase(BaseModel):
     """步骤执行时环境配置覆盖基础字段模型。"""
 
     env_name: str = Field(..., max_length=128, description="环境名称")
-    config_type: AutoTestConfigNodeType = Field(..., description="配置类型")
+    config_type: AutoTestConfigNodeType = Field(..., description="配置类型(yangkai: APP/FILE/DB；扩展: REDIS)")
     config_name: str = Field(..., max_length=128, description="配置名称")
     config_host: str = Field(..., max_length=128, description="配置主机")
     config_port: str = Field(..., max_length=8, description="配置端口")
     database_name: Optional[str] = Field(None, max_length=128, description="数据库名称")
+
+    @field_validator("config_type", mode="before")
+    @classmethod
+    def normalize_config_type(cls, v: Any) -> Any:
+        """仅接受 APP/FILE/DB（及扩展 REDIS），映射为本项目枚举值。"""
+        if v is None or isinstance(v, AutoTestConfigNodeType):
+            return v
+        raw = v.value if hasattr(v, "value") else str(v).strip()
+        mapped = _STEPS_EXECUTE_CONFIG_TYPE_ALIASES.get(raw)
+        if mapped is None:
+            raise ValueError(f"config_type仅支持APP/FILE/DB/REDIS，当前值: {raw}")
+        return mapped
 
 
 class StepExtractVariableItem(BaseModel):
@@ -491,35 +511,38 @@ class AutoTestCaseRunInfo(BaseModel):
 
 
 class AutoTestStepTreeExecute(BaseModel):
-    """步骤树执行/调试入参。"""
+    """
+    步骤树执行/调试入参（与 yangkai AutoTestStepTreeExecute 对齐）。
 
-    case_id: int = Field(..., description="用例ID")
-    execute_type: AutoTestReportType = Field(..., description="执行类型(复用AutoTestReportType枚举)")
-    steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(DEBUG_EXEC必填；ASYNC_EXEC/SCHEDULE_EXEC不填)")
-    initial_variables: Optional[List[StepVariablesBase]] = Field(default_factory=list, description="初始变量池(列表项为key/value/desc)")
-    # 脚本执行配置：key=步骤ID(step_id) 或 @@{step_name}（当步骤未落库时），value=配置明细；空 dict 表示该步骤无配置覆盖
-    # { step_id 或 @@step_name: {env_name, config_type(api|database|file), config_name, config_host, config_port, database_name} }
-    steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = Field(default_factory=dict, description="脚本执行配置作用环境")
-    # 参数化驱动：ASYNC_EXEC/SCHEDULE_EXEC可传多条；DEBUG_EXEC仅可选一条
-    selected_dataset_names: Optional[List[str]] = Field(None, description="选中的数据集名称(列表运行/定时模式可选多条；调试模式仅可选一条)")
+    模式判定（不传 execute_type）：
+    - 运行模式：仅传 case_id，不传 steps（或 steps 为空）
+    - 调试模式：传 case_id + steps
+    """
 
-    @model_validator(mode='after')
-    def validate_execute_request(self):
-        """
-        根据execute_type校验steps是否必填或禁止传递。
+    case_id: int = Field(..., description="用例ID(运行模式和调试模式都必填)")
+    steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(
+        None,
+        description="步骤树数据(调试模式必填, 运行模式不填)",
+    )
+    initial_variables: Optional[List[StepVariablesBase]] = Field(
+        None,
+        description="会话变量(初始变量池), 列表项含key、value、desc字段",
+    )
+    # 脚本执行配置: { step_id 或 @@step_name: {env_name, config_type(APP|FILE|DB|REDIS), ...} }
+    steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = Field(
+        default=None,
+        description="脚本执行配置作用环境",
+    )
+    selected_dataset_names: Optional[List[str]] = Field(
+        None,
+        description="选中的数据集名称列表，运行模式可选多条，调试模式仅可选1条",
+    )
 
-        :return: 当前模型实例
-        """
+    @model_validator(mode="after")
+    def validate_case_id(self):
+        """运行/调试均要求 case_id。"""
         if self.case_id is None:
-            raise ValueError("参数[case_id]不允许为空")
-        has_steps = bool(self.steps)
-        et = self.execute_type
-        if et == AutoTestReportType.DEBUG_EXEC:
-            if not has_steps:
-                raise ValueError("参数[execute_type]为DEBUG_EXEC时必须传递[steps]")
-        elif et in (AutoTestReportType.ASYNC_EXEC, AutoTestReportType.SCHEDULE_EXEC):
-            if has_steps:
-                raise ValueError("参数[execute_type]非DEBUG_EXEC时无须传递[steps]")
+            raise ValueError("必须提供[case_id]参数（运行模式和调试模式都需要）")
         return self
 
 

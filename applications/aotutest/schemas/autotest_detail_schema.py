@@ -109,7 +109,7 @@ class AutoTestApiDetailVarBase(BaseModel):
     assert_validators: NON_LIST_DICT_TYPE = Field(default=None, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
     database_operates: Optional[List[DataBaseOperates]] = Field(default=None, description="数据库请求操作列表")
     redis_operates: Optional[List[RedisOperates]] = Field(default=None, description="Redis请求操作列表")
-    step_exec_logger: Optional[List[str]] = Field(default=None, description="步骤执行日志(字符串列表)")
+    step_exec_logger: Optional[str] = Field(default=None, description="步骤执行日志(多行文本)")
     step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
 
     @field_validator("session_variables", "defined_variables", "extract_variables", "assert_validators", mode="before")
@@ -127,19 +127,21 @@ class AutoTestApiDetailVarBase(BaseModel):
 
     @field_validator("step_exec_logger", mode="before")
     @classmethod
-    def normalize_step_exec_logger(cls, v: Any) -> Optional[List[str]]:
+    def normalize_step_exec_logger(cls, v: Any) -> Optional[str]:
         """
-        将step_exec_logger规范为List[str]或null，过滤空项。
+        将step_exec_logger规范为多行文本或null。
+        兼容引擎传入的 List[str]：过滤空项后以换行拼接。
 
-        :param v: 原始日志字段
-        :return: 规范化后的日志列表，全空则返回 None
+        :param v: 原始日志字段（str / List[str] / null）
+        :return: 规范化后的日志文本，全空则返回 None
         """
         if v is None:
             return None
-        if not isinstance(v, list):
-            raise ValueError("参数[step_exec_logger]必须为List[str]或null值")
-        out = [str(x) for x in v if x is not None and str(x) != ""]
-        return out or None
+        if isinstance(v, list):
+            out = [str(x) for x in v if x is not None and str(x) != ""]
+            return "\n".join(out) if out else None
+        text = str(v).strip()
+        return text or None
 
     @field_validator('database_operates', mode='before')
     @classmethod
@@ -243,13 +245,16 @@ class AutoTestApiDetailVarBase(BaseModel):
 
         if executive_logger:
             base = v.get("step_exec_logger")
-            if base is None:
-                base_list: List[str] = []
+            extra = "\n".join(str(x) for x in executive_logger if x is not None and str(x) != "")
+            if not extra:
+                pass
+            elif base is None or base == "":
+                v["step_exec_logger"] = extra
             elif isinstance(base, list):
                 base_list = [str(x) for x in base if x is not None and str(x) != ""]
+                v["step_exec_logger"] = "\n".join(base_list + [str(x) for x in executive_logger])
             else:
-                raise ValueError("参数[step_exec_logger]必须为List[str]或null值")
-            v["step_exec_logger"] = base_list + [str(x) for x in executive_logger]
+                v["step_exec_logger"] = f"{base}\n{extra}"
 
         return v
 
