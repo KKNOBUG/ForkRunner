@@ -311,7 +311,16 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
-    async def query_classified_by_project_ids(self, project_ids: List[int]) -> Dict[int, Dict[str, Dict[str, Dict[str, Dict[str, str]]]]]:
+    async def query_classified_by_project_ids(
+            self,
+            project_ids: List[int],
+    ) -> Dict[int, Dict[str, Dict[str, Dict[str, Dict[str, Any]]]]]:
+        """
+        按应用ID列表查询未删除配置，并按 yangkai 兼容结构分类。
+
+        返回：project_id -> env_name -> APP|FILE|DB -> config_name ->
+        {config_host, config_port, database_name}
+        """
         if not project_ids:
             error_message: str = "按应用列表查询环境配置失败, 参数(project_ids)不允许为空"
             LOGGER.error(error_message)
@@ -322,47 +331,52 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             project_id: {}
             for project_id in distinct_project_ids
         }
-        classified_config_type: Dict[int, str] = {1: "APP", 2: "FILE", 3: "DB"}
-        env_config_instances: Optional[List[AutoTestApiEnvConfigInfo]] = await self.model.filter(
-            env_id__in=distinct_project_ids,
+        # 响应桶标签与 get_envs / 前端约定一致（非库内 api/file/database）
+        env_type_to_label: Dict[int, str] = {1: "APP", 2: "FILE", 3: "DB"}
+        empty_type_buckets: Dict[str, Dict[str, Any]] = {label: {} for label in env_type_to_label.values()}
+
+        env_config_instances: List[AutoTestApiEnvConfigInfo] = await self.model.filter(
+            project_id__in=distinct_project_ids,
             state__not=1,
         ).all()
+        if not env_config_instances:
+            return classified_config_result
+
+        env_ids: List[int] = list({int(cfg.env_id) for cfg in env_config_instances})
+        env_rows = await AutoTestApiEnvEnumInfo.filter(id__in=env_ids, state__not=1).values("id", "env_name")
+        env_name_map: Dict[int, str] = {int(row["id"]): row["env_name"] for row in env_rows}
+
         for cfg_instance in env_config_instances:
-            env: str = cfg_instance.env
-            env_info_id: int = cfg_instance.env_info_id
-            if env_info_id not in classified_config_result:
+            project_id: int = int(cfg_instance.project_id)
+            if project_id not in classified_config_result:
                 continue
-            env_type: int = cfg_instance.env_type
-            if env_type not in classified_config_type:
-                LOGGER.warning(f"跳过未知配置类型: env_info_id={env_info_id}, env_id={env}, env_type={env_type}")
+
+            env_name: Optional[str] = env_name_map.get(int(cfg_instance.env_id))
+            if not env_name:
+                LOGGER.warning(
+                    f"跳过无对应环境主表记录的配置: config_id={cfg_instance.id}, env_id={cfg_instance.env_id}"
+                )
                 continue
-            if env not in classified_config_result[env_info_id]:
-                classified_config_result[env_info_id][env] = {v: {} for k, v in classified_config_type.items()}
 
-            config_host = None
-            config_port = None
-            config_type = None
-            database_name = None
-            if env_type == 1:
-                config_type = "APP"
-                config_host = cfg_instance.env_host
-                config_port = cfg_instance.env_port
-            elif env_type == 2:
-                config_type = "FILE"
-                config_host = cfg_instance.server_ip
-                config_port = cfg_instance.server_port
-            elif env_type == 3:
-                config_type = "DB"
-                config_host = cfg_instance.db_host
-                config_port = cfg_instance.db_port
-                database_name = cfg_instance.db_name
+            config_type_value: str = enum_field_value(cfg_instance.config_type)
+            env_type: Optional[int] = CONFIG_TYPE_TO_ENV_TYPE.get(config_type_value)
+            type_label: Optional[str] = env_type_to_label.get(env_type) if env_type is not None else None
+            if not type_label:
+                LOGGER.warning(
+                    f"跳过未知配置类型: project_id={project_id}, env={env_name}, config_type={config_type_value}"
+                )
+                continue
 
-            config_info: Dict[str, Any] = {
-                "config_host": config_host,
-                "config_port": config_port,
-                "database_name": database_name,
+            if env_name not in classified_config_result[project_id]:
+                classified_config_result[project_id][env_name] = {
+                    label: {} for label in empty_type_buckets
+                }
+
+            classified_config_result[project_id][env_name][type_label][cfg_instance.config_name] = {
+                "config_host": cfg_instance.config_host,
+                "config_port": cfg_instance.config_port,
+                "database_name": cfg_instance.database_name,
             }
-            classified_config_result[env_info_id][env][config_type][cfg_instance.config_name] = config_info
         return classified_config_result
 
     async def list_distinct_config_names(

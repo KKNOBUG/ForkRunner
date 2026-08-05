@@ -174,7 +174,7 @@ async def query_classify_env_config(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    返回结构：project_id -> env_id -> config_type(api/database/file) -> config_name ->
+    返回结构：project_id -> env_name -> APP|FILE|DB -> config_name ->
     {config_host, config_port, database_name}。
     """
     try:
