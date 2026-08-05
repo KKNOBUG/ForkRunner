@@ -87,3 +87,7 @@ class EnvDeleteRequest(BaseModel):
 
     id: int = Field(..., description="环境枚举ID")
     env_type: int = Field(..., description="节点类型")
+
+
+class AutoTestApiEnvConfigQueryByProjectsIn(BaseModel):
+    project_ids: List[int] = Field(..., min_length=1, description="应用ID列表")

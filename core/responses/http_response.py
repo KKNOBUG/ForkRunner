@@ -11,7 +11,7 @@ from typing import Optional, Union, List, Any, Dict
 from core.responses import BaseResponse
 from enums import Code, Status, Message
 
-DataType = Optional[Union[int, str, List, Dict[str, Any]]]
+DataType = Optional[Union[int, str, List, Dict[Any, Any]]]
 
 
 class SuccessResponse(BaseResponse):

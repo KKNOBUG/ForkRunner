@@ -311,53 +311,58 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
-    async def query_classified_by_project_ids(self, project_ids: List[int]) -> Dict[int, Dict[int, Dict[str, Dict[str, Dict[str, Any]]]]]:
-        """
-        根据应用ID列表查询环境配置并根据类型嵌套归类。
-
-        :param project_ids: 应用主键ID列表
-        :return: 嵌套归类结果；请求中的应用ID均出现在第一层
-        :raises ParameterException: project_ids为空
-        """
+    async def query_classified_by_project_ids(self, project_ids: List[int]) -> Dict[int, Dict[str, Dict[str, Dict[str, Dict[str, str]]]]]:
         if not project_ids:
-            error_message: str = "根据应用列表查询环境配置失败, 参数[project_ids]不允许为空"
+            error_message: str = "按应用列表查询环境配置失败, 参数(project_ids)不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         distinct_project_ids: List[int] = list(dict.fromkeys(project_ids))
-        classified_config_result: Dict[int, Dict[int, Dict[str, Dict[str, Dict[str, Any]]]]] = {
+        classified_config_result: Dict[int, Dict[str, Dict[str, Dict[str, Dict[str, Any]]]]] = {
             project_id: {}
             for project_id in distinct_project_ids
         }
-        classified_config_type: Tuple[str, ...] = (
-            AutoTestConfigNodeType.API.value,
-            AutoTestConfigNodeType.DB.value,
-            AutoTestConfigNodeType.REDIS.value,
-            AutoTestConfigNodeType.FILE.value,
-        )
+        classified_config_type: Dict[int, str] = {1: "APP", 2: "FILE", 3: "DB"}
         env_config_instances: Optional[List[AutoTestApiEnvConfigInfo]] = await self.model.filter(
-            project_id__in=distinct_project_ids,
+            env_id__in=distinct_project_ids,
             state__not=1,
         ).all()
         for cfg_instance in env_config_instances:
-            env_id: int = cfg_instance.env_id
-            project_id: int = cfg_instance.project_id
-            if project_id not in classified_config_result:
+            env: str = cfg_instance.env
+            env_info_id: int = cfg_instance.env_info_id
+            if env_info_id not in classified_config_result:
                 continue
-            config_type_raw: AutoTestConfigNodeType = cfg_instance.config_type
-            config_type_act = config_type_raw.value if hasattr(config_type_raw, "value") else str(config_type_raw)
-            if config_type_act not in classified_config_type:
-                LOGGER.warning(f"跳过未知配置类型: [project_id={project_id}, env_id={env_id}, config_type={config_type_act}]")
+            env_type: int = cfg_instance.env_type
+            if env_type not in classified_config_type:
+                LOGGER.warning(f"跳过未知配置类型: env_info_id={env_info_id}, env_id={env}, env_type={env_type}")
                 continue
-            if env_id not in classified_config_result[project_id]:
-                classified_config_result[project_id][env_id] = {t: {} for t in classified_config_type}
+            if env not in classified_config_result[env_info_id]:
+                classified_config_result[env_info_id][env] = {v: {} for k, v in classified_config_type.items()}
+
+            config_host = None
+            config_port = None
+            config_type = None
+            database_name = None
+            if env_type == 1:
+                config_type = "APP"
+                config_host = cfg_instance.env_host
+                config_port = cfg_instance.env_port
+            elif env_type == 2:
+                config_type = "FILE"
+                config_host = cfg_instance.server_ip
+                config_port = cfg_instance.server_port
+            elif env_type == 3:
+                config_type = "DB"
+                config_host = cfg_instance.db_host
+                config_port = cfg_instance.db_port
+                database_name = cfg_instance.db_name
 
             config_info: Dict[str, Any] = {
-                "config_host": cfg_instance.config_host,
-                "config_port": cfg_instance.config_port,
-                "database_name": cfg_instance.database_name,
+                "config_host": config_host,
+                "config_port": config_port,
+                "database_name": database_name,
             }
-            classified_config_result[project_id][env_id][config_type_act][cfg_instance.config_name] = config_info
+            classified_config_result[env_info_id][env][config_type][cfg_instance.config_name] = config_info
         return classified_config_result
 
     async def list_distinct_config_names(

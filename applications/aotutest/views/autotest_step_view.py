@@ -717,6 +717,10 @@ async def debug_http_request(
             logger_object=append_debugging_log,
             finished_variables={}
         )
+        # 变量池提取/断言使用解析后的值（否则仍会命中 ${generate_xxx(...)} 原文）
+        for item in finished_variables:
+            if isinstance(item, StepVariablesBase) and item.key:
+                merged_all_variables[item.key] = item.value
         headers_list = AutoTestToolService.resolve_placeholders(
             value=request_header,
             logger_object=append_debugging_log,
@@ -914,6 +918,7 @@ async def debug_http_request(
         )
         for extract_key, extract_value in extract_data.items():
             finished_variables.append(StepVariablesBase(key=extract_key, value=extract_value, desc=""))
+            merged_all_variables[extract_key] = extract_value
         # 处理断言验证（使用与步骤引擎共用的工具方法）
         validator_results = AutoTestToolService.run_assert_validators(
             assert_validators=assert_validators or [],
@@ -1048,6 +1053,9 @@ async def debug_tcp_request(
             logger_object=append_debugging_log,
             finished_variables={}
         )
+        for item in finished_variables:
+            if isinstance(item, StepVariablesBase) and item.key:
+                merge_all_variables[item.key] = item.value
         if request_args_type == AutoTestReqArgsType.JSON:
             request_body = AutoTestToolService.resolve_placeholders(
                 value=request_body,
@@ -1224,6 +1232,7 @@ async def debug_tcp_request(
         )
         for extract_key, extract_value in extract_data.items():
             finished_variables.append(StepVariablesBase(key=extract_key, value=extract_value, desc=""))
+            merge_all_variables[extract_key] = extract_value
         validator_results = AutoTestToolService.run_assert_validators(
             assert_validators=assert_validators or [],
             response_text=response_text,

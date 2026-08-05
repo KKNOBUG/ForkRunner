@@ -9,14 +9,14 @@
 import traceback
 from typing import Optional
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query, Depends, Body
 
 from applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from applications.aotutest.schemas.autotest_env_schema import (
     EnvListQuery,
     EnvCreate,
     EnvEditRequest,
-    EnvDeleteRequest,
+    EnvDeleteRequest, AutoTestApiEnvConfigQueryByProjectsIn,
 )
 from configure import LOGGER
 from core.exceptions import (
@@ -190,4 +190,30 @@ async def get_all_app(
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"获取所有应用失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+
+
+@autotest_env.post("/query", summary="API自动化测试-按应用列表查询环境配置并分类")
+async def query_classify_env_config(
+        env_config_in: AutoTestApiEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    try:
+        data = await services.env_config_curd.query_classified_by_project_ids(
+            project_ids=env_config_in.project_ids,
+        )
+        total_configs: int = sum(
+            len(names)
+            for envs in data.values()
+            for buckets in envs.values()
+            for names in buckets.values()
+        )
+        LOGGER.info(
+            f"按应用列表查询环境配置并分类成功, project_ids={env_config_in.project_ids}, 配置条数: {total_configs}"
+        )
+        return SuccessResponse(message="查询成功", data=data, total=total_configs)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"按应用列表查询环境配置并分类失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
