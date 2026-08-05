@@ -194,7 +194,7 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
     return {"scanned": len(tasks), "dispatched": dispatched}
 
 
-@celery.task(name="backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks")
+@celery.task(name="celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks")
 def scan_and_dispatch_autotest_tasks():
     """
     Beat入口，扫描启用中的Cron任务，到期则下发run_autotest_task。
@@ -204,7 +204,7 @@ def scan_and_dispatch_autotest_tasks():
     return run_async(_scan_and_dispatch_impl())
 
 
-@celery.task(name="backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task")
+@celery.task(name="celery_scheduler.tasks.task_autotest_case.run_autotest_task")
 def run_autotest_task(
         task_id: int,
         report_type: Optional[AutoTestReportType] = None,

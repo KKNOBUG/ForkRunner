@@ -11,23 +11,23 @@ from enums import AutoTestTaskType
 
 # Celery 注册名 → 任务类型 / 默认展示名
 CELERY_TASK_META: Dict[str, Dict[str, Any]] = {
-    "backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task": {
+    "celery_scheduler.tasks.task_autotest_case.run_autotest_task": {
         "task_type": AutoTestTaskType.AUTOTEST_API,
         "task_name": "用例编排",
     },
-    "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks": {
+    "celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks": {
         "task_type": AutoTestTaskType.SCHEDULE_SCAN,
         "task_name": "调度扫描",
     },
-    "backend.celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task": {
+    "celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task": {
         "task_type": AutoTestTaskType.CASE_STEP_EXEC,
         "task_name": "用例执行",
     },
-    "backend.celery_scheduler.tasks.task_export_case_datagram.export_testcases_task": {
+    "celery_scheduler.tasks.task_export_case_datagram.export_testcases_task": {
         "task_type": AutoTestTaskType.EXPORT_CASE_DATA,
         "task_name": "导出用例数据",
     },
-    "backend.celery_scheduler.tasks.task_export_case_script.export_case_scripts_task": {
+    "celery_scheduler.tasks.task_export_case_script.export_case_scripts_task": {
         "task_type": AutoTestTaskType.EXPORT_CASE_SCRIPT,
         "task_name": "导出公共接口",
     },

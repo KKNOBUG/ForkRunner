@@ -18,13 +18,13 @@ from typing_extensions import Self
 
 from common import FileUtils, ShellUtils
 
-_BACKEND_PROJECT_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-_BACKEND_PROJECT_CONF: str = os.path.join(_BACKEND_PROJECT_ROOT, ".env")
+_PROJECT_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+_PROJECT_CONF: str = os.path.join(_PROJECT_ROOT, ".env")
 
 
 class ProjectConfig(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=_BACKEND_PROJECT_CONF,
+        env_file=_PROJECT_CONF,
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -73,13 +73,13 @@ class ProjectConfig(BaseSettings):
     LOGGER_ROTATION_BACKUP_COUNT: int = 30
 
     # 项目路径相关配置
-    APPLICATIONS_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "applications"))
-    CELERY_SCHEDULER_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "celery_scheduler"))
-    COMMON_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "common"))
-    CONFIGURE_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "configure"))
-    CORE_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "core"))
-    ENUMS_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "enums"))
-    OUTPUT_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "output"))
+    APPLICATIONS_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "applications"))
+    CELERY_SCHEDULER_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "celery_scheduler"))
+    COMMON_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "common"))
+    CONFIGURE_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "configure"))
+    CORE_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "core"))
+    ENUMS_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "enums"))
+    OUTPUT_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "output"))
     OUTPUT_LOGS_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "logs"))
     OUTPUT_UPLOAD_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "upload"))
     OUTPUT_DOWNLOAD_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "download"))
@@ -88,10 +88,10 @@ class ProjectConfig(BaseSettings):
     OUTPUT_JMX_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "jmx"))
     OUTPUT_XLSX_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "xlsx"))
     OUTPUT_DOCS_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "docs"))
-    SERVICES_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "services"))
-    STATIC_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "static"))
+    SERVICES_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "services"))
+    STATIC_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "static"))
     STATIC_IMG_DIR: str = os.path.abspath(os.path.join(STATIC_DIR, "image"))
-    MIGRATION_DIR: str = os.path.abspath(os.path.join(_BACKEND_PROJECT_ROOT, "migrations"))
+    MIGRATION_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "migrations"))
 
     # # 允许访问的源（域名）列表
     CORS_ORIGINS: List[str] = [
@@ -139,7 +139,7 @@ class ProjectConfig(BaseSettings):
     ]
 
     # 应用注册
-    APPLICATIONS_MODULE: str = "backend.applications"
+    APPLICATIONS_MODULE: str = "applications"
     APPLICATIONS_INSTALLED: List[str] = FileUtils.get_all_dirs(
         abspath=APPLICATIONS_DIR,
         return_full_path=False,

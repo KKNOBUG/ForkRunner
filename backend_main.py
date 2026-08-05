@@ -92,4 +92,4 @@ if __name__ == '__main__':
     # source ~/.zshrc
     # redis-server
 
-    # MacOS: gunicorn -c backend/gunicorn.conf.py backend_main:app
+    # MacOS: gunicorn -c gunicorn.conf.py backend_main:app

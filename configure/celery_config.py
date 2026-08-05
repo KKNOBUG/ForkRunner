@@ -46,7 +46,7 @@ class CeleryConfig(BaseSettings):
         task_imports = FileUtils.get_all_files(
             abspath=os.path.join(project.CELERY_SCHEDULER_DIR, "tasks"),
             return_full_path=False,
-            return_precut_path="backend.celery_scheduler.tasks.",
+            return_precut_path="celery_scheduler.tasks.",
             startswith="task",
             extension=".py",
             exclude_startswith="__",
@@ -68,10 +68,10 @@ class CeleryConfig(BaseSettings):
             "result_expires": 3600,
             "result_persistent": True,
             "task_routes": {
-                "backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task": {
+                "celery_scheduler.tasks.task_autotest_case.run_autotest_task": {
                     "queue": "autotest_queue"
                 },
-                "backend.celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task": {
+                "celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task": {
                     "queue": "autotest_queue"
                 },
             },
@@ -91,7 +91,7 @@ class CeleryConfig(BaseSettings):
             "beat_schedule": {
                 "scan-autotest-tasks": {
                     "task": (
-                        "backend.celery_scheduler.tasks.task_autotest_case"
+                        "celery_scheduler.tasks.task_autotest_case"
                         ".scan_and_dispatch_autotest_tasks"
                     ),
                     "schedule": 60.0,

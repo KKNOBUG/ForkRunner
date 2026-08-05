@@ -129,7 +129,7 @@ async def _execute_step_tree_impl(
     }
 
 
-@celery.task(name="backend.celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task")
+@celery.task(name="celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task")
 def execute_step_tree_task(
         case_id: int,
         initial_variables: Optional[List[Dict[str, Any]]] = None,

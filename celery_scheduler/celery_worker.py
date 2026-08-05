@@ -38,7 +38,7 @@ from .celery_base import (
 _async_event_loop_pool = None
 # 扫描任务不写执行记录、不走终态更新
 _SCAN_TASK_NAME = (
-    "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
+    "celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
 )
 # setup_logging 写入 celery 专用日志文件时登记的 Loguru sink id，避免重复添加
 _celery_logfile_sink_id = None
