@@ -440,7 +440,7 @@ class AutoTestStepTreeUpdateList(BaseModel):
 class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
     """HTTP 步骤调试入参。"""
 
-    env_id: int = Field(..., ge=1, description="环境枚举ID")
+    env_name: str = Field(..., max_length=64, description="环境名称")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_url: str = Field(..., max_length=2048, description="请求地址")
     request_method: HTTPMethod = Field(..., description="请求方法")

@@ -610,7 +610,7 @@ async def debug_http_request(
     """
     try:
         # 提取请求参数（使用 Pydantic 模型，自动验证）
-        env_id: int = step_data.env_id
+        env_name: str = (step_data.env_name or "").strip()
         step_name: str = step_data.step_name
         request_project_id: int = step_data.request_project_id
         request_config_name: str = step_data.request_config_name
@@ -643,14 +643,32 @@ async def debug_http_request(
             StepVariablesBase(key=k, value=v, desc="") for k, v in merged_all_variables.items()
         ]
 
-        # 处理请求主机域名
+        # 处理请求主机域名（对齐 yangkai：按环境名+应用+配置名解析，不要求前端传 env_id）
         if request_url and not request_url.lower().startswith("http"):
             try:
+                if not env_name:
+                    return ParameterResponse(message="HTTP请求调试失败, 参数[env_name]不允许为空")
+                env_row = await services.env_enum_curd.model.filter(
+                    project_id=request_project_id,
+                    env_name__iexact=env_name,
+                    env_type=1,
+                    state__not=1,
+                ).first()
+                if not env_row:
+                    env_row = await services.env_enum_curd.model.filter(
+                        project_id=request_project_id,
+                        env_name__iexact=env_name,
+                        state__not=1,
+                    ).first()
+                if not env_row:
+                    return NotFoundResponse(
+                        message=f"HTTP请求调试失败, 应用[{request_project_id}]下环境[{env_name}]不存在"
+                    )
                 env_config_instance = await services.env_config_curd.get_by_conditions(
                     only_one=True,
                     on_error=False,
                     state__not=1,
-                    env_id=env_id,
+                    env_id=env_row.id,
                     project_id=request_project_id,
                     config_name=request_config_name,
                     config_type=AutoTestConfigNodeType.API
@@ -658,13 +676,23 @@ async def debug_http_request(
                 if not env_config_instance:
                     return NotFoundResponse(message=f"HTTP请求调试失败, 目标环境下[{request_config_name}]配置不存在")
                 execute_env_host: str = env_config_instance.config_host.strip().rstrip("/").rstrip(":")
-                execute_env_port: str = env_config_instance.config_port
-                if not execute_env_host or not execute_env_port:
+                execute_env_port: Optional[str] = (
+                    str(env_config_instance.config_port).strip()
+                    if env_config_instance.config_port is not None
+                    else ""
+                )
+                if not execute_env_host:
                     return NotFoundResponse(message=f"HTTP请求调试失败, 目标环境下[{request_config_name}]配置不完整")
+                # 对齐 yangkai：拼接完整 URL 时补全协议；host 已含协议则不再加前缀
+                host_with_scheme = (
+                    execute_env_host
+                    if execute_env_host.lower().startswith(("http://", "https://"))
+                    else f"http://{execute_env_host}"
+                )
                 if not execute_env_port:
-                    request_url = f"{execute_env_host}/{request_url}"
+                    request_url = f"{host_with_scheme}/{request_url}"
                 else:
-                    request_url = f"{execute_env_host}:{execute_env_port}/{request_url}"
+                    request_url = f"{host_with_scheme}:{execute_env_port}/{request_url}"
             except Exception as e:
                 LOGGER.error(f"HTTP请求调试失败, 异常描述: {e}\n{traceback.format_exc()}")
                 return FailureResponse(message=f"HTTP请求调试失败，异常描述: {e}")
@@ -684,7 +712,7 @@ async def debug_http_request(
 
         append_debugging_log(
             message=f"【HTTP请求】调试开始: \n\t"
-                    f"环境ID: {env_id}\n\t"
+                    f"环境名称: {env_name}\n\t"
                     f"应用ID: {request_project_id}\n\t"
                     f"配置名称: {request_config_name}\n\t"
                     f"请求方法: {request_method}\n\t"
