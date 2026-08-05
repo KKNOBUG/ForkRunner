@@ -38,7 +38,7 @@ class User(ScaffoldModel, StateModel, TimestampMixin, MaintainMixin):
     dept_id = fields.IntField(null=True, index=True, description="所属部门ID")
 
     class Meta:
-        table = "krun_user"
+        table = "tbx_ user"
         unique_together = (
             ("alias", "email"),
         )

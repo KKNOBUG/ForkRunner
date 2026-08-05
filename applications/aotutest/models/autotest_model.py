@@ -49,7 +49,7 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
-        table = "krun_autotest_api_project"
+        table = "tbx_ autotest_api_project"
         table_description = "自动化测试-应用信息表"
         indexes = (
             ("project_name", "project_state"),
@@ -69,7 +69,7 @@ class AutoTestApiEnvEnumInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
-        table = "krun_autotest_api_env"
+        table = "tbx_ autotest_api_env"
         table_description = "自动化测试-环境信息表"
         ordering = ["-updated_time"]
 
@@ -98,7 +98,7 @@ class AutoTestApiEnvConfigInfo(ScaffoldModel, MaintainMixin, TimestampMixin, Sta
     is_authorization = fields.BooleanField(default=None, null=True, description="是否免密")
 
     class Meta:
-        table = "tbx_autotest_api_config"
+        table = "tbx_ autotest_api_config"
         table_description = "自动化测试-环境配置表"
         unique_together = (
             ("env_id", "project_id", "config_name"),
@@ -123,7 +123,7 @@ class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
-        table = "krun_autotest_api_tag"
+        table = "tbx_ autotest_api_tag"
         table_description = "自动化测试-标签信息表"
         unique_together = (
             ("tag_project", "tag_mode", "tag_name"),
@@ -157,7 +157,7 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
-        table = "krun_autotest_api_case"
+        table = "tbx_ autotest_api_case"
         table_description = "自动化测试-用例信息表"
         unique_together = (
             ("case_name", "case_project", "created_user"),
@@ -250,7 +250,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
-        table = "krun_autotest_api_step"
+        table = "tbx_ autotest_api_step"
         table_description = "自动化测试-步骤明细表"
         unique_together = (
             ("case_id", "step_no", "step_code"),
@@ -289,7 +289,7 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
-        table = "krun_autotest_api_report"
+        table = "tbx_ autotest_api_report"
         table_description = "自动化测试-报告信息表"
         indexes = (
             ("case_id", "case_code"),
@@ -376,7 +376,7 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
-        table = "krun_autotest_api_details"
+        table = "tbx_ autotest_api_details"
         table_description = "自动化测试-明细信息表"
         unique_together = (
             ("report_code", "case_code", "step_code", "num_cycles"),
@@ -426,7 +426,7 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
-        table = "krun_autotest_api_task"
+        table = "tbx_ autotest_api_task"
         table_description = "自动化测试-任务信息表"
         unique_together = (
             ("task_name", "task_project"),
@@ -461,7 +461,7 @@ class AutoTestApiRecordInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     celery_duration = fields.CharField(max_length=64, null=True, description="耗时")
 
     class Meta:
-        table = "krun_autotest_api_record"
+        table = "tbx_ autotest_api_record"
         table_description = "自动化测试-任务执行观测记录表"
         indexes = (
             ("celery_status",),
@@ -497,7 +497,7 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
-        table = "krun_autotest_data_source"
+        table = "tbx_ autotest_data_source"
         table_description = "自动化测试-数据驱动文件存储表"
         unique_together = (
             ("case_id", "step_code"),

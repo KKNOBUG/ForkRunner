@@ -29,4 +29,4 @@ class Role(ScaffoldModel, TimestampMixin, MaintainMixin):
     )
 
     class Meta:
-        table = "krun_role"
+        table = "tbx_ role"

@@ -28,4 +28,4 @@ class Menu(ScaffoldModel, MaintainMixin, TimestampMixin):
     redirect = fields.CharField(max_length=128, null=True, description="重定向")
 
     class Meta:
-        table = "krun_menu"
+        table = "tbx_ menu"
