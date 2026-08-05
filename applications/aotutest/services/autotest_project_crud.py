@@ -7,7 +7,7 @@
 @DateTime: 2026/1/2 18:01
 """
 import traceback
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List, Tuple, Union
 
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
@@ -57,6 +57,26 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
+
+    async def get_by_ids(
+            self, project_ids: List[int], on_error: bool = False, return_obj: bool = False
+    ) -> Optional[Union[bool, List[AutoTestApiProjectInfo]]]:
+        if not project_ids or not isinstance(project_ids, list):
+            error_message: str = "查询应用信息失败, 参数(project_ids)不允许为空且必须是List[int]类型"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
+        existing_project_ids = await self.model.filter(id__in=project_ids, state__not=1).values_list("id", flat=True)
+        missing_project_ids: set = set(project_ids) - set(existing_project_ids)
+        if missing_project_ids:
+            error_message: str = f"查询应用信息失败, 应用(id={missing_project_ids})不存在"
+            LOGGER.error(error_message)
+            if on_error:
+                raise NotFoundException(message=error_message)
+            return False
+        if return_obj:
+            return await self.model.filter(id__in=project_ids, state__not=1).all()
+        return True
 
     async def get_by_code(self, project_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiProjectInfo]:
         """
@@ -281,3 +301,24 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             error_message: str = f"查询应用信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
+
+    async def get_all_project(self, page: int = 1, page_size: int = 10000) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        查询全部启用应用（LXD /getallApp）。
+
+        :return: ([{id, project_name, project_mark}], total)；project_mark 取 project_code
+        """
+        query = self.model.filter(state=0)
+        total = await query.count()
+        rows = await query.offset((page - 1) * page_size).limit(page_size).values(
+            "id", "project_name", "project_code"
+        )
+        data = [
+            {
+                "id": row["id"],
+                "project_name": row["project_name"],
+                "project_mark": row["project_code"],
+            }
+            for row in rows
+        ]
+        return data, total

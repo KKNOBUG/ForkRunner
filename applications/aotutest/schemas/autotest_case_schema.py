@@ -8,10 +8,10 @@
 """
 from typing import Optional, List, Dict, Any, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from applications.base.services.scaffold import UpperStr
-from enums import AutoTestCaseType, AutoTestCaseAttr
+from enums import AutoTestCaseType, AutoTestCaseAttr, AutoTestStepType, AutoTestReqArgsType
 
 
 class AutoTestApiCaseMeta(BaseModel):
@@ -75,11 +75,18 @@ class AutoTestApiCaseSelect(AutoTestApiCaseMeta, AutoTestApiCaseBase):
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default=["-created_time"], description="排序字段")
 
-    exclude_case_id: Optional[int] = Field(None, description="排除的用例ID（复制时排除自己）")
+    step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
+    request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
+    case_type: Optional[List[AutoTestCaseType]] = Field(None, description="用例所属类型")
     created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
     updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
-    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+    state: Optional[int] = Field(0, description="状态(0:启用, 1:禁用)")
 
-    # 创建时间范围（根据 created_time 筛选，格式 YYYY-MM-DD 或 YYYY-MM-DD HH:mm:ss）
-    date_from: Optional[str] = Field(None, description="创建时间-起")
-    date_to: Optional[str] = Field(None, description="创建时间-止")
+    @model_validator(mode='after')
+    def validate_case_type(self):
+        case_type: Optional[List[AutoTestCaseType]] = self.case_type
+        if case_type is not None and not isinstance(case_type, list):
+            raise ValueError(f"查询用例时[case_type]字段期待的是List[str]类型, 但得到{type(case_type)}类型")
+        if case_type is not None:
+            self.case_type = [ct.value for ct in case_type]
+        return self

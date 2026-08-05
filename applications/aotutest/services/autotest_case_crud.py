@@ -23,7 +23,7 @@ from core.exceptions import (
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from enums import AutoTestCaseType, AutoTestStepType, PUBLIC_CASE_TYPES
+from enums import AutoTestCaseType, AutoTestStepType, PUBLIC_CASE_TYPES, AutoTestReqArgsType
 
 # 列表/对象型JSON字段：schema已将空数组归一为None；payload显式给出这些字段时，None代表显式清空，需回补以落库NULL
 CASE_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = ("case_tags", "session_variables")
@@ -113,6 +113,26 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
+
+    @staticmethod
+    async def get_case_ids_by_request_step(
+            step_type: Optional[AutoTestStepType] = None,
+            request_args_type: Optional[AutoTestReqArgsType] = None,
+    ) -> Optional[List[int]]:
+        if step_type is None and request_args_type is None:
+            return None
+
+        step_q = Q(
+            state__not=1,
+            step_type__in=[AutoTestStepType.TCP.value, AutoTestStepType.HTTP.value],
+        ) & ~Q(case_id__isnull=True)
+        if step_type is not None:
+            step_q &= Q(step_type=step_type.value)
+        if request_args_type is not None:
+            step_q &= Q(request_args_type=request_args_type.value)
+
+        case_ids: List[int] = await AutoTestApiStepInfo.filter(step_q).distinct().values_list("case_id", flat=True)
+        return case_ids
 
     async def create_case(self, case_in: AutoTestApiCaseCreate) -> AutoTestApiCaseInfo:
         """

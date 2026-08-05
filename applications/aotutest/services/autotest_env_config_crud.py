@@ -7,21 +7,29 @@
 @DateTime: 2026/4/16 10:51
 """
 import traceback
+from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
 
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
-from applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
+from applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo, AutoTestApiEnvEnumInfo
 from applications.aotutest.schemas.autotest_env_config_schema import (
     AutoTestApiConfigCreate,
     AutoTestApiConfigUpdate,
-    AutoTestApiConfigDelete
+    AutoTestApiConfigDelete,
 )
-from applications.aotutest.services.autotest_env_crud import AutoTestApiEnvEnumCrud
+from applications.aotutest.schemas.autotest_env_schema import AutoTestApiEnvCreate
+from applications.aotutest.services.autotest_env_crud import (
+    AutoTestApiEnvEnumCrud,
+    CONFIG_TYPE_TO_ENV_TYPE,
+    enum_field_value,
+    resolve_config_type,
+)
 from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
 from applications.base.services.scaffold import ScaffoldCrud
+from common.database.database_connection_pool import get_app_database_pool
 from configure import LOGGER
 from core.exceptions import (
     NotFoundException,
@@ -29,7 +37,7 @@ from core.exceptions import (
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from enums import AutoTestConfigNodeType
+from enums import AutoTestConfigNodeType, AutoTestDataBaseType
 
 
 class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestApiConfigCreate, AutoTestApiConfigUpdate]):
@@ -374,3 +382,437 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             stmt = stmt.filter(config_type=config_type)
         names = await stmt.values_list("config_name", flat=True)
         return sorted(set(names))
+
+    @staticmethod
+    def _trim_port(port: Optional[str]) -> Optional[str]:
+        """端口字段库表长度上限为8，超出截断。"""
+        if port is None:
+            return None
+        return str(port).strip()[:8]
+
+    def _map_typed_config_fields(self, env_type: int, data_dict: dict) -> Dict[str, Any]:
+        """
+        将按节点类型拆分的入参映射为 EnvConfig 落库字段。
+
+        :param env_type: 1=APP, 2=FILE, 3=DB
+        :param data_dict: 创建/更新入参字典
+        :return: 可写入 AutoTestApiEnvConfigInfo 的字段字典
+        """
+        fields: Dict[str, Any] = {
+            "config_name": data_dict["config_name"],
+            "config_desc": data_dict.get("remark"),
+            "created_user": data_dict.get("maintainer"),
+            "updated_user": data_dict.get("maintainer"),
+        }
+        if env_type == 1:
+            fields["config_host"] = data_dict["env_host"]
+            fields["config_port"] = self._trim_port(data_dict.get("env_port"))
+        elif env_type == 2:
+            fields["config_host"] = data_dict["server_ip"]
+            fields["config_port"] = self._trim_port(data_dict.get("server_port"))
+            fields["config_username"] = data_dict.get("server_account")
+            fields["config_password"] = data_dict.get("server_password")
+            # is_no_password: 0=免密 → is_authorization=True
+            fields["is_authorization"] = int(data_dict.get("is_no_password", 1)) == 0
+        else:
+            db_type_raw = (data_dict.get("db_type") or "mysql").lower()
+            db_type = (
+                db_type_raw
+                if db_type_raw in AutoTestDataBaseType.get_values()
+                else AutoTestDataBaseType.MYSQL.value
+            )
+            fields["config_host"] = data_dict["db_host"]
+            fields["config_port"] = self._trim_port(data_dict.get("db_port"))
+            fields["config_username"] = data_dict.get("db_user")
+            fields["config_password"] = data_dict.get("db_password")
+            fields["database_name"] = data_dict.get("db_name")
+            fields["database_type"] = db_type
+        return fields
+
+    @staticmethod
+    def _serialize_typed_config(self, instance: AutoTestApiEnvConfigInfo, env_name: str, env_type: int) -> Dict[str, Any]:
+        """将配置实例序列化为按节点类型拆分字段的响应结构。"""
+        host = instance.config_host
+        port = instance.config_port
+        return {
+            "id": instance.id,
+            "env_info_id": instance.project_id,
+            "config_name": instance.config_name,
+            "env": env_name,
+            "env_type": env_type,
+            "state": instance.state,
+            "updated_time": instance.updated_time or datetime.now(),
+            "created_time": instance.created_time or datetime.now(),
+            "env_host": host if env_type == 1 else None,
+            "env_port": port if env_type == 1 else None,
+            "server_ip": host if env_type == 2 else None,
+            "server_port": port if env_type == 2 else None,
+            "db_host": host if env_type == 3 else None,
+            "db_port": port if env_type == 3 else None,
+            "remark": instance.config_desc,
+        }
+
+    @staticmethod
+    async def _get_or_create_env_enum(self, env_name: str, user: str) -> AutoTestApiEnvEnumInfo:
+        """按环境名获取或创建环境枚举。"""
+        name = (env_name or "").strip().upper()
+        if not name:
+            raise ParameterException(message="参数[env]不允许为空")
+        return await AutoTestApiEnvEnumCrud().create_env(
+            AutoTestApiEnvCreate(env_name=name, created_user=user, env_desc="")
+        )
+
+    async def _assert_host_unique(
+            self,
+            *,
+            project_id: int,
+            env_id: int,
+            config_type: str,
+            env_type: int,
+            mapped: Dict[str, Any],
+            exclude_id: Optional[int] = None,
+    ) -> None:
+        """校验同应用+环境+类型下 host/port(/database_name) 唯一。"""
+        host = mapped.get("config_host")
+        if not host:
+            return
+        dup_q = self.model.filter(
+            project_id=project_id,
+            env_id=env_id,
+            config_type=config_type,
+            config_host=host,
+            state=0,
+        )
+        if exclude_id is not None:
+            dup_q = dup_q.exclude(id=exclude_id)
+        port = mapped.get("config_port")
+        if port is not None:
+            dup_q = dup_q.filter(config_port=port)
+        if env_type == 3 and mapped.get("database_name"):
+            dup_q = dup_q.filter(database_name=mapped["database_name"])
+        if await dup_q.exists():
+            if env_type == 3:
+                raise DataAlreadyExistsException(
+                    message="当前应用+环境下，数据库名称+IP+端口重复，不能重复新增"
+                )
+            raise DataAlreadyExistsException(message="当前应用+环境下，IP+端口重复，不能重复新增")
+
+    async def create_config_by_env_type(
+            self,
+            env_type: int,
+            data_dict: dict,
+            user: str = "admin",
+    ) -> Dict[str, Any]:
+        """
+        按节点类型新增环境配置。
+
+        :param env_type: 1=APP, 2=FILE, 3=DB
+        :param data_dict: 对应类型创建入参字典
+        :param user: 操作人
+        :return: 配置响应字典
+        """
+        try:
+            config_type = resolve_config_type(env_type)
+            project_id = int(data_dict["env_info_id"])
+            config_name = data_dict["config_name"]
+            env_name = (data_dict.get("env") or "").upper()
+            payload = {**data_dict, "env": env_name, "maintainer": data_dict.get("maintainer") or user}
+
+            await AutoTestApiProjectCrud().get_by_id(project_id=project_id, on_error=True, state__not=1)
+            env_enum = await self._get_or_create_env_enum(env_name, user=user)
+            mapped = self._map_typed_config_fields(env_type, payload)
+
+            existing = await self.model.filter(
+                project_id=project_id,
+                env_id=env_enum.id,
+                config_name=config_name,
+                config_type=config_type,
+            ).first()
+            if existing:
+                if existing.state == 0:
+                    raise DataAlreadyExistsException(
+                        message=f"配置:{config_name}已存在，当前应用+环境下配置名称唯一，不能重复新增"
+                    )
+                for key, value in mapped.items():
+                    setattr(existing, key, value)
+                existing.state = 0
+                existing.config_type = config_type
+                existing.updated_user = user
+                await existing.save()
+                return self._serialize_typed_config(existing, env_name, env_type)
+
+            await self._assert_host_unique(
+                project_id=project_id,
+                env_id=env_enum.id,
+                config_type=config_type,
+                env_type=env_type,
+                mapped=mapped,
+            )
+            instance = await self.model.create(
+                project_id=project_id,
+                env_id=env_enum.id,
+                config_type=config_type,
+                state=0,
+                **mapped,
+            )
+            return self._serialize_typed_config(instance, env_name, env_type)
+        except (DataAlreadyExistsException, ParameterException, NotFoundException):
+            raise
+        except Exception as e:
+            error_message = f"新增环境配置失败, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
+
+    async def update_config_by_env_type(self, env_type: int, data_dict: dict, user: str = "admin") -> Dict[str, Any]:
+        """
+        按节点类型修改环境配置。
+
+        :param env_type: 1=APP, 2=FILE, 3=DB
+        :param data_dict: 对应类型更新入参字典
+        :param user: 操作人
+        :return: 配置响应字典
+        """
+        try:
+            config_type = resolve_config_type(env_type)
+            record_id = data_dict.get("id")
+            if not record_id:
+                raise ParameterException(message="缺少主键ID参数")
+            frontend_project_id = data_dict.get("project_id")
+            if frontend_project_id is None or frontend_project_id == "":
+                raise ParameterException(message="缺少应用ID参数")
+
+            existing = await self.model.filter(id=record_id).first()
+            if not existing:
+                raise NotFoundException(message=f"未找到ID为：{record_id}的配置记录")
+            if existing.state == 1:
+                raise ParameterException(message=f"该ID：{record_id}配置已被删除，无法修改")
+            if str(frontend_project_id) != str(existing.project_id):
+                raise ParameterException(message="应用ID不匹配，请检查")
+
+            expected_type = enum_field_value(existing.config_type)
+            if expected_type != config_type:
+                raise ParameterException(
+                    message=f"类型不匹配，记录类型为{expected_type}，请求类型为{config_type}"
+                )
+
+            env_name = (data_dict.get("env") or "").upper()
+            env_enum = await self._get_or_create_env_enum(env_name, user=user)
+            mapped = self._map_typed_config_fields(
+                env_type,
+                {**data_dict, "env": env_name, "maintainer": data_dict.get("maintainer") or user},
+            )
+
+            name_dup = await self.model.filter(
+                project_id=existing.project_id,
+                env_id=env_enum.id,
+                config_name=mapped["config_name"],
+                config_type=config_type,
+                state=0,
+            ).exclude(id=record_id).first()
+            if name_dup:
+                raise DataAlreadyExistsException(message="当前应用+环境下已经存在相同的配置名称，不能重复新增")
+
+            await self._assert_host_unique(
+                project_id=existing.project_id,
+                env_id=env_enum.id,
+                config_type=config_type,
+                env_type=env_type,
+                mapped=mapped,
+                exclude_id=record_id,
+            )
+
+            existing.env_id = env_enum.id
+            for key, value in mapped.items():
+                setattr(existing, key, value)
+            existing.updated_user = user
+            await existing.save()
+            return self._serialize_typed_config(existing, env_name, env_type)
+        except (DataAlreadyExistsException, ParameterException, NotFoundException):
+            raise
+        except Exception as e:
+            error_message = f"修改环境配置失败, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
+
+    async def delete_config_by_env_type(self, record_id: int, env_type: int, user: str = "admin") -> Dict[str, Any]:
+        """
+        按节点类型软删除环境配置。
+
+        :param record_id: 配置主键
+        :param env_type: 节点类型
+        :param user: 操作人
+        :return: 配置响应字典
+        """
+        try:
+            config_type = resolve_config_type(env_type)
+            existing = await self.model.filter(id=record_id).first()
+            if not existing:
+                raise NotFoundException(message=f"未找到ID为{record_id}的配置记录")
+            expected_type = enum_field_value(existing.config_type)
+            if expected_type != config_type:
+                raise ParameterException(
+                    message=f"类型不匹配，记录类型为{expected_type}，请求类型为{env_type}"
+                )
+            env_row = await AutoTestApiEnvEnumInfo.filter(id=existing.env_id).first()
+            env_name = env_row.env_name if env_row else ""
+            existing.state = 1
+            existing.updated_user = user
+            await existing.save()
+            return self._serialize_typed_config(existing, env_name, env_type)
+        except (ParameterException, NotFoundException):
+            raise
+        except Exception as e:
+            error_message = f"删除环境配置失败, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
+
+    async def get_config_list(
+            self,
+            env_info_id: Optional[int] = None,
+            env_name: Optional[str] = None,
+            env_type: Optional[int] = None,
+            page: int = 1,
+            page_size: int = 10,
+    ) -> Tuple[int, List[Dict[str, Any]]]:
+        """
+        分页查询环境配置，并统一为 ip/port + 类型扩展字段结构。
+
+        :param env_info_id: 应用ID
+        :param env_name: 环境名称
+        :param env_type: 节点类型
+        :param page: 页码
+        :param page_size: 每页条数
+        :return: (总条数, 当前页列表)
+        """
+        try:
+            query = self.model.filter(state=0, config_type__in=list(CONFIG_TYPE_TO_ENV_TYPE.keys()))
+            if env_info_id is not None:
+                query = query.filter(project_id=env_info_id)
+            if env_type is not None:
+                query = query.filter(config_type=resolve_config_type(env_type))
+            if env_name:
+                matched_env_ids = await AutoTestApiEnvEnumInfo.filter(
+                    env_name__iexact=env_name.strip(),
+                    state__not=1,
+                ).values_list("id", flat=True)
+                if not matched_env_ids:
+                    return 0, []
+                query = query.filter(env_id__in=list(matched_env_ids))
+
+            total = await query.count()
+            instances = await query.offset((page - 1) * page_size).limit(page_size).all()
+
+            env_ids = list({obj.env_id for obj in instances})
+            env_name_map = {}
+            if env_ids:
+                env_name_map = dict(
+                    await AutoTestApiEnvEnumInfo.filter(id__in=env_ids).values_list("id", "env_name")
+                )
+
+            result: List[Dict[str, Any]] = []
+            for obj in instances:
+                etype = CONFIG_TYPE_TO_ENV_TYPE.get(enum_field_value(obj.config_type), 1)
+                db_type_val = obj.database_type
+                if db_type_val is not None and hasattr(db_type_val, "value"):
+                    db_type_val = db_type_val.value
+                is_no_password = None
+                if etype == 2 and obj.is_authorization is not None:
+                    is_no_password = 0 if obj.is_authorization else 1
+
+                result.append({
+                    "id": obj.id,
+                    "config_name": obj.config_name,
+                    "env_name": env_name_map.get(obj.env_id, ""),
+                    "ip": obj.config_host or "",
+                    "port": str(obj.config_port) if obj.config_port is not None else "",
+                    "remark": obj.config_desc,
+                    "maintainer": obj.updated_user or obj.created_user or "",
+                    "created_time": obj.created_time or datetime.now(),
+                    "updated_time": obj.updated_time or datetime.now(),
+                    "db_name": obj.database_name if etype == 3 else None,
+                    "db_type": str(db_type_val) if etype == 3 and db_type_val else None,
+                    "server_account": obj.config_username if etype == 2 else None,
+                    "server_password": obj.config_password if etype == 2 else None,
+                    "db_user": obj.config_username if etype == 3 else None,
+                    "db_password": obj.config_password if etype == 3 else None,
+                    "is_no_password": is_no_password,
+                })
+            return total, result
+        except ParameterException:
+            raise
+        except Exception as e:
+            error_message = f"子表环境配置查询异常, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
+
+    async def test_db_connection(self, config_id: int, app_id: str, env: str, config_name: str, db_name: str) -> Dict[str, Any]:
+        """
+        校验 DB 配置存在后创建连接池。
+
+        :return: {code, status, message, data} 结构字典
+        """
+        try:
+            app_id_int = int(str(app_id).strip())
+        except (TypeError, ValueError):
+            return {
+                "code": "999999",
+                "status": "failure",
+                "message": "配置表未找到对应记录，请检查",
+                "data": None,
+            }
+
+        env_row = await AutoTestApiEnvEnumInfo.filter(
+            env_name__iexact=(env or "").strip(),
+            state__not=1,
+        ).first()
+        if not env_row:
+            return {
+                "code": "999999",
+                "status": "failure",
+                "message": "配置表未找到对应记录，请检查",
+                "data": None,
+            }
+
+        config = await self.model.filter(
+            id=config_id,
+            project_id=app_id_int,
+            env_id=env_row.id,
+            config_name=config_name,
+            database_name=db_name,
+            config_type=AutoTestConfigNodeType.DB.value,
+            state=0,
+        ).first()
+        if not config:
+            return {
+                "code": "999999",
+                "status": "failure",
+                "message": "配置表未找到对应记录，请检查",
+                "data": None,
+            }
+
+        try:
+            await get_app_database_pool().connection(
+                app_id=str(app_id),
+                env=env,
+                config_name=config_name,
+                db_name=db_name,
+            )
+            return {
+                "code": "000000",
+                "status": "success",
+                "message": "数据库连接成功",
+                "data": {
+                    "id": config_id,
+                    "db_type": enum_field_value(config.database_type) if config.database_type else None,
+                    "host": config.config_host,
+                    "port": config.config_port,
+                },
+            }
+        except Exception as e:
+            LOGGER.error(f"创建连接池失败: {e}\n{traceback.format_exc()}")
+            return {
+                "code": "999999",
+                "status": "failure",
+                "message": f"创建连接池失败：{str(e)}",
+                "data": None,
+            }

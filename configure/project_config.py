@@ -61,14 +61,14 @@ class ProjectConfig(BaseSettings):
     # 安全认证配置（须在 backend/.env 或环境变量中配置）
     AUTH_SECRET_KEY: str = Field(..., min_length=64, description="JWT密钥，建议: openssl rand -hex 32")
     AUTH_JWT_ALGORITHM: str = "HS256"
-    AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 day
+    AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 365  # 7 day
 
     # 日志相关参数配置
     LOGGER_FILE_NAME_PREFIX: str = "执行日志"
     # 大小轮转："200 MB"
     # 日期轮转："1 day"、"1 week"、"1 month"
     # 时间轮转："HH:MM:SS"、"00:00"、"00:00:00"
-    LOGGER_ROTATION: str = "1 MB"
+    LOGGER_ROTATION: str = "100 MB"
     # 大小轮转后保留的备份文件个数（单文件多进程模式）
     LOGGER_ROTATION_BACKUP_COUNT: int = 30
 

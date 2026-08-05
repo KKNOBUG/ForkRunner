@@ -6,10 +6,11 @@
 @Module  : autotest_case_view.py
 @DateTime: 2025/4/28
 """
+import asyncio
 import os
 import tempfile
 import traceback
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set, Tuple
 
 from fastapi import APIRouter, Body, Query, Depends, UploadFile, File
 from starlette.background import BackgroundTask
@@ -50,7 +51,7 @@ from core.responses import (
     DataAlreadyExistsResponse,
     FileExtensionResponse
 )
-from enums import AutoTestReportType
+from enums import AutoTestReportType, AutoTestCaseType
 from services import get_current_username
 
 autotest_case = APIRouter()
@@ -236,6 +237,66 @@ async def get_case(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
+async def batch_fetch_related_data(
+        project_ids: Set[int], tag_ids: Set[int], case_ids: List[int], services: AutoTestApiServices
+) -> Tuple[Dict[int, dict], Dict[int, dict], Dict[int, List[str]]]:
+    acquire_project_instance_task = services.project_curd.get_by_ids(
+        project_ids=list(project_ids),
+        on_error=True,
+        return_obj=True
+    ) if project_ids else asyncio.sleep(0, result=[])
+
+    acquire_tag_instance_task = services.tag_curd.get_by_ids(
+        tag_ids=list(tag_ids),
+        on_error=True,
+        return_obj=True
+    ) if tag_ids else asyncio.sleep(0, result=[])
+
+    acquire_step_type_instance_task = services.step_curd.model.filter(
+        ~Q(case_id__isnull=True),
+        case_id__in=case_ids
+    ).values_list("case_id", "step_type") if case_ids else asyncio.sleep(0, result=[])
+
+    project_objs, tag_objs, step_type_raw = await asyncio.gather(
+        acquire_project_instance_task,
+        acquire_tag_instance_task,
+        acquire_step_type_instance_task
+    )
+
+    project_map = {}
+    for p in project_objs:
+        p_dict = await p.to_dict(
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3", "reserve_4", "reserve_5"
+            },
+            replace_fields={"id": "project_id"}
+        )
+        project_map[p_dict["project_id"]] = p_dict
+
+    tag_map = {}
+    for tag in tag_objs:
+        tag_dict = await tag.to_dict(
+            exclude_fields={
+                "state",
+                "created_user", "updated_user",
+                "created_time", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3", "reserve_4", "reserve_5"
+            },
+            replace_fields={"id": "tag_id"}
+        )
+        tag_map[tag_dict["tag_id"]] = tag_dict
+
+    case_step_type_map = {}
+    for cid, stype in step_type_raw:
+        if cid not in case_step_type_map:
+            case_step_type_map[cid] = stype
+
+    return project_map, tag_map, case_step_type_map
+
+
 @autotest_case.post("/search", summary="查询用例列表", description="根据条件分页查询用例列表信息(Body)")
 async def search_cases(
         case_in: AutoTestApiCaseSelect = Body(..., description="查询条件"),
@@ -252,8 +313,6 @@ async def search_cases(
         q = Q()
         if case_in.case_id:
             q &= Q(id=case_in.case_id)
-        if case_in.exclude_case_id:
-            q &= ~Q(id=case_in.exclude_case_id)
         if case_in.case_code:
             q &= Q(case_code=case_in.case_code)
         if case_in.case_name:
@@ -261,10 +320,8 @@ async def search_cases(
         if case_in.case_tags:
             for tag_id in case_in.case_tags:
                 q |= Q(case_tags__contains=tag_id)
-        if case_in.case_types:
-            q &= Q(case_type__in=[t.value for t in case_in.case_types])
-        elif case_in.case_type:
-            q &= Q(case_type=case_in.case_type.value)
+        if case_in.case_type:
+            q &= Q(case_type__in=case_in.case_type)
         if case_in.case_steps:
             q &= Q(case_steps__gte=case_in.case_steps)
         if case_in.case_project:
@@ -277,63 +334,75 @@ async def search_cases(
             q &= Q(created_user__iexact=case_in.created_user)
         if case_in.updated_user:
             q &= Q(updated_user__iexact=case_in.updated_user)
-        # 创建时间范围：根据 created_time 筛选，仅日期时补全为当天起止
-        if case_in.date_from:
-            date_from = case_in.date_from.strip()
-            if len(date_from) == 10:  # YYYY-MM-DD
-                date_from = f"{date_from} 00:00:00"
-            q &= Q(created_time__gte=date_from)
-        if case_in.date_to:
-            date_to = case_in.date_to.strip()
-            if len(date_to) == 10:
-                date_to = f"{date_to} 23:59:59"
-            q &= Q(created_time__lte=date_to)
         q &= Q(state=case_in.state)
+        if case_in.step_type is not None or case_in.request_args_type is not None:
+            matched_case_ids: Optional[List[int]] = await services.case_curd.get_case_ids_by_request_step(
+                step_type=case_in.step_type,
+                request_args_type=case_in.request_args_type,
+            )
+            if not matched_case_ids:
+                LOGGER.info("按条件查询用例成功, 结果数量: 0")
+                return SuccessResponse(message="查询成功", data=[], total=0)
+            q &= Q(id__in=matched_case_ids)
+
         total, instances = await services.case_curd.select_cases(
             search=q,
             page=case_in.page,
             page_size=case_in.page_size,
             order=case_in.order
         )
+        if not instances:
+            LOGGER.info(f"按条件查询用例成功, 结果数量: {total}")
+            return SuccessResponse(message="查询成功", data=[], total=total)
+
+        # 预收集所有关联ID，一次性并发批量查询
+        all_project_ids: Set[int] = set()
+        all_tag_ids: Set[int] = set()
+        all_case_ids: List[int] = []
+        is_private_script = False
+        target_case_type = {AutoTestCaseType.PUBLIC_SCRIPT.value, AutoTestCaseType.PRIVATE_SCRIPT.value}
+
+        for instance in instances:
+            all_case_ids.append(instance.id)
+            all_project_ids.add(instance.case_project)
+            # 仅脚本类型才需要查询标签
+            if (set(case_in.case_type) == target_case_type) and instance.case_tags:
+                all_tag_ids.update(instance.case_tags)
+                is_private_script = True
+
+        # 并发拉取项目、标签、步骤类型映射
+        project_map, tag_map, case_step_type_map = await batch_fetch_related_data(
+            project_ids=all_project_ids,
+            tag_ids=all_tag_ids if is_private_script else set(),
+            case_ids=all_case_ids
+        )
+
+        # 循环序列化每条用例
         case_serializes: List[Dict[str, Any]] = []
         for instance in instances:
             serialize: Dict[str, Any] = await instance.to_dict(
-                exclude_fields={"state", "reserve_1", "reserve_2", "reserve_3"},
+                exclude_fields={
+                    "state", "created_user", "updated_user",
+                    "reserve_1", "reserve_2", "reserve_3", "reserve_4", "reserve_5"
+                },
                 replace_fields={"id": "case_id"}
             )
-            project_id: int = serialize.pop("case_project")
-            project_instance = await services.project_curd.get_by_id(on_error=True, project_id=project_id, state__not=1)
-            serialize["case_project"] = await project_instance.to_dict(
-                exclude_fields={
-                    "state",
-                    "created_user", "updated_user",
-                    "created_time", "updated_time",
-                    "reserve_1", "reserve_2", "reserve_3"
-                },
-                replace_fields={"id": "project_id"}
-            )
-            tag_ids: List[int] = serialize.pop("case_tags") or []
-            # 无标签用例(公共接口允许)跳过标签查询, get_by_ids不接受空列表
-            serialize["case_tags"] = [
-                await obj.to_dict(
-                    exclude_fields={
-                        "state",
-                        "created_user", "updated_user",
-                        "created_time", "updated_time",
-                        "reserve_1", "reserve_2", "reserve_3"
-                    },
-                    replace_fields={"id": "tag_id"}
-                ) for obj in await services.tag_curd.get_by_ids(tag_ids=tag_ids, on_error=True, state__not=1)
-            ] if tag_ids else []
+            case_id = serialize["case_id"]
+            project_id = serialize.pop("case_project", None)
+            serialize["case_project"] = project_map.get(project_id, {})
+            if is_private_script:
+                tag_ids = serialize.pop("case_tags", [])
+                serialize["step_type"] = case_step_type_map.get(case_id, None)
+                serialize["case_tags"] = [tag_map.get(tid, {}) for tid in tag_ids]
             case_serializes.append(serialize)
-        LOGGER.info(f"根据条件查询用例成功, 结果数量: {total}")
+        LOGGER.info(f"按条件查询用例成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=case_serializes, total=total)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"按条件查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 

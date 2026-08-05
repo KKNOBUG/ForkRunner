@@ -20,6 +20,14 @@ from applications.aotutest.schemas.autotest_env_config_schema import (
     AutoTestApiConfigSelect,
     AutoTestApiConfigDelete,
     AutoTestEnvConfigQueryByProjectsIn,
+    APPEnvConfigCreate,
+    FILEEnvConfigCreate,
+    DBEnvConfigCreate,
+    APPEnvConfigUpdate,
+    FILEEnvConfigUpdate,
+    DBEnvConfigUpdate,
+    EnvConfigDelete,
+    TestDBConnectionRequest,
 )
 from configure import LOGGER
 from core.exceptions import (
@@ -359,3 +367,207 @@ async def get_unique_env_config_name_list(
     except Exception as e:
         LOGGER.error(f"获取去重配置名称列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
+
+
+@autotest_env_config.post("/app/add", summary="新增APP类型环境配置")
+async def add_app_config(
+        data: APPEnvConfigCreate,
+        user: str = Query("admin", description="操作人"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """新增 APP 类型环境配置。"""
+    try:
+        result = await services.env_config_curd.create_config_by_env_type(
+            env_type=1, data_dict=data.model_dump(), user=user
+        )
+        return SuccessResponse(message="新增APP配置成功", data=result, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"新增APP配置失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"新增APP配置失败, 错误描述: {e}")
+
+
+@autotest_env_config.post("/file/add", summary="新增FILE类型环境配置")
+async def add_file_config(
+        data: FILEEnvConfigCreate,
+        user: str = Query("admin", description="操作人"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """新增 FILE 类型环境配置。"""
+    try:
+        result = await services.env_config_curd.create_config_by_env_type(
+            env_type=2, data_dict=data.model_dump(), user=user
+        )
+        return SuccessResponse(message="新增FILE配置成功", data=result, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"新增FILE配置失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"新增FILE配置失败, 错误描述: {e}")
+
+
+@autotest_env_config.post("/db/add", summary="新增DB类型环境配置")
+async def add_db_config(
+        data: DBEnvConfigCreate,
+        user: str = Query("admin", description="操作人"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """新增 DB 类型环境配置。"""
+    try:
+        result = await services.env_config_curd.create_config_by_env_type(
+            env_type=3, data_dict=data.model_dump(), user=user
+        )
+        return SuccessResponse(message="新增DB配置成功", data=result, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"新增DB配置失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"新增DB配置失败, 错误描述: {e}")
+
+
+@autotest_env_config.get("/list", summary="查询子表环境配置列表")
+async def get_env_config_list(
+        env_info_id: Optional[int] = Query(None, description="应用ID"),
+        env_name: Optional[str] = Query(None, description="环境"),
+        env_type: Optional[int] = Query(None, description="节点类型"),
+        page: int = Query(1, description="页码", ge=1),
+        page_size: int = Query(10, description="每页条数", ge=1, le=100),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """分页查询环境配置列表。"""
+    try:
+        total, data = await services.env_config_curd.get_config_list(
+            env_info_id=env_info_id,
+            env_name=env_name,
+            env_type=env_type,
+            page=page,
+            page_size=page_size,
+        )
+        return SuccessResponse(message="查询成功", data=data, total=total)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"查询子表环境配置列表失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败, 错误描述: {e}")
+
+
+@autotest_env_config.post("/app/update", summary="修改APP类型环境配置")
+async def update_app_config(
+        data: APPEnvConfigUpdate,
+        user: str = Query("admin", description="操作人"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """修改 APP 类型环境配置。"""
+    try:
+        result = await services.env_config_curd.update_config_by_env_type(
+            env_type=1, data_dict=data.model_dump(), user=user
+        )
+        return SuccessResponse(message="修改APP配置成功", data=result, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"修改APP配置失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"修改APP配置失败, 错误描述: {e}")
+
+
+@autotest_env_config.post("/file/update", summary="修改FILE类型环境配置")
+async def update_file_config(
+        data: FILEEnvConfigUpdate,
+        user: str = Query("admin", description="操作人"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """修改 FILE 类型环境配置。"""
+    try:
+        result = await services.env_config_curd.update_config_by_env_type(
+            env_type=2, data_dict=data.model_dump(), user=user
+        )
+        return SuccessResponse(message="修改FILE配置成功", data=result, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"修改FILE配置失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"修改FILE配置失败, 错误描述: {e}")
+
+
+@autotest_env_config.post("/db/update", summary="修改DB类型环境配置")
+async def update_db_config(
+        data: DBEnvConfigUpdate,
+        user: str = Query("admin", description="操作人"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """修改 DB 类型环境配置。"""
+    try:
+        result = await services.env_config_curd.update_config_by_env_type(
+            env_type=3, data_dict=data.model_dump(), user=user
+        )
+        return SuccessResponse(message="修改DB配置成功", data=result, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"修改DB配置失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"修改DB配置失败, 错误描述: {e}")
+
+
+@autotest_env_config.post("/config/delete", summary="删除子表环境配置")
+async def delete_config_by_type(
+        data: EnvConfigDelete,
+        user: str = Query("admin", description="操作人"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    按节点类型软删除单条配置。
+
+    路径使用 /config/delete，避免与现有批量 POST /delete 冲突。
+    """
+    try:
+        result = await services.env_config_curd.delete_config_by_env_type(
+            record_id=data.id, env_type=data.env_type, user=user
+        )
+        return SuccessResponse(message="删除配置成功", data=result, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"删除配置失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除配置失败, 错误描述: {e}")
+
+
+@autotest_env_config.post("/db/tests-connection", summary="测试数据库连接并创建连接池")
+async def test_db_connection(
+        data: TestDBConnectionRequest,
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """测试数据库连接并创建连接池。"""
+    return await services.env_config_curd.test_db_connection(
+        config_id=data.id,
+        app_id=data.app_id,
+        env=data.env,
+        config_name=data.config_name,
+        db_name=data.db_name,
+    )

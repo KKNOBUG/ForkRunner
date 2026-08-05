@@ -87,3 +87,115 @@ class AutoTestEnvConfigClassifiedLeaf(BaseModel):
     config_host: Optional[str] = Field(None, description="主机地址")
     config_port: Optional[str] = Field(None, description="主机端口")
     database_name: Optional[str] = Field(None, description="数据库名称")
+
+
+class APPEnvConfigCreate(BaseModel):
+    """新增 APP 类型环境配置入参。"""
+
+    env_info_id: int = Field(..., description="应用ID")
+    config_name: str = Field(..., description="配置名称", max_length=64)
+    env: str = Field(..., description="环境", max_length=64)
+    env_host: str = Field(..., description="IP地址", max_length=128)
+    env_port: str = Field(..., description="端口", max_length=128)
+    maintainer: str = Field(..., description="维护人", max_length=128)
+    remark: Optional[str] = Field(None, description="备注", max_length=256)
+    operation: int = Field(1, description="操作类型：1-新增")
+
+
+class FILEEnvConfigCreate(BaseModel):
+    """新增 FILE 类型环境配置入参。"""
+
+    env_info_id: int = Field(..., description="应用ID")
+    config_name: str = Field(..., description="配置名称", max_length=64)
+    env: str = Field(..., description="环境", max_length=64)
+    server_ip: str = Field(..., description="服务器IP", max_length=128)
+    server_port: str = Field(..., description="服务器端口", max_length=128)
+    server_account: str = Field(..., description="服务器账号", max_length=128)
+    server_password: str = Field(..., description="服务器密码", max_length=128)
+    is_no_password: int = Field(..., description="是否免密", ge=0, le=1)
+    maintainer: str = Field(..., description="维护人", max_length=128)
+    remark: Optional[str] = Field(None, description="备注", max_length=256)
+    operation: int = Field(1, description="操作类型：1-新增")
+
+
+class DBEnvConfigCreate(BaseModel):
+    """新增 DB 类型环境配置入参。"""
+
+    env_info_id: int = Field(..., description="应用ID")
+    config_name: str = Field(..., description="配置名称", max_length=64)
+    env: str = Field(..., description="环境", max_length=64)
+    db_name: str = Field(..., description="数据库名称", max_length=128)
+    db_host: str = Field(..., description="数据库IP", max_length=128)
+    db_port: str = Field(..., description="数据库端口", max_length=128)
+    db_user: str = Field(..., description="数据库账号", max_length=128)
+    db_password: str = Field(..., description="数据库密码", max_length=128)
+    db_type: str = Field(..., description="数据库类型", max_length=128)
+    maintainer: str = Field(..., description="维护人", max_length=128)
+    remark: Optional[str] = Field(None, description="备注", max_length=256)
+    operation: int = Field(1, description="操作类型：1-新增")
+
+
+class APPEnvConfigUpdate(BaseModel):
+    """修改 APP 类型环境配置入参。"""
+
+    id: int = Field(..., description="配置ID")
+    project_id: str = Field(..., description="应用ID", max_length=64)
+    config_name: str = Field(..., description="配置名称", max_length=64)
+    env: str = Field(..., description="环境", max_length=64)
+    env_host: str = Field(..., description="IP地址", max_length=128)
+    env_port: str = Field(..., description="端口", max_length=128)
+    maintainer: str = Field(..., description="维护人", max_length=128)
+    remark: Optional[str] = Field(None, description="备注", max_length=256)
+    operation: int = Field(2, description="操作类型：2-修改")
+
+
+class FILEEnvConfigUpdate(BaseModel):
+    """修改 FILE 类型环境配置入参。"""
+
+    id: int = Field(..., description="配置ID")
+    project_id: str = Field(..., description="应用ID", max_length=64)
+    config_name: str = Field(..., description="配置名称", max_length=64)
+    env: str = Field(..., description="环境", max_length=64)
+    server_ip: str = Field(..., description="服务器IP", max_length=128)
+    server_port: str = Field(..., description="服务器端口", max_length=128)
+    server_account: str = Field(..., description="服务器账号", max_length=128)
+    server_password: str = Field(..., description="服务器密码", max_length=128)
+    is_no_password: int = Field(..., description="是否免密", ge=0, le=1)
+    maintainer: str = Field(..., description="维护人", max_length=128)
+    remark: Optional[str] = Field(None, description="备注", max_length=256)
+    operation: int = Field(2, description="操作类型：2-修改")
+
+
+class DBEnvConfigUpdate(BaseModel):
+    """修改 DB 类型环境配置入参。"""
+
+    id: int = Field(..., description="配置ID")
+    project_id: str = Field(..., description="应用ID", max_length=64)
+    config_name: str = Field(..., description="配置名称", max_length=64)
+    env: str = Field(..., description="环境", max_length=64)
+    db_name: str = Field(..., description="数据库名称", max_length=128)
+    db_host: str = Field(..., description="数据库IP", max_length=128)
+    db_port: str = Field(..., description="数据库端口", max_length=128)
+    db_user: str = Field(..., description="数据库账号", max_length=128)
+    db_password: str = Field(..., description="数据库密码", max_length=128)
+    db_type: str = Field(..., description="数据库类型", max_length=128)
+    maintainer: str = Field(..., description="维护人", max_length=128)
+    remark: Optional[str] = Field(None, description="备注", max_length=256)
+    operation: int = Field(2, description="操作类型：2-修改")
+
+
+class EnvConfigDelete(BaseModel):
+    """按节点类型删除环境配置入参。"""
+
+    id: int = Field(..., description="配置主键ID")
+    env_type: int = Field(..., description="节点类型")
+
+
+class TestDBConnectionRequest(BaseModel):
+    """测试数据库连接入参。"""
+
+    id: int = Field(..., description="配置主键ID")
+    app_id: str = Field(..., description="应用ID")
+    env: str = Field(..., description="环境")
+    config_name: str = Field(..., description="配置名称")
+    db_name: str = Field(..., description="数据库名称")

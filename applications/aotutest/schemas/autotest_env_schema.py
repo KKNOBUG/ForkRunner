@@ -53,3 +53,33 @@ class AutoTestApiEnvSelect(AutoTestApiEnvBase):
 
     created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+
+
+class EnvListQuery(BaseModel):
+    """按应用聚合查询环境名称列表入参。"""
+
+    project_id: Optional[List[int]] = Field(None, description="应用ID列表，如 [999,998,997]")
+
+
+class EnvCreate(BaseModel):
+    """新增环境（应用+名称+节点类型）入参。"""
+
+    project_id: int = Field(..., description="应用ID", ge=1)
+    env_name: str = Field(..., description="环境名称", max_length=64)
+    env_type: int = Field(..., description="节点类型：1:APP,2:FILE,3:DB")
+
+
+class EnvEditRequest(BaseModel):
+    """编辑环境（应用+名称+节点类型）入参。"""
+
+    id: int = Field(..., description="环境枚举ID")
+    project_id: int = Field(..., description="应用ID")
+    env_name: str = Field(..., description="环境名称")
+    env_type: int = Field(..., description="节点类型")
+
+
+class EnvDeleteRequest(BaseModel):
+    """删除环境（按枚举ID+节点类型）入参。"""
+
+    id: int = Field(..., description="环境枚举ID")
+    env_type: int = Field(..., description="节点类型")
