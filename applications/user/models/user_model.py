@@ -33,7 +33,7 @@ class User(ScaffoldModel, StateModel, TimestampMixin, MaintainMixin):
     roles = fields.ManyToManyField(
         model_name="models.Role",
         related_name="user_roles",
-        through="krun_user_role",
+        through="tbx_user_role",
     )
     dept_id = fields.IntField(null=True, index=True, description="所属部门ID")
 

@@ -20,12 +20,12 @@ class Role(ScaffoldModel, TimestampMixin, MaintainMixin):
     menus = fields.ManyToManyField(
         model_name="models.Menu",
         related_name="role_menus",
-        through="krun_role_menus",
+        through="tbx_role_menus",
     )
     routers = fields.ManyToManyField(
         model_name="models.Router",
         related_name="role_routers",
-        through="krun_role_routers"
+        through="tbx_role_routers"
     )
 
     class Meta:

@@ -497,7 +497,7 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
-        table = "tbx_ autotest_data_source"
+        table = "tbx_ autotest_api_data_source"
         table_description = "自动化测试-数据驱动文件存储表"
         unique_together = (
             ("case_id", "step_code"),
