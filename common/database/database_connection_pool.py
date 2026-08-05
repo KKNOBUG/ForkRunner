@@ -246,14 +246,15 @@ class DBConnPoolFromConfig:
                 self.logger.error(err_msg + f"\n{traceback.format_exc()}")
             raise
 
-        # 创建连接池
+        # 创建连接池：单次最多等 3 秒，最多重试 3 次（合计约 9 秒）
+        connect_timeout_sec = 3
         for retry in range(max_retries):
             try:
                 if db_type in ("mysql", "tdsql"):
                     pool = await aiomysql.create_pool(
                         minsize=1,
                         maxsize=100,
-                        connect_timeout=60,
+                        connect_timeout=connect_timeout_sec,
                         pool_recycle=3600,
                         charset='utf8mb4',
                         host=config["host"],
@@ -264,7 +265,7 @@ class DBConnPoolFromConfig:
                         autocommit=True
                     )
                 elif db_type == 'oracle':
-                    pool = oracledb.create_pool_async(
+                    pool = await oracledb.create_pool_async(
                         user=config["username"],
                         password=config["password"],
                         service_name=config["database_name"],
@@ -272,7 +273,8 @@ class DBConnPoolFromConfig:
                         port=config["port"],
                         min=1,
                         max=100,
-                        increment=1
+                        increment=1,
+                        tcp_connect_timeout=connect_timeout_sec,
                     )
                 else:
                     continue
@@ -283,7 +285,6 @@ class DBConnPoolFromConfig:
             except Exception as e:
                 if retry < max_retries - 1:
                     self.logger.warning(f"连接失败，{retry + 1}/{max_retries}次重试：{str(e)}")
-                    await asyncio.sleep(3)
                     continue
                 else:
                     err_msg = f"连接失败，错误信息：{str(e)}"
