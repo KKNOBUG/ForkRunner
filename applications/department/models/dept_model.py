@@ -22,7 +22,7 @@ class Department(ScaffoldModel, TimestampMixin, MaintainMixin):
     parent_id = fields.IntField(default=0, max_length=10, index=True, description="父部门ID")
 
     class Meta:
-        table = "tbx_ dept"
+        table = "tbx_dept"
 
 
 class DeptStruct(ScaffoldModel, TimestampMixin):
@@ -33,4 +33,4 @@ class DeptStruct(ScaffoldModel, TimestampMixin):
     level = fields.IntField(default=0, index=True, description="深度")
 
     class Meta:
-        table = "tbx_ dept_nest"
+        table = "tbx_dept_nest"

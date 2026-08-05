@@ -22,7 +22,7 @@ class Router(ScaffoldModel, MaintainMixin, TimestampMixin):
     description = fields.TextField(null=True, description="路由功能描述")
 
     class Meta:
-        table = "tbx_ router"
+        table = "tbx_router"
         unique_together = (
             ("method", "path"),
         )
