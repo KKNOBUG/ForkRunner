@@ -51,7 +51,7 @@ from core.responses import (
     DataAlreadyExistsResponse,
     FileExtensionResponse
 )
-from enums import AutoTestReportType, AutoTestCaseType
+from enums import AutoTestReportType, AutoTestCaseType, AutoTestStepType
 from services import get_current_username
 
 autotest_case = APIRouter()
@@ -298,6 +298,18 @@ async def batch_fetch_related_data(
     return project_map, tag_map, case_step_type_map
 
 
+def _protocol_from_step_type(step_type: Any) -> Optional[str]:
+    """将步骤类型映射为协议：HTTP请求→HTTP，TCP请求→TCP。"""
+    if step_type is None:
+        return None
+    value = step_type.value if hasattr(step_type, "value") else str(step_type)
+    if value == AutoTestStepType.HTTP.value or value.upper() == "HTTP":
+        return "HTTP"
+    if value == AutoTestStepType.TCP.value or value.upper() == "TCP":
+        return "TCP"
+    return None
+
+
 @autotest_case.post("/search", summary="查询用例列表", description="根据条件分页查询用例列表信息(Body)")
 async def search_cases(
         case_in: AutoTestApiCaseSelect = Body(..., description="查询条件"),
@@ -361,17 +373,19 @@ async def search_cases(
         all_tag_ids: Set[int] = set()
         all_case_ids: List[int] = []
         is_private_script = False
-        target_case_type = {AutoTestCaseType.PUBLIC_SCRIPT.value, AutoTestCaseType.PRIVATE_SCRIPT.value}
+        requested_types = set(case_in.case_type or [])
+        script_case_types = {AutoTestCaseType.PUBLIC_SCRIPT.value, AutoTestCaseType.PRIVATE_SCRIPT.value}
+        is_public_api_query = AutoTestCaseType.PUBLIC_API.value in requested_types
 
         for instance in instances:
             all_case_ids.append(instance.id)
             all_project_ids.add(instance.case_project)
             # 仅脚本类型才需要查询标签
-            if (set(case_in.case_type) == target_case_type) and instance.case_tags:
+            if (requested_types == script_case_types) and instance.case_tags:
                 all_tag_ids.update(instance.case_tags)
                 is_private_script = True
 
-        # 并发拉取项目、标签、步骤类型映射
+        # 并发拉取项目、标签、步骤类型映射（公共接口也需步骤类型以推导协议）
         project_map, tag_map, case_step_type_map = await batch_fetch_related_data(
             project_ids=all_project_ids,
             tag_ids=all_tag_ids if is_private_script else set(),
@@ -396,6 +410,15 @@ async def search_cases(
                 tag_ids = serialize.pop("case_tags", [])
                 serialize["step_type"] = case_step_type_map.get(case_id, None)
                 serialize["case_tags"] = [tag_map.get(tid, {}) for tid in tag_ids]
+            # 公共接口：有且仅有一个 HTTP/TCP 请求步骤，协议即 HTTP/TCP
+            instance_type = (
+                instance.case_type.value
+                if hasattr(instance.case_type, "value")
+                else str(instance.case_type or "")
+            )
+            if is_public_api_query or instance_type == AutoTestCaseType.PUBLIC_API.value:
+                step_type = case_step_type_map.get(case_id)
+                serialize["step_type"] = _protocol_from_step_type(step_type)
             case_serializes.append(serialize)
         LOGGER.info(f"按条件查询用例成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=case_serializes, total=total)
