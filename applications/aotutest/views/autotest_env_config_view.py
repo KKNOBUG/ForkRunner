@@ -558,7 +558,7 @@ async def delete_config_by_type(
         return FailureResponse(message=f"删除配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/db/tests-connection", summary="测试数据库连接并创建连接池")
+@autotest_env_config.post("/db/test_connection", summary="测试数据库连接并创建连接池")
 async def test_db_connection(
         data: TestDBConnectionRequest,
         services: AutoTestApiServices = Depends(get_autotest_api_services),

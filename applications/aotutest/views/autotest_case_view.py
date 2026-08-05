@@ -238,18 +238,19 @@ async def get_case(
 
 
 async def batch_fetch_related_data(
-        project_ids: Set[int], tag_ids: Set[int], case_ids: List[int], services: AutoTestApiServices
+        project_ids: Set[int],
+        tag_ids: Set[int],
+        case_ids: List[int],
+        services: AutoTestApiServices
 ) -> Tuple[Dict[int, dict], Dict[int, dict], Dict[int, List[str]]]:
     acquire_project_instance_task = services.project_curd.get_by_ids(
         project_ids=list(project_ids),
         on_error=True,
-        return_obj=True
     ) if project_ids else asyncio.sleep(0, result=[])
 
     acquire_tag_instance_task = services.tag_curd.get_by_ids(
         tag_ids=list(tag_ids),
         on_error=True,
-        return_obj=True
     ) if tag_ids else asyncio.sleep(0, result=[])
 
     acquire_step_type_instance_task = services.step_curd.model.filter(
@@ -374,7 +375,8 @@ async def search_cases(
         project_map, tag_map, case_step_type_map = await batch_fetch_related_data(
             project_ids=all_project_ids,
             tag_ids=all_tag_ids if is_private_script else set(),
-            case_ids=all_case_ids
+            case_ids=all_case_ids,
+            services=services
         )
 
         # 循环序列化每条用例

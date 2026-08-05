@@ -37,47 +37,35 @@ def _get_func_desc(attr_name: str) -> str:
 
 # 公共函数列表：name 与 execute_func_string 解析格式一致
 FUNC_LIST: List[Dict[str, Any]] = [
-    {"name": "generate_country()", "desc": ""},
-    {"name": "generate_province()", "desc": ""},
-    {"name": "generate_city()", "desc": ""},
-    {"name": "generate_district()", "desc": ""},
-    {"name": "generate_address()", "desc": ""},
-    {"name": "generate_company()", "desc": ""},
-    {"name": "generate_email()", "desc": ""},
-    {"name": "generate_job()", "desc": ""},
-    {"name": "generate_name()", "desc": ""},
-    {"name": "generate_week_number()", "desc": ""},
-    {"name": "generate_week_name()", "desc": ""},
-    {"name": "generate_day()", "desc": ""},
-    {"name": "generate_am_or_pm()", "desc": ""},
-    {"name": "generate_uuid()", "desc": ""},
-    {"name": "generate_phone()", "desc": ""},
-    {"name": "generate_random_int(min_=1, max_=100)", "desc": ""},
-    {"name": "generate_ident_card_number()", "desc": ""},
-    {"name": "generate_ident_card_number_condition(min_age=18, max_age=65)", "desc": ""},
-    {"name": 'generate_ident_card_birthday(ident_card_number="310224199508081212")', "desc": ""},
-    {"name": 'generate_ident_card_gender(ident_card_number="310224199508081212")', "desc": ""},
-    {"name": "generate_string(length=6, digit=False, char=False, chinese=False)", "desc": ""},
-    {"name": "generate_global_serial_number()", "desc": ""},
-    {"name": "generate_information(minAge=18, maxAge=60)", "desc": ""},
-    {"name": "generate_datetime(year=0, month=0, day=0, hour=0, minute=0, second=0, fmt=52, isMicrosecond=False)", "desc": ""},
+    {"value": "generate_country()", "key": ""},
+    {"value": "generate_province()", "key": ""},
+    {"value": "generate_city()", "key": ""},
+    {"value": "generate_district()", "key": ""},
+    {"value": "generate_address()", "key": ""},
+    {"value": "generate_company()", "key": ""},
+    {"value": "generate_email()", "key": ""},
+    {"value": "generate_job()", "key": ""},
+    {"value": "generate_name()", "key": ""},
+    {"value": "generate_week_number()", "key": ""},
+    {"value": "generate_week_name()", "key": ""},
+    {"value": "generate_day()", "key": ""},
+    {"value": "generate_am_or_pm()", "key": ""},
+    {"value": "generate_uuid()", "key": ""},
+    {"value": "generate_phone()", "key": ""},
+    {"value": "generate_random_int(min_=1, max_=100)", "key": ""},
+    {"value": "generate_ident_card_number()", "key": ""},
+    {"value": "generate_ident_card_number_condition(min_age=18, max_age=65)", "key": ""},
+    {"value": 'generate_ident_card_birthday(ident_card_number="310224199508081212")', "key": ""},
+    {"value": 'generate_ident_card_gender(ident_card_number="310224199508081212")', "key": ""},
+    {"value": "generate_string(length=6, digit=False, char=False, chinese=False)", "key": ""},
+    {"value": "generate_global_serial_number()", "key": ""},
+    {"value": "generate_information(minAge=18, maxAge=60)", "key": ""},
+    {"value": "generate_datetime(year=0, month=0, day=0, hour=0, minute=0, second=0, fmt=52, isMicrosecond=False)", "key": ""},
 ]
 
 
-# 获取GenerateUtils类型公共函数方法1
-def _build_func_list_with_desc1() -> List[Dict[str, Any]]:
-    """为 FUNC_LIST 中每项补全 desc（从 GenerateUtils 反射）。"""
-    result: List[Dict[str, Any]] = []
-    for item in FUNC_LIST:
-        name = item["name"]
-        func_name = name.split("(")[0].strip() if "(" in name else name
-        desc = item.get("desc") or _get_func_desc(func_name)
-        result.append({"name": name, "desc": desc})
-    return result
-
-
-# 获取GenerateUtils类型公共函数方法2
-def _build_func_list_with_desc2(cls) -> List[Dict[str, Any]]:
+# 获取GenerateUtils类型公共函数方法
+def _build_func_list_with_desc(cls) -> List[Dict[str, Any]]:
     """
     获取类下所有公共方法信息
     支持：实例方法/@classmethod/@staticmethod
@@ -131,8 +119,8 @@ def _build_func_list_with_desc2(cls) -> List[Dict[str, Any]]:
             # desc = doc.splitlines()[0].strip() if doc else ""
 
             result.append({
-                "name": func_full_name,
-                "desc": doc
+                "value": func_full_name,
+                "key": doc
             })
         except (ValueError, TypeError):
             continue
@@ -148,7 +136,7 @@ async def get_func_info():
     :return: 统一HTTP响应
     """
     try:
-        func_list = _build_func_list_with_desc2(GenerateUtils)
+        func_list = _build_func_list_with_desc(GenerateUtils)
         LOGGER.info("辅助函数查询成功")
         return SuccessResponse(message="查询成功", data=func_list, total=len(func_list))
     except Exception as e:

@@ -7,7 +7,7 @@
 @DateTime: 2026/1/2 18:01
 """
 import traceback
-from typing import Optional, Dict, Any, List, Tuple, Union
+from typing import Optional, Dict, Any, List, Tuple, Union, Set
 
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
@@ -59,24 +59,29 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         return instance
 
     async def get_by_ids(
-            self, project_ids: List[int], on_error: bool = False, return_obj: bool = False
+            self,
+            project_ids: List[int],
+            on_error: bool = False,
+            **kwargs
     ) -> Optional[Union[bool, List[AutoTestApiProjectInfo]]]:
-        if not project_ids or not isinstance(project_ids, list):
-            error_message: str = "查询应用信息失败, 参数(project_ids)不允许为空且必须是List[int]类型"
+        if not project_ids:
+            error_message: str = "查询应用信息失败, 参数[project_ids]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        if not isinstance(project_ids, list):
+            error_message: str = "查询应用信息失败, 参数[project_ids]必须是List[int]类型"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        existing_project_ids = await self.model.filter(id__in=project_ids, state__not=1).values_list("id", flat=True)
-        missing_project_ids: set = set(project_ids) - set(existing_project_ids)
+        existing_project_ids = await self.model.filter(id__in=project_ids, **kwargs).values_list("id", flat=True)
+        missing_project_ids: Set[int] = set(project_ids) - set(existing_project_ids)
         if missing_project_ids:
-            error_message: str = f"查询应用信息失败, 应用(id={missing_project_ids})不存在"
+            error_message: str = f"查询应用信息失败, 记录[id_in={missing_project_ids}]不存在"
             LOGGER.error(error_message)
             if on_error:
                 raise NotFoundException(message=error_message)
             return False
-        if return_obj:
-            return await self.model.filter(id__in=project_ids, state__not=1).all()
-        return True
+        return await self.model.filter(id__in=project_ids, state__not=1).all()
 
     async def get_by_code(self, project_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiProjectInfo]:
         """
