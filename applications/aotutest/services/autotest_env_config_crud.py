@@ -25,6 +25,7 @@ from applications.aotutest.services.autotest_env_crud import (
     AutoTestApiEnvEnumCrud,
     CONFIG_TYPE_TO_ENV_TYPE,
     enum_field_value,
+    format_datetime,
     resolve_config_type,
 )
 from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
@@ -429,7 +430,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             fields["database_type"] = db_type
         return fields
 
-    @staticmethod
     def _serialize_typed_config(self, instance: AutoTestApiEnvConfigInfo, env_name: str, env_type: int) -> Dict[str, Any]:
         """将配置实例序列化为按节点类型拆分字段的响应结构。"""
         host = instance.config_host
@@ -452,14 +452,26 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             "remark": instance.config_desc,
         }
 
-    @staticmethod
-    async def _get_or_create_env_enum(self, env_name: str, user: str) -> AutoTestApiEnvEnumInfo:
-        """按环境名获取或创建环境枚举。"""
+    async def _get_or_create_env_enum(
+            self,
+            *,
+            project_id: int,
+            env_name: str,
+            env_type: int,
+            user: str,
+    ) -> AutoTestApiEnvEnumInfo:
+        """按应用+环境名+节点类型获取或创建环境主表记录。"""
         name = (env_name or "").strip().upper()
         if not name:
             raise ParameterException(message="参数[env]不允许为空")
         return await AutoTestApiEnvEnumCrud().create_env(
-            AutoTestApiEnvCreate(env_name=name, created_user=user, env_desc="")
+            AutoTestApiEnvCreate(
+                env_name=name,
+                project_id=project_id,
+                env_type=env_type,
+                created_user=user,
+                env_desc="",
+            )
         )
 
     async def _assert_host_unique(
@@ -519,7 +531,12 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             payload = {**data_dict, "env": env_name, "maintainer": data_dict.get("maintainer") or user}
 
             await AutoTestApiProjectCrud().get_by_id(project_id=project_id, on_error=True, state__not=1)
-            env_enum = await self._get_or_create_env_enum(env_name, user=user)
+            env_enum = await self._get_or_create_env_enum(
+                project_id=project_id,
+                env_name=env_name,
+                env_type=env_type,
+                user=user,
+            )
             mapped = self._map_typed_config_fields(env_type, payload)
 
             existing = await self.model.filter(
@@ -596,7 +613,12 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 )
 
             env_name = (data_dict.get("env") or "").upper()
-            env_enum = await self._get_or_create_env_enum(env_name, user=user)
+            env_enum = await self._get_or_create_env_enum(
+                project_id=int(existing.project_id),
+                env_name=env_name,
+                env_type=env_type,
+                user=user,
+            )
             mapped = self._map_typed_config_fields(
                 env_type,
                 {**data_dict, "env": env_name, "maintainer": data_dict.get("maintainer") or user},
@@ -691,10 +713,15 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             if env_type is not None:
                 query = query.filter(config_type=resolve_config_type(env_type))
             if env_name:
-                matched_env_ids = await AutoTestApiEnvEnumInfo.filter(
+                env_filter = AutoTestApiEnvEnumInfo.filter(
                     env_name__iexact=env_name.strip(),
                     state__not=1,
-                ).values_list("id", flat=True)
+                )
+                if env_info_id is not None:
+                    env_filter = env_filter.filter(project_id=env_info_id)
+                if env_type is not None:
+                    env_filter = env_filter.filter(env_type=env_type)
+                matched_env_ids = await env_filter.values_list("id", flat=True)
                 if not matched_env_ids:
                     return 0, []
                 query = query.filter(env_id__in=list(matched_env_ids))
@@ -727,8 +754,8 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                     "port": str(obj.config_port) if obj.config_port is not None else "",
                     "remark": obj.config_desc,
                     "maintainer": obj.updated_user or obj.created_user or "",
-                    "created_time": obj.created_time or datetime.now(),
-                    "updated_time": obj.updated_time or datetime.now(),
+                    "created_time": format_datetime(obj.created_time or datetime.now()),
+                    "updated_time": format_datetime(obj.updated_time or datetime.now()),
                     "db_name": obj.database_name if etype == 3 else None,
                     "db_type": str(db_type_val) if etype == 3 and db_type_val else None,
                     "server_account": obj.config_username if etype == 2 else None,
@@ -762,9 +789,17 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             }
 
         env_row = await AutoTestApiEnvEnumInfo.filter(
+            project_id=app_id_int,
             env_name__iexact=(env or "").strip(),
+            env_type=3,
             state__not=1,
         ).first()
+        if not env_row:
+            env_row = await AutoTestApiEnvEnumInfo.filter(
+                project_id=app_id_int,
+                env_name__iexact=(env or "").strip(),
+                state__not=1,
+            ).first()
         if not env_row:
             return {
                 "code": "999999",

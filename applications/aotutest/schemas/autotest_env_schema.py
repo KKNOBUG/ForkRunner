@@ -17,6 +17,8 @@ class AutoTestApiEnvCreate(BaseModel):
     """创建环境枚举入参。"""
 
     env_name: UpperStr = Field(..., max_length=64, description="环境枚举名称")
+    project_id: int = Field(..., description="应用ID", ge=1)
+    env_type: int = Field(..., description="节点类型：1:APP,2:FILE,3:DB", ge=1, le=3)
     env_desc: Optional[str] = Field(None, max_length=2048, description="环境枚举描述")
     created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
 
@@ -27,6 +29,8 @@ class AutoTestApiEnvBase(BaseModel):
     env_id: Optional[int] = Field(None, description="环境ID")
     env_code: Optional[str] = Field(None, max_length=64, description="环境标识代码")
     env_name: Optional[Union[UpperStr, str]] = Field(None, max_length=64, description="环境名称")
+    project_id: Optional[int] = Field(None, description="应用ID", ge=1)
+    env_type: Optional[int] = Field(None, description="节点类型：1:APP,2:FILE,3:DB")
     env_desc: Optional[str] = Field(None, max_length=2048, description="环境枚举描述")
     updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
 

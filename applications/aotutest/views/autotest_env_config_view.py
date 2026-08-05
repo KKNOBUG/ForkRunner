@@ -15,10 +15,7 @@ from tortoise.expressions import Q
 
 from applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from applications.aotutest.schemas.autotest_env_config_schema import (
-    AutoTestApiConfigCreate,
-    AutoTestApiConfigUpdate,
     AutoTestApiConfigSelect,
-    AutoTestApiConfigDelete,
     AutoTestEnvConfigQueryByProjectsIn,
     APPEnvConfigCreate,
     FILEEnvConfigCreate,
@@ -34,152 +31,17 @@ from core.exceptions import (
     NotFoundException,
     DataAlreadyExistsException,
     ParameterException,
-    DataBaseStorageException,
 )
 from core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
     NotFoundResponse,
-    DataBaseStorageResponse,
     DataAlreadyExistsResponse
 )
 from enums import AutoTestConfigNodeType
 
 autotest_env_config = APIRouter()
-
-
-@autotest_env_config.post("/create", summary="新增环境配置")
-async def create_env_config(
-        config_in: AutoTestApiConfigCreate = Body(..., description="环境配置"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
-):
-    """
-    新增环境配置。
-
-    :param config_in: 环境配置入参
-    :param services: 自动化测试CRUD依赖聚合
-    :return: 统一HTTP响应
-    """
-    try:
-        instance = await services.env_config_curd.create_config(config_in=config_in)
-        data = await instance.to_dict(
-            exclude_fields={
-                "state",
-                "created_user", "updated_user",
-                "created_time", "updated_time",
-                "reserve_1", "reserve_2", "reserve_3"
-            },
-            replace_fields={"id": "config_id"}
-        )
-        LOGGER.info(f"新增环境配置成功, 结果明细: {data}")
-        return SuccessResponse(message="新增成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except DataBaseStorageException as e:
-        return DataBaseStorageResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"新增环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增失败，异常描述: {e}")
-
-
-@autotest_env_config.delete("/delete", summary="删除环境配置", description="根据id或code删除环境配置信息")
-async def delete_env_config(
-        config_id: Optional[int] = Query(None, description="环境配置ID"),
-        config_code: Optional[str] = Query(None, description="环境配置标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
-):
-    """
-    根据id或code删除环境配置。
-
-    :param config_id: 环境配置主键ID
-    :param config_code: 环境配置业务标识
-    :param services: 自动化测试CRUD依赖聚合
-    :return: 统一HTTP响应
-    """
-    try:
-        instance = await services.env_config_curd.delete_config(config_id=config_id, config_code=config_code)
-        data = await instance.to_dict(
-            exclude_fields={
-                "state",
-                "created_user", "updated_user",
-                "created_time", "updated_time",
-                "reserve_1", "reserve_2", "reserve_3"
-            },
-            replace_fields={"id": "config_id"}
-        )
-        LOGGER.info(f"根据id或code删除环境配置成功, 结果明细: {data}")
-        return SuccessResponse(message="删除成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"根据id或code删除环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")
-
-
-@autotest_env_config.post("/delete", summary="批量删除环境配置", description="根据id或code列表删除环境配置信息")
-async def delete_env_config_batch(
-        config_in: AutoTestApiConfigDelete = Body(..., description="环境配置信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
-):
-    """
-    根据id或code列表删除环境。
-
-    :param config_in: 环境配置入参
-    :param services: 自动化测试CRUD依赖聚合
-    :return: 统一HTTP响应
-    """
-    try:
-        count = await services.env_config_curd.delete_configs(config_in=config_in)
-        LOGGER.info(f"根据id或code列表删除环境配置成功, 数量: {count}")
-        return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"根据id或code列表删除环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")
-
-
-@autotest_env_config.post("/update", summary="更新环境配置", description="根据id或code更新环境配置信息")
-async def update_env_config(
-        config_in: AutoTestApiConfigUpdate = Body(..., description="环境配置"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
-):
-    """
-    根据id或code更新环境配置。
-
-    :param config_in: 环境配置入参
-    :param services: 自动化测试CRUD依赖聚合
-    :return: 统一HTTP响应
-    """
-    try:
-        instance = await services.env_config_curd.update_config(config_in=config_in)
-        data = await instance.to_dict(
-            exclude_fields={
-                "state",
-                "created_user", "updated_user",
-                "created_time", "updated_time",
-                "reserve_1", "reserve_2", "reserve_3"
-            },
-            replace_fields={"id": "env_id"}
-        )
-        LOGGER.info(f"根据id或code更新环境配置成功, 结果明细: {data}")
-        return SuccessResponse(message="更新成功", data=data, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
-    except DataBaseStorageException as e:
-        return DataBaseStorageResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"根据id或code更新环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
 @autotest_env_config.get("/get", summary="查询环境配置", description="根据id或code查询环境配置信息")
@@ -369,7 +231,7 @@ async def get_unique_env_config_name_list(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_env_config.post("/app/add", summary="新增APP类型环境配置")
+@autotest_env_config.post("/app/create", summary="新增APP类型环境配置")
 async def add_app_config(
         data: APPEnvConfigCreate,
         user: str = Query("admin", description="操作人"),
@@ -392,7 +254,7 @@ async def add_app_config(
         return FailureResponse(message=f"新增APP配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/file/add", summary="新增FILE类型环境配置")
+@autotest_env_config.post("/file/create", summary="新增FILE类型环境配置")
 async def add_file_config(
         data: FILEEnvConfigCreate,
         user: str = Query("admin", description="操作人"),
@@ -415,7 +277,7 @@ async def add_file_config(
         return FailureResponse(message=f"新增FILE配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/db/add", summary="新增DB类型环境配置")
+@autotest_env_config.post("/database/create", summary="新增DB类型环境配置")
 async def add_db_config(
         data: DBEnvConfigCreate,
         user: str = Query("admin", description="操作人"),
@@ -510,7 +372,7 @@ async def update_file_config(
         return FailureResponse(message=f"修改FILE配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/db/update", summary="修改DB类型环境配置")
+@autotest_env_config.post("/database/update", summary="修改DB类型环境配置")
 async def update_db_config(
         data: DBEnvConfigUpdate,
         user: str = Query("admin", description="操作人"),
@@ -533,7 +395,7 @@ async def update_db_config(
         return FailureResponse(message=f"修改DB配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/config/delete", summary="删除子表环境配置")
+@autotest_env_config.post("/delete", summary="删除子表环境配置")
 async def delete_config_by_type(
         data: EnvConfigDelete,
         user: str = Query("admin", description="操作人"),
@@ -558,7 +420,7 @@ async def delete_config_by_type(
         return FailureResponse(message=f"删除配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/db/test_connection", summary="测试数据库连接并创建连接池")
+@autotest_env_config.post("/database/test_connection", summary="测试数据库连接并创建连接池")
 async def test_db_connection(
         data: TestDBConnectionRequest,
         services: AutoTestApiServices = Depends(get_autotest_api_services),

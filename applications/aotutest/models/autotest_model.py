@@ -63,14 +63,23 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
 
 
 class AutoTestApiEnvEnumInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    env_name = fields.CharField(max_length=128, unique=True, index=True, description="环境名称")
+    env_name = fields.CharField(max_length=128, index=True, description="环境名称")
     env_desc = fields.CharField(max_length=2048, null=True, description="环境描述")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
+    project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
+    env_type = fields.SmallIntField(default=1, index=True, description="节点类型：1:APP,2:FILE,3:DB")
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "tbx_autotest_api_env"
         table_description = "自动化测试-环境信息表"
+        unique_together = (
+            ("project_id", "env_name", "env_type"),
+        )
+        indexes = (
+            ("project_id", "state"),
+            ("env_type", "state"),
+        )
         ordering = ["-updated_time"]
 
     def __str__(self):

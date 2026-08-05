@@ -47,11 +47,6 @@ CONFIG_TYPE_TO_ENV_TYPE = {
     AutoTestConfigNodeType.FILE.value: 2,
     AutoTestConfigNodeType.DB.value: 3,
 }
-CONFIG_TYPE_TO_LABEL = {
-    AutoTestConfigNodeType.API.value: "APP",
-    AutoTestConfigNodeType.FILE.value: "FILE",
-    AutoTestConfigNodeType.DB.value: "DB",
-}
 
 
 def resolve_config_type(env_type: int) -> str:
@@ -73,15 +68,25 @@ def enum_field_value(value: Any) -> str:
     return value.value if hasattr(value, "value") else str(value)
 
 
+def format_datetime(value: Any) -> Optional[str]:
+    """将时间格式化为 YYYY-MM-DD HH:MM:SS；空值返回 None。"""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    text = str(value).strip()
+    return text[:19] if text else None
+
+
 async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tuple[str, Optional[str]]:
     """
-    根据全局环境枚举名与应用解析API的host/port。
+    根据应用与环境名称解析API的host/port。
 
     :param project_id: 应用主键ID
-    :param env_name: 环境枚举名称
+    :param env_name: 环境名称
     :return: (host, port)；port可为空
     :raises ParameterException: env_name为空
-    :raises NotFoundException: 环境枚举或API配置不存在
+    :raises NotFoundException: 环境或API配置不存在
     """
     pid = int(project_id)
     name = (env_name or "").strip()
@@ -90,9 +95,21 @@ async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tupl
         LOGGER.error(error_message)
         raise ParameterException(message=error_message)
 
-    env_row = await AutoTestApiEnvEnumInfo.filter(env_name__iexact=name, state__not=1).first()
+    env_row = await AutoTestApiEnvEnumInfo.filter(
+        project_id=pid,
+        env_name__iexact=name,
+        env_type=1,
+        state__not=1,
+    ).first()
     if not env_row:
-        error_message: str = f"查询环境枚举失败, 记录[env_name={name}]不存在"
+        # 兼容历史：同名环境可能挂在其他 env_type 行上，再按配置反查
+        env_row = await AutoTestApiEnvEnumInfo.filter(
+            project_id=pid,
+            env_name__iexact=name,
+            state__not=1,
+        ).first()
+    if not env_row:
+        error_message: str = f"查询环境失败, 记录[project_id={pid}, env_name={name}]不存在"
         LOGGER.error(error_message)
         raise NotFoundException(message=error_message)
 
@@ -195,22 +212,27 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def create_env(self, env_in: AutoTestApiEnvCreate) -> AutoTestApiEnvEnumInfo:
         """
-        创建环境枚举；同名已存在则恢复并更新。
+        创建环境；同应用+名称+类型已存在则恢复并更新。
 
-        :param env_in: 环境枚举创建schema
-        :return: 创建或恢复后的环境枚举实例
+        :param env_in: 环境创建schema（含 project_id / env_type）
+        :return: 创建或恢复后的环境实例
+        :raises ParameterException: env_type非法
         :raises DataBaseStorageException: 违反数据库约束或记录异常丢失
         """
+        resolve_config_type(env_in.env_type)
         env_name: str = env_in.env_name
-        # 业务层验证：检查环境枚举名称是否存在
         env_dict: Dict[str, Any] = env_in.model_dump(exclude_none=True, exclude_unset=True)
-        existing_env: Optional[AutoTestApiEnvEnumInfo] = await self.model.filter(env_name=env_name).first()
+        existing_env: Optional[AutoTestApiEnvEnumInfo] = await self.model.filter(
+            project_id=env_in.project_id,
+            env_name=env_name,
+            env_type=env_in.env_type,
+        ).first()
         if not existing_env:
             try:
                 instance: AutoTestApiEnvEnumInfo = await self.create(obj_in=env_dict)
                 return instance
             except IntegrityError as e:
-                error_message: str = f"新增环境枚举信息异常, 违反约束规则: {e}"
+                error_message: str = f"新增环境信息异常, 违反约束规则: {e}"
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 raise DataBaseStorageException(message=error_message) from e
 
@@ -219,7 +241,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             instance: AutoTestApiEnvEnumInfo = await self.update(id=existing_env.id, obj_in=env_dict)
             return instance
         except (DoesNotExist, IntegrityError) as e:
-            error_message: str = f"新增(更新)环境枚举信息异常, 违反约束规则或空指针异常: {e}"
+            error_message: str = f"新增(更新)环境信息异常, 违反约束规则或空指针异常: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -322,7 +344,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             project_id: Optional[List[int]] = None,
     ) -> Union[Dict[str, List[str]], Dict[int, Dict[str, List[str]]]]:
         """
-        按节点类型聚合环境名称。
+        按节点类型聚合环境名称（直接读环境主表）。
 
         :param project_id:
             - None: 返回 {APP/FILE/DB: [env_name, ...]}
@@ -332,44 +354,36 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         :raises ParameterException: 查询异常
         """
         try:
-            base_qs = AutoTestApiEnvConfigInfo.filter(
-                state=0,
-                config_type__in=list(CONFIG_TYPE_TO_ENV_TYPE.keys()),
-            )
-
-            async def _load_env_names(rows: List[Dict[str, Any]]) -> Dict[int, str]:
-                env_ids = list({r["env_id"] for r in rows if r.get("env_id")})
-                if not env_ids:
-                    return {}
-                return dict(
-                    await AutoTestApiEnvEnumInfo.filter(id__in=env_ids, state__not=1).values_list("id", "env_name")
-                )
+            env_type_to_label = {
+                1: "APP",
+                2: "FILE",
+                3: "DB",
+            }
+            base_qs = self.model.filter(state=0)
 
             if project_id is None:
-                rows = await base_qs.values("config_type", "env_id")
-                env_name_map = await _load_env_names(rows)
+                rows = await base_qs.values("env_type", "env_name")
                 env_map: Dict[str, set] = defaultdict(set)
                 for row in rows:
-                    label = CONFIG_TYPE_TO_LABEL.get(enum_field_value(row["config_type"]))
-                    name = env_name_map.get(row["env_id"])
+                    label = env_type_to_label.get(int(row["env_type"]))
+                    name = row.get("env_name")
                     if label and name:
                         env_map[label].add(name)
                 return {et: sorted(names) for et, names in env_map.items()}
 
             unique_pids: Optional[List[int]] = None
             if not project_id:
-                rows = await base_qs.values("project_id", "config_type", "env_id")
+                rows = await base_qs.values("project_id", "env_type", "env_name")
             else:
                 unique_pids = list(dict.fromkeys(project_id))
                 rows = await base_qs.filter(project_id__in=unique_pids).values(
-                    "project_id", "config_type", "env_id"
+                    "project_id", "env_type", "env_name"
                 )
 
-            env_name_map = await _load_env_names(rows)
             grouped: Dict[int, Dict[str, set]] = defaultdict(lambda: defaultdict(set))
             for row in rows:
-                label = CONFIG_TYPE_TO_LABEL.get(enum_field_value(row["config_type"]))
-                name = env_name_map.get(row["env_id"])
+                label = env_type_to_label.get(int(row["env_type"]))
+                name = row.get("env_name")
                 if label and name:
                     grouped[row["project_id"]][label].add(name)
 
@@ -393,92 +407,76 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             page_size: int = 10,
     ) -> Tuple[int, List[Dict[str, Any]]]:
         """
-        按 (project_id, env_name, env_type) 聚合配置后分页返回。
+        以环境主表分页查询；可选按子配置 IP 过滤。
 
         :return: (总条数, 当前页记录)；记录含 id/project_id/env_name/env_type/project_name/is_delete/时间字段
         :raises ParameterException: 查询异常或节点类型非法
         """
         try:
-            config_qs = AutoTestApiEnvConfigInfo.filter(
-                state=0,
-                config_type__in=list(CONFIG_TYPE_TO_ENV_TYPE.keys()),
-            )
-            if project_id is not None:
-                config_qs = config_qs.filter(project_id=project_id)
             if env_type is not None:
-                config_qs = config_qs.filter(config_type=resolve_config_type(env_type))
+                resolve_config_type(env_type)
+
+            base_qs = self.model.filter(state=0)
+
             if ip:
-                config_qs = config_qs.filter(config_host__contains=ip)
+                config_qs = AutoTestApiEnvConfigInfo.filter(
+                    state=0,
+                    config_host__contains=ip,
+                    config_type__in=list(CONFIG_TYPE_TO_ENV_TYPE.keys()),
+                )
+                matched_env_ids = await config_qs.values_list("env_id", flat=True)
+                if not matched_env_ids:
+                    return 0, []
+                base_qs = base_qs.filter(id__in=list(set(matched_env_ids)))
 
-            rows = await config_qs.values(
-                "project_id", "env_id", "config_type", "created_time", "updated_time"
-            )
-            if not rows:
-                return 0, []
-
-            env_ids = list({r["env_id"] for r in rows})
-            env_rows = await AutoTestApiEnvEnumInfo.filter(id__in=env_ids, state__not=1).values(
-                "id", "env_name", "created_time", "updated_time"
-            )
-            env_map = {r["id"]: r for r in env_rows}
+            if project_id is not None:
+                base_qs = base_qs.filter(project_id=project_id)
             if env_name:
-                keyword = env_name.upper()
-                env_map = {
-                    eid: erow for eid, erow in env_map.items()
-                    if keyword in (erow.get("env_name") or "").upper()
-                }
-                rows = [r for r in rows if r["env_id"] in env_map]
+                base_qs = base_qs.filter(env_name__icontains=env_name.strip())
+            if env_type is not None:
+                base_qs = base_qs.filter(env_type=env_type)
 
-            groups: Dict[Tuple[int, int, str], Dict[str, Any]] = {}
-            for row in rows:
-                erow = env_map.get(row["env_id"])
-                if not erow:
-                    continue
-                ctype = enum_field_value(row["config_type"])
-                key = (row["project_id"], row["env_id"], ctype)
-                if key not in groups:
-                    groups[key] = {
-                        "id": str(row["env_id"]),
-                        "project_id": str(row["project_id"]),
-                        "env_name": erow["env_name"],
-                        "env_type": CONFIG_TYPE_TO_ENV_TYPE.get(ctype, 1),
-                        "created_time": row["created_time"] or erow.get("created_time"),
-                        "updated_time": row["updated_time"] or erow.get("updated_time"),
-                    }
-                    continue
-                nxt = row["updated_time"]
-                cur = groups[key]["updated_time"]
-                if cur and nxt and nxt > cur:
-                    groups[key]["updated_time"] = nxt
+            active_project_ids = await AutoTestApiProjectInfo.filter(state=0).values_list("id", flat=True)
+            if active_project_ids:
+                base_qs = base_qs.filter(project_id__in=list(active_project_ids))
 
-            aggregated = sorted(
-                groups.values(),
-                key=lambda x: x.get("updated_time") or datetime.min,
-                reverse=True,
+            total = await base_qs.count()
+            offset = (page - 1) * page_size
+            page_rows = await base_qs.offset(offset).limit(page_size).values(
+                "id", "project_id", "env_name", "env_type", "created_time", "updated_time"
             )
-            total = len(aggregated)
-            page_items = aggregated[(page - 1) * page_size: page * page_size]
 
-            project_ids = [int(item["project_id"]) for item in page_items]
+            project_ids = [int(item["project_id"]) for item in page_rows]
             project_map = {}
             if project_ids:
                 project_map = dict(
                     await AutoTestApiProjectInfo.filter(id__in=project_ids, state=0).values_list("id", "project_name")
                 )
 
-            # 列表项均由配置聚合得到，存在子配置，故 is_delete 恒为 False
+            check_ids = [item["id"] for item in page_rows]
+            sub_exists = set()
+            if check_ids:
+                config_rows = await AutoTestApiEnvConfigInfo.filter(
+                    env_id__in=check_ids,
+                    state=0,
+                    config_type__in=list(CONFIG_TYPE_TO_ENV_TYPE.keys()),
+                ).values("env_id", "project_id", "config_type")
+                for crow in config_rows:
+                    ctype = enum_field_value(crow["config_type"])
+                    sub_exists.add((crow["env_id"], crow["project_id"], CONFIG_TYPE_TO_ENV_TYPE.get(ctype)))
+
             result = [
                 {
-                    "id": item["id"],
-                    "project_id": item["project_id"],
+                    "id": str(item["id"]),
+                    "project_id": str(item["project_id"]),
                     "env_name": item["env_name"],
                     "env_type": item["env_type"],
-                    "created_time": item["created_time"],
-                    "updated_time": item["updated_time"],
+                    "created_time": format_datetime(item["created_time"]),
+                    "updated_time": format_datetime(item["updated_time"]),
                     "project_name": project_map.get(int(item["project_id"]), ""),
-                    "is_delete": False,
+                    "is_delete": (item["id"], item["project_id"], item["env_type"]) not in sub_exists,
                 }
-                for item in page_items
+                for item in page_rows
             ]
             return total, result
         except ParameterException:
@@ -490,40 +488,48 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def create_automation_env(self, data: EnvCreate, user: str = "system") -> Dict[str, Any]:
         """
-        确保环境枚举存在；同应用+环境+类型下已有配置则判重。
+        新增环境主表记录（应用+名称+类型唯一）。
 
         :param data: 环境创建入参
         :param user: 操作人
         :return: 与历史接口一致的环境响应字典
         """
         try:
-            config_type = resolve_config_type(data.env_type)
+            resolve_config_type(data.env_type)
             from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
             await AutoTestApiProjectCrud().get_by_id(project_id=data.project_id, on_error=True, state__not=1)
 
             env_name = data.env_name.upper()
-            existing_env = await self.model.filter(env_name=env_name).first()
-            if existing_env and existing_env.state == 0:
-                exists_cfg = await AutoTestApiEnvConfigInfo.filter(
-                    project_id=data.project_id,
-                    env_id=existing_env.id,
-                    config_type=config_type,
-                    state=0,
-                ).exists()
-                if exists_cfg:
+            existing_env = await self.model.filter(
+                project_id=data.project_id,
+                env_name=env_name,
+                env_type=data.env_type,
+            ).first()
+            if existing_env:
+                if existing_env.state == 0:
                     raise DataAlreadyExistsException(
                         message=f"应用：{data.project_id}+环境{env_name}+类型{data.env_type}已存在，不能重复新增"
                     )
+                existing_env.state = 0
+                existing_env.updated_user = user
+                await existing_env.save()
+                env_instance = existing_env
+            else:
+                env_instance = await self.create_env(
+                    AutoTestApiEnvCreate(
+                        env_name=env_name,
+                        project_id=data.project_id,
+                        env_type=data.env_type,
+                        created_user=user,
+                    )
+                )
 
-            env_instance = await self.create_env(
-                AutoTestApiEnvCreate(env_name=env_name, created_user=user)
-            )
             now = env_instance.updated_time or env_instance.created_time or datetime.now()
             return {
                 "id": env_instance.id,
-                "project_id": data.project_id,
+                "project_id": env_instance.project_id,
                 "env_name": env_instance.env_name,
-                "env_type": data.env_type,
+                "env_type": env_instance.env_type,
                 "updated_time": now,
                 "created_time": env_instance.created_time or now,
             }
@@ -536,7 +542,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def update_automation_env(self, data: EnvEditRequest, user: str = "system") -> Dict[str, Any]:
         """
-        更新环境枚举名称，并级联同类型配置的 env_id / project_id。
+        更新环境主表字段，并级联同类型配置的 env_id / project_id。
 
         :param data: 环境编辑入参
         :param user: 操作人
@@ -549,44 +555,46 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
             existing = await self.get_by_id(env_id=data.id, on_error=True, state__not=1)
             new_env_name = data.env_name.upper()
-            target_env = await self.model.filter(env_name=new_env_name, state__not=1).first()
+            old_project_id = existing.project_id
+            old_env_name = existing.env_name
+            old_env_type = existing.env_type
 
-            if target_env and target_env.id != existing.id:
-                dup = await AutoTestApiEnvConfigInfo.filter(
+            duplicate = await self.model.filter(
+                project_id=data.project_id,
+                env_name=new_env_name,
+                env_type=data.env_type,
+                state=0,
+            ).first()
+            if duplicate and duplicate.id != existing.id:
+                raise DataAlreadyExistsException(
+                    message=f"应用：{data.project_id}+环境：{new_env_name}+类型：{data.env_type}已经存在，不能重复"
+                )
+
+            existing.project_id = data.project_id
+            existing.env_name = new_env_name
+            existing.env_type = data.env_type
+            existing.updated_user = user
+            await existing.save()
+
+            config_qs = AutoTestApiEnvConfigInfo.filter(
+                env_id=data.id,
+                config_type=resolve_config_type(old_env_type),
+                state=0,
+            )
+            if old_project_id != data.project_id or old_env_name != new_env_name or old_env_type != data.env_type:
+                await config_qs.update(
                     project_id=data.project_id,
-                    env_id=target_env.id,
                     config_type=config_type,
-                    state=0,
-                ).exists()
-                if dup:
-                    raise DataAlreadyExistsException(
-                        message=f"应用：{data.project_id}+环境：{new_env_name}+类型：{data.env_type}已经存在，不能重复"
-                    )
-                await AutoTestApiEnvConfigInfo.filter(
-                    env_id=existing.id,
-                    config_type=config_type,
-                    state=0,
-                ).update(env_id=target_env.id, project_id=data.project_id, updated_user=user)
-                env_instance = target_env
-            else:
-                if existing.env_name != new_env_name:
-                    existing.env_name = new_env_name
-                    existing.updated_user = user
-                    await existing.save()
-                await AutoTestApiEnvConfigInfo.filter(
-                    env_id=existing.id,
-                    config_type=config_type,
-                    state=0,
-                ).update(project_id=data.project_id, updated_user=user)
-                env_instance = existing
+                    updated_user=user,
+                )
 
             return {
-                "id": env_instance.id,
-                "project_id": data.project_id,
-                "env_name": env_instance.env_name,
-                "env_type": data.env_type,
-                "updated_time": env_instance.updated_time or datetime.now(),
-                "created_time": env_instance.created_time or datetime.now(),
+                "id": existing.id,
+                "project_id": existing.project_id,
+                "env_name": existing.env_name,
+                "env_type": existing.env_type,
+                "updated_time": existing.updated_time or datetime.now(),
+                "created_time": existing.created_time or datetime.now(),
             }
         except (DataAlreadyExistsException, ParameterException, NotFoundException):
             raise
@@ -597,33 +605,36 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def delete_automation_env(self, env_id: int, env_type: int, user: str = "system") -> Dict[str, Any]:
         """
-        软删指定枚举下某节点类型的全部配置；若该枚举已无启用配置则软删枚举本身。
+        软删环境主表记录，并软删其下对应类型的配置。
 
-        :param env_id: 环境枚举ID
-        :param env_type: 节点类型
+        :param env_id: 环境主键ID
+        :param env_type: 节点类型（校验与主表一致）
         :param user: 操作人
         :return: 环境响应字典
         """
         try:
             config_type = resolve_config_type(env_type)
             existing = await self.get_by_id(env_id=env_id, on_error=True, state__not=1)
+            if existing.env_type != env_type:
+                raise ParameterException(
+                    message=f"环境ID:{env_id}的节点类型为{existing.env_type}，与请求类型{env_type}不一致"
+                )
 
-            config_qs = AutoTestApiEnvConfigInfo.filter(env_id=env_id, config_type=config_type, state=0)
-            first_cfg = await config_qs.first()
-            project_id = first_cfg.project_id if first_cfg else 0
-            await config_qs.update(state=1, updated_user=user)
+            await AutoTestApiEnvConfigInfo.filter(
+                env_id=env_id,
+                config_type=config_type,
+                state=0,
+            ).update(state=1, updated_user=user)
 
-            remain = await AutoTestApiEnvConfigInfo.filter(env_id=env_id, state=0).count()
-            if remain == 0:
-                existing.state = 1
-                existing.updated_user = user
-                await existing.save()
+            existing.state = 1
+            existing.updated_user = user
+            await existing.save()
 
             return {
                 "id": existing.id,
-                "project_id": project_id,
+                "project_id": existing.project_id,
                 "env_name": existing.env_name,
-                "env_type": env_type,
+                "env_type": existing.env_type,
                 "updated_time": existing.updated_time or datetime.now(),
                 "created_time": existing.created_time or datetime.now(),
             }

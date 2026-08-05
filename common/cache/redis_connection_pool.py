@@ -74,10 +74,13 @@ class RedisConnPoolFromConfig:
             return None
 
         env_row = await AutoTestApiEnvEnumInfo.filter(
+            project_id=app_id_int,
             env_name__iexact=env,
         ).filter(state__not=1).first()
         if not env_row:
-            self.logger.warning(f"未找到环境枚举 env_name(忽略大小写)={env!r}")
+            self.logger.warning(
+                f"未找到环境 project_id={app_id_int}, env_name(忽略大小写)={env!r}"
+            )
             return None
 
         qs = self.config_model.filter(
