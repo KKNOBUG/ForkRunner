@@ -299,13 +299,13 @@ async def batch_fetch_related_data(
 
 
 def _protocol_from_step_type(step_type: Any) -> Optional[str]:
-    """将步骤类型映射为协议：HTTP请求→HTTP，TCP请求→TCP。"""
+    """步骤类型枚举值映射为协议标识（HTTP请求→HTTP，TCP请求→TCP）。"""
     if step_type is None:
         return None
     value = step_type.value if hasattr(step_type, "value") else str(step_type)
-    if value == AutoTestStepType.HTTP.value or value.upper() == "HTTP":
+    if value == AutoTestStepType.HTTP.value:
         return "HTTP"
-    if value == AutoTestStepType.TCP.value or value.upper() == "TCP":
+    if value == AutoTestStepType.TCP.value:
         return "TCP"
     return None
 
@@ -385,7 +385,7 @@ async def search_cases(
                 all_tag_ids.update(instance.case_tags)
                 is_private_script = True
 
-        # 并发拉取项目、标签、步骤类型映射（公共接口也需步骤类型以推导协议）
+        # 并发拉取项目、标签、步骤类型映射
         project_map, tag_map, case_step_type_map = await batch_fetch_related_data(
             project_ids=all_project_ids,
             tag_ids=all_tag_ids if is_private_script else set(),
@@ -410,15 +410,14 @@ async def search_cases(
                 tag_ids = serialize.pop("case_tags", [])
                 serialize["step_type"] = case_step_type_map.get(case_id, None)
                 serialize["case_tags"] = [tag_map.get(tid, {}) for tid in tag_ids]
-            # 公共接口：有且仅有一个 HTTP/TCP 请求步骤，协议即 HTTP/TCP
+            # 公共接口仅一个 HTTP/TCP 步骤，补充协议字段供列表展示
             instance_type = (
                 instance.case_type.value
                 if hasattr(instance.case_type, "value")
                 else str(instance.case_type or "")
             )
             if is_public_api_query or instance_type == AutoTestCaseType.PUBLIC_API.value:
-                step_type = case_step_type_map.get(case_id)
-                serialize["step_type"] = _protocol_from_step_type(step_type)
+                serialize["protocol"] = _protocol_from_step_type(case_step_type_map.get(case_id))
             case_serializes.append(serialize)
         LOGGER.info(f"按条件查询用例成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=case_serializes, total=total)

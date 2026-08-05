@@ -643,7 +643,7 @@ async def debug_http_request(
             StepVariablesBase(key=k, value=v, desc="") for k, v in merged_all_variables.items()
         ]
 
-        # 处理请求主机域名（对齐 yangkai：按环境名+应用+配置名解析，不要求前端传 env_id）
+        # 相对路径：按环境名+应用+配置名解析 API 配置，拼成带协议的绝对 URL
         if request_url and not request_url.lower().startswith("http"):
             try:
                 if not env_name:
@@ -671,28 +671,21 @@ async def debug_http_request(
                     env_id=env_row.id,
                     project_id=request_project_id,
                     config_name=request_config_name,
-                    config_type=AutoTestConfigNodeType.API
+                    config_type=AutoTestConfigNodeType.API,
                 )
                 if not env_config_instance:
                     return NotFoundResponse(message=f"HTTP请求调试失败, 目标环境下[{request_config_name}]配置不存在")
-                execute_env_host: str = env_config_instance.config_host.strip().rstrip("/").rstrip(":")
-                execute_env_port: Optional[str] = (
+                host = (env_config_instance.config_host or "").strip().rstrip("/").rstrip(":")
+                port = (
                     str(env_config_instance.config_port).strip()
                     if env_config_instance.config_port is not None
                     else ""
                 )
-                if not execute_env_host:
+                if not host:
                     return NotFoundResponse(message=f"HTTP请求调试失败, 目标环境下[{request_config_name}]配置不完整")
-                # 对齐 yangkai：拼接完整 URL 时补全协议；host 已含协议则不再加前缀
-                host_with_scheme = (
-                    execute_env_host
-                    if execute_env_host.lower().startswith(("http://", "https://"))
-                    else f"http://{execute_env_host}"
-                )
-                if not execute_env_port:
-                    request_url = f"{host_with_scheme}/{request_url}"
-                else:
-                    request_url = f"{host_with_scheme}:{execute_env_port}/{request_url}"
+                if not host.lower().startswith(("http://", "https://")):
+                    host = f"http://{host}"
+                request_url = f"{host}/{request_url}" if not port else f"{host}:{port}/{request_url}"
             except Exception as e:
                 LOGGER.error(f"HTTP请求调试失败, 异常描述: {e}\n{traceback.format_exc()}")
                 return FailureResponse(message=f"HTTP请求调试失败，异常描述: {e}")
