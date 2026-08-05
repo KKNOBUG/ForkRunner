@@ -14,9 +14,9 @@ from xml.etree import ElementTree
 
 from jsonpath_ng import parse as jsonpath_parse
 
-from backend.applications.aotutest.services.autotest_runtime.context import ExchangeContext
-from backend.applications.aotutest.services.autotest_runtime.util_kv import KvUtils
-from backend.common.xpath_utils import XPathUtils
+from applications.aotutest.services.autotest_runtime.context import ExchangeContext
+from applications.aotutest.services.autotest_runtime.util_kv import KvUtils
+from common.xpath_utils import XPathUtils
 
 
 class Extractors:

@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import numpy as np
 import pandas as pd
 
-from backend.configure import LOGGER
+from configure import LOGGER
 
 _executor = ThreadPoolExecutor(max_workers=5)
 

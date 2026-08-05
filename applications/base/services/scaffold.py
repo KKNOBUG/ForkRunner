@@ -24,8 +24,8 @@ from tortoise.models import Model
 from tortoise.queryset import QuerySet
 from tortoise.transactions import in_transaction
 
-from backend.configure import GLOBAL_CONFIG, LOGGER
-from backend.core.exceptions import ParameterException, NotFoundException
+from configure import GLOBAL_CONFIG, LOGGER
+from core.exceptions import ParameterException, NotFoundException
 
 
 def unique_identify() -> str:
@@ -339,7 +339,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if obj_dict.get("created_user"):
             return
         # 惰性导入，避免 scaffold ↔ services.dependency 循环依赖
-        from backend.services.ctx import get_current_username
+        from services.ctx import get_current_username
         username = get_current_username()
         if username:
             obj_dict["created_user"] = username
@@ -352,7 +352,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return
         if obj_dict.get("updated_user"):
             return
-        from backend.services.ctx import get_current_username
+        from services.ctx import get_current_username
         username = get_current_username()
         if username:
             obj_dict["updated_user"] = username
@@ -515,7 +515,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         # 获取模型有效字段列表
         valid_fields = set(self.model._meta.db_fields)
         valid_fields.update(self.model._meta.fk_fields)
-        from backend.services.ctx import get_current_username
+        from services.ctx import get_current_username
         current_username = get_current_username()
 
         total_updated = 0

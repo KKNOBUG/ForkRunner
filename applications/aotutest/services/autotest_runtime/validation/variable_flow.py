@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Set
 
-from backend.applications.aotutest.schemas.autotest_step_schema import (
+from applications.aotutest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateItem,
     StepVariablesBase,
 )
-from backend.applications.aotutest.services.autotest_runtime.sandbox import RE_PLACEHOLDER
+from applications.aotutest.services.autotest_runtime.sandbox import RE_PLACEHOLDER
 
 
 class VariableFlowValidation:

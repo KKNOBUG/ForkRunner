@@ -14,7 +14,7 @@ from typing import Any, Dict, Optional, Sequence
 
 import orjson
 
-from backend.applications.aotutest.schemas.autotest_step_schema import (
+from applications.aotutest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateItem,
     StepVariablesBase,
 )

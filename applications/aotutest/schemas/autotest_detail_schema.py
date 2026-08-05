@@ -11,9 +11,9 @@ from typing import Optional, List, Dict, Any, Type, Union
 import orjson
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from backend.applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
-from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import AutoTestStepType, HTTPMethod, AutoTestReqArgsType, AutoTestAssertionOperation
+from applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
+from applications.base.services.scaffold import UpperStr
+from enums import AutoTestStepType, HTTPMethod, AutoTestReqArgsType, AutoTestAssertionOperation
 
 NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
 NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]

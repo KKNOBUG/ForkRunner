@@ -10,8 +10,8 @@ from typing import Optional, List, Dict, Any, Union
 
 from pydantic import BaseModel, Field, field_validator
 
-from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import AutoTestCaseType, AutoTestCaseAttr
+from applications.base.services.scaffold import UpperStr
+from enums import AutoTestCaseType, AutoTestCaseAttr
 
 
 class AutoTestApiCaseMeta(BaseModel):

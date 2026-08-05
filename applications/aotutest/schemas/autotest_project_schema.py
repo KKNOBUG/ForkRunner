@@ -10,7 +10,7 @@ from typing import Optional, List, Union
 
 from pydantic import BaseModel, Field, field_validator
 
-from backend.applications.base.services.scaffold import UpperStr
+from applications.base.services.scaffold import UpperStr
 
 
 class AutoTestApiProjectBase(BaseModel):

@@ -12,11 +12,11 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from tortoise.exceptions import DoesNotExist
 
-from backend.applications.base.models.router_model import Router
-from backend.applications.base.schemas.router_schema import RouterCreate, RouterUpdate
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
+from applications.base.models.router_model import Router
+from applications.base.schemas.router_schema import RouterCreate, RouterUpdate
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 
 
 class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):

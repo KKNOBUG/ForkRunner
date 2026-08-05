@@ -12,12 +12,12 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import orjson
 
-from backend.applications.aotutest.schemas.autotest_step_schema import (
+from applications.aotutest.schemas.autotest_step_schema import (
     StepAssertValidatorItem,
     StepExtractVariableItem,
 )
-from backend.applications.aotutest.services.autotest_runtime.exchange.assert_pipeline import AssertPipeline
-from backend.applications.aotutest.services.autotest_runtime.exchange.extract_pipeline import ExtractPipeline
+from applications.aotutest.services.autotest_runtime.exchange.assert_pipeline import AssertPipeline
+from applications.aotutest.services.autotest_runtime.exchange.extract_pipeline import ExtractPipeline
 
 
 class ExtractAssertPipeline:

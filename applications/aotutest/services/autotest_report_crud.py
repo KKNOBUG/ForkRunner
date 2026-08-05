@@ -14,22 +14,22 @@ from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiReportInfo
-from backend.applications.aotutest.schemas.autotest_report_schema import (
+from applications.aotutest.models.autotest_model import AutoTestApiReportInfo
+from applications.aotutest.schemas.autotest_report_schema import (
     AutoTestApiReportCreate,
     AutoTestApiReportUpdate,
     AutoTestApiReportBatchSelect,
     AutoTestApiReportBatchItem,
 )
-from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import (
     ParameterException,
     NotFoundException,
     DataBaseStorageException,
 )
-from backend.enums import AutoTestTaskStatus
+from enums import AutoTestTaskStatus
 
 
 class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiReportCreate, AutoTestApiReportUpdate]):
@@ -163,7 +163,7 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         # 业务层验证：检查报告是否存在明细信息, 如果存在则删除
         async with in_transaction():
             report_code = instance.report_code
-            from backend.applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
+            from applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
             count = await AutoTestApiDetailCrud().model.filter(report_code=report_code, state__not=1).update(state=1)
             LOGGER.warning(f"成功删除报告[report_code={report_code}]关联的{count}条明细信息")
 

@@ -6,8 +6,8 @@ import mimetypes
 import os
 from typing import Any, Dict, List, Optional
 
-from backend.configure import PROJECT_CONFIG
-from backend.enums import AutoTestTaskType
+from configure import PROJECT_CONFIG
+from enums import AutoTestTaskType
 
 # Celery 注册名 → 任务类型 / 默认展示名
 CELERY_TASK_META: Dict[str, Dict[str, Any]] = {

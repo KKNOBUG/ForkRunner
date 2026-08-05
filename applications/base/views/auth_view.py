@@ -12,24 +12,24 @@ from typing import List
 
 from fastapi import APIRouter, Depends, Body
 
-from backend.applications.base.models.menu_model import Menu
-from backend.applications.base.models.role_model import Role
-from backend.applications.base.models.router_model import Router
-from backend.applications.base.schemas.token_schema import CredentialsSchema, JWTOut, JWTPayload
-from backend.applications.user.dependencies import get_user_crud
-from backend.applications.user.models.user_model import User
-from backend.applications.user.services.user_crud import UserCrud
-from backend.configure import LOGGER, PROJECT_CONFIG
-from backend.core.exceptions import NotFoundException, NoPermissionException, ParameterException
-from backend.core.responses import (
+from applications.base.models.menu_model import Menu
+from applications.base.models.role_model import Role
+from applications.base.models.router_model import Router
+from applications.base.schemas.token_schema import CredentialsSchema, JWTOut, JWTPayload
+from applications.user.dependencies import get_user_crud
+from applications.user.models.user_model import User
+from applications.user.services.user_crud import UserCrud
+from configure import LOGGER, PROJECT_CONFIG
+from core.exceptions import NotFoundException, NoPermissionException, ParameterException
+from core.responses import (
     SuccessResponse,
     NotFoundResponse,
     FailureResponse,
     ParameterResponse,
     ForbiddenResponse
 )
-from backend.services import CTX_USER_ID
-from backend.services import create_access_token
+from services import CTX_USER_ID
+from services import create_access_token
 
 auth_public = APIRouter()
 auth_secure = APIRouter()

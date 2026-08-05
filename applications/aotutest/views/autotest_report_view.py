@@ -13,20 +13,20 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
-from backend.applications.aotutest.schemas.autotest_report_schema import (
+from applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
+from applications.aotutest.schemas.autotest_report_schema import (
     AutoTestApiReportCreate,
     AutoTestApiReportSelect,
     AutoTestApiReportUpdate,
     AutoTestApiReportBatchSelect,
 )
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
 )
-from backend.core.responses import (
+from core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,

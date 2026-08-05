@@ -8,8 +8,8 @@
 """
 from tortoise import fields
 
-from backend.applications.base.services.scaffold import ScaffoldModel, TimestampMixin
-from backend.enums import HTTPMethod
+from applications.base.services.scaffold import ScaffoldModel, TimestampMixin
+from enums import HTTPMethod
 
 
 class Audit(ScaffoldModel, TimestampMixin):

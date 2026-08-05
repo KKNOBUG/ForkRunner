@@ -6,7 +6,7 @@
 @Module  : file_size_enum.py
 @DateTime: 2025/4/7 22:05
 """
-from backend.enums.base_enum_cls import StringEnum
+from enums.base_enum_cls import StringEnum
 
 
 class FileSizeEum(StringEnum):

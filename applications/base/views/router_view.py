@@ -12,12 +12,12 @@ from fastapi import APIRouter, Body, Query, Depends
 from starlette.requests import Request
 from tortoise.expressions import Q
 
-from backend.applications.base.dependencies import get_router_crud
-from backend.applications.base.schemas.router_schema import RouterCreate, RouterUpdate, RouterSelect
-from backend.applications.base.services.router_crud import RouterCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import DataAlreadyExistsException, NotFoundException
-from backend.core.responses import (
+from applications.base.dependencies import get_router_crud
+from applications.base.schemas.router_schema import RouterCreate, RouterUpdate, RouterSelect
+from applications.base.services.router_crud import RouterCrud
+from configure import LOGGER
+from core.exceptions import DataAlreadyExistsException, NotFoundException
+from core.responses import (
     SuccessResponse,
     FailureResponse,
     DataAlreadyExistsResponse,

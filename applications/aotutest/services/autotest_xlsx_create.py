@@ -20,8 +20,8 @@ import pandas as pd
 # =============================
 # 数据模型
 # =============================
-from backend.applications.aotutest.schemas.autotest_data_generate_schema import AutoTestApiDataCreateUpdate
-from backend.applications.aotutest.services.autotest_data_source_crud import AutoTestApiDataCreateCrud
+from applications.aotutest.schemas.autotest_data_generate_schema import AutoTestApiDataCreateUpdate
+from applications.aotutest.services.autotest_data_source_crud import AutoTestApiDataCreateCrud
 
 
 @dataclass

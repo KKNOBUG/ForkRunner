@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
-from backend.applications.aotutest.schemas.autotest_step_schema import StepAssertValidatorItem
-from backend.applications.aotutest.services.autotest_runtime.exchange.assert_compare import AssertionCompare
-from backend.applications.aotutest.services.autotest_runtime.exchange.extractors import Extractors
-from backend.applications.aotutest.services.autotest_runtime.placeholders.resolver import PlaceholderResolver
+from applications.aotutest.schemas.autotest_step_schema import StepAssertValidatorItem
+from applications.aotutest.services.autotest_runtime.exchange.assert_compare import AssertionCompare
+from applications.aotutest.services.autotest_runtime.exchange.extractors import Extractors
+from applications.aotutest.services.autotest_runtime.placeholders.resolver import PlaceholderResolver
 
 
 class AssertPipeline:

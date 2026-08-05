@@ -12,28 +12,28 @@ from typing import List
 from fastapi import FastAPI
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate
-from backend.applications.aotutest.schemas.autotest_project_schema import AutoTestApiProjectCreate
-from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestApiStepCreate
-from backend.applications.aotutest.schemas.autotest_tag_schema import AutoTestApiTagCreate
-from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
-from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
-from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
-from backend.applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
-from backend.applications.base.models.menu_model import Menu
-from backend.applications.base.models.router_model import Router
-from backend.applications.base.schemas.menu_schema import MenuCreate
-from backend.applications.base.schemas.role_schema import RoleCreate
-from backend.applications.base.services.menu_crud import MenuCrud
-from backend.applications.base.services.role_crud import RoleCrud
-from backend.applications.base.services.router_crud import RouterCrud
-from backend.applications.department.schemas.department_schema import DepartmentCreate
-from backend.applications.department.services.department_crud import DepartmentCrud
-from backend.applications.user.schemas.user_schema import UserCreate
-from backend.applications.user.services.user_crud import UserCrud
-from backend.configure import LOGGER
-from backend.enums import AutoTestStepType
-from backend.enums import MenuType
+from applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate
+from applications.aotutest.schemas.autotest_project_schema import AutoTestApiProjectCreate
+from applications.aotutest.schemas.autotest_step_schema import AutoTestApiStepCreate
+from applications.aotutest.schemas.autotest_tag_schema import AutoTestApiTagCreate
+from applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
+from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
+from applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+from applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
+from applications.base.models.menu_model import Menu
+from applications.base.models.router_model import Router
+from applications.base.schemas.menu_schema import MenuCreate
+from applications.base.schemas.role_schema import RoleCreate
+from applications.base.services.menu_crud import MenuCrud
+from applications.base.services.role_crud import RoleCrud
+from applications.base.services.router_crud import RouterCrud
+from applications.department.schemas.department_schema import DepartmentCreate
+from applications.department.services.department_crud import DepartmentCrud
+from applications.user.schemas.user_schema import UserCreate
+from applications.user.services.user_crud import UserCrud
+from configure import LOGGER
+from enums import AutoTestStepType
+from enums import MenuType
 
 
 async def init_database_role():

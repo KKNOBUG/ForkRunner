@@ -10,11 +10,11 @@ from typing import Optional
 
 from tortoise.exceptions import DoesNotExist
 
-from backend.applications.base.models.menu_model import Menu
-from backend.applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
+from applications.base.models.menu_model import Menu
+from applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 
 
 class MenuCrud(ScaffoldCrud[Menu, MenuCreate, MenuUpdate]):

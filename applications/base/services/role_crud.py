@@ -10,13 +10,13 @@ from typing import List, Optional
 
 from tortoise.exceptions import DoesNotExist
 
-from backend.applications.base.models.menu_model import Menu
-from backend.applications.base.models.role_model import Role
-from backend.applications.base.models.router_model import Router
-from backend.applications.base.schemas.role_schema import RoleCreate, RoleUpdate
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import DataAlreadyExistsException, ParameterException, NotFoundException
+from applications.base.models.menu_model import Menu
+from applications.base.models.role_model import Role
+from applications.base.models.router_model import Router
+from applications.base.schemas.role_schema import RoleCreate, RoleUpdate
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import DataAlreadyExistsException, ParameterException, NotFoundException
 
 
 class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):

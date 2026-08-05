@@ -25,11 +25,11 @@ import orjson
 from aiomysql import Pool
 
 if TYPE_CHECKING:
-    from backend.applications.aotutest.dependencies import AutoTestApiServices
+    from applications.aotutest.dependencies import AutoTestApiServices
 
-from backend.applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
-from backend.applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
-from backend.applications.aotutest.schemas.autotest_step_schema import (
+from applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
+from applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
+from applications.aotutest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateItem,
     ConditionsBase,
     DataBaseOperates,
@@ -39,7 +39,7 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     StepsExecuteConfigBase,
     prepare_step_tree_item_for_execution, StepExtractVariableItem,
 )
-from backend.applications.aotutest.services.autotest_runtime.sandbox import (
+from applications.aotutest.services.autotest_runtime.sandbox import (
     RE_PLACEHOLDER,
     RE_QUOTED_CONCAT,
     RE_QUOTED_PLACEHOLDER,
@@ -47,17 +47,17 @@ from backend.applications.aotutest.services.autotest_runtime.sandbox import (
     USER_CODE_EXTRA_BUILTINS,
     safe_user_code_import,
 )
-from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
-from backend.applications.base.services.scaffold import unique_identify
-from backend.common import AioTcpClient, TcpFrameMode
-from backend.common.cache.redis_connection_pool import get_app_redis_pool, RedisConnPoolFromConfig
-from backend.common.database.database_connection_pool import get_app_database_pool, DBConnPoolFromConfig
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.aotutest.services.autotest_tool_service import AutoTestToolService
+from applications.base.services.scaffold import unique_identify
+from common import AioTcpClient, TcpFrameMode
+from common.cache.redis_connection_pool import get_app_redis_pool, RedisConnPoolFromConfig
+from common.database.database_connection_pool import get_app_database_pool, DBConnPoolFromConfig
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     ParameterException,
 )
-from backend.enums import (
+from enums import (
     AutoTestStepType,
     AutoTestReportType,
     AutoTestLoopMode,
@@ -66,7 +66,7 @@ from backend.enums import (
     AutoTestReqArgsType,
     AutoTestConfigNodeType, HTTPMethod
 )
-from backend.services import get_current_username
+from services import get_current_username
 
 
 class StepExecutionError(Exception):
@@ -999,7 +999,7 @@ class BaseStepExecutor:
     @classmethod
     async def get_services(cls) -> AutoTestApiServices:
         """获取自动化测试依赖注入的CRUD服务聚合。"""
-        from backend.applications.aotutest.dependencies import get_autotest_api_services
+        from applications.aotutest.dependencies import get_autotest_api_services
         return await get_autotest_api_services()
 
     def get_execute_config(self, database_operates_index: Optional[int] = None) -> Optional[StepsExecuteConfigBase]:

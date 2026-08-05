@@ -17,8 +17,8 @@ from typing import Optional
 from concurrent_log_handler import ConcurrentRotatingFileHandler
 from loguru import logger
 
-from backend.common.request_context import get_parent_span_id, get_span_id, get_trace_id
-from backend.configure.project_config import PROJECT_CONFIG
+from common.request_context import get_parent_span_id, get_span_id, get_trace_id
+from configure.project_config import PROJECT_CONFIG
 
 # 自定义日志格式(控制台与文件共用；文件设置colorize=False)
 # trace_id（X-Trace-ID）/ span_id（X-Span-ID）由 patcher 注入，未绑定则为 -

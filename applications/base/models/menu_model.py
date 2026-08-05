@@ -8,8 +8,8 @@
 """
 from tortoise import fields
 
-from backend.enums import MenuType
-from backend.applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
+from enums import MenuType
+from applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
 
 
 class Menu(ScaffoldModel, MaintainMixin, TimestampMixin):

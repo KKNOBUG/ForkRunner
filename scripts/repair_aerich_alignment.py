@@ -106,7 +106,7 @@ async def repair(execute: bool) -> None:
         print(f"\n调用 aerich upgrade 真实应用: {pending_real}")
         sys.path.insert(0, str(BACKEND_DIR.parent))
         from aerich import Command
-        from backend.configure import PROJECT_CONFIG
+        from configure import PROJECT_CONFIG
 
         config = {
             "connections": PROJECT_CONFIG.DATABASE_CONNECTIONS,

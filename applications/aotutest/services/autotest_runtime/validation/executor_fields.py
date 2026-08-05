@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem
+from applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem
 
 
 class ExecutorFieldsValidation:
@@ -24,7 +24,7 @@ class ExecutorFieldsValidation:
         :param steps: 根步骤列表
         :return: 错误项列表，每项含step_code、step_name、step_type、missing（缺失字段名列表）、message
         """
-        from backend.enums import AutoTestStepType, AutoTestLoopMode
+        from enums import AutoTestStepType, AutoTestLoopMode
 
         errors: List[Dict[str, Any]] = []
 

@@ -15,8 +15,8 @@ import orjson
 from fastapi import APIRouter, Body
 from lxml import etree
 
-from backend.configure import LOGGER
-from backend.core.responses import SuccessResponse, FailureResponse
+from configure import LOGGER
+from core.responses import SuccessResponse, FailureResponse
 
 autotest_tcp_test = APIRouter()
 

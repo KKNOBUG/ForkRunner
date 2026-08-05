@@ -16,17 +16,17 @@ from tortoise.exceptions import FieldError
 from tortoise.exceptions import IntegrityError, DoesNotExist
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import (
+from applications.aotutest.models.autotest_model import (
     AutoTestApiDataCreateInfo,
     AutoTestApiDataSourceInfo,
     AutoTestApiStepInfo,
 )
-from backend.applications.aotutest.schemas.autotest_data_generate_schema import AutoTestApiDataCreateCreate, AutoTestApiDataCreateUpdate
-from backend.applications.aotutest.schemas.autotest_data_source_schema import AutoTestDataSourceCreate, AutoTestDataSourceUpdate
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER, PROJECT_CONFIG
-from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
-from backend.core.exceptions import DataBaseStorageException
+from applications.aotutest.schemas.autotest_data_generate_schema import AutoTestApiDataCreateCreate, AutoTestApiDataCreateUpdate
+from applications.aotutest.schemas.autotest_data_source_schema import AutoTestDataSourceCreate, AutoTestDataSourceUpdate
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER, PROJECT_CONFIG
+from core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
+from core.exceptions import DataBaseStorageException
 
 
 def make_cache_key(case_id: int, step_code: str) -> str:
@@ -497,7 +497,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        from backend.applications.aotutest.services.autotest_data_source_parser import normalize_dataset_record
+        from applications.aotutest.services.autotest_data_source_parser import normalize_dataset_record
 
         # 每个场景强制补齐 head/body/assert_head/assert_body 四键
         normalized_dataset = {

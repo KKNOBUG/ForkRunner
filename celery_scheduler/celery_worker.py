@@ -19,15 +19,15 @@ from celery._state import _task_stack
 from celery.signals import setup_logging, task_prerun, worker_process_init
 from celery.worker.request import Request
 
-from backend.common import AsyncEventLoopContextIOPool
-from backend.common.request_context import (
+from common import AsyncEventLoopContextIOPool
+from common.request_context import (
     celery_dispatch_trace_headers,
     enter_celery_span,
     get_span_id,
     _extract_celery_trace_fields,
 )
-from backend.configure import LOGGER, CELERY_CONFIG
-from backend.configure.logging_config import InterceptHandler
+from configure import LOGGER, CELERY_CONFIG
+from configure.logging_config import InterceptHandler
 from .celery_base import (
     ensure_tortoise_orm_initialized,
     init_tortoise_orm,
@@ -59,7 +59,7 @@ def _reset_async_pool_and_tortoise_after_fork(**kwargs):
     AsyncEventLoopContextIOPool.reset_process_state()
     reset_tortoise_orm_state()
     # prefork 子进程继承父进程 Loguru 文件句柄，需重建 Sink 以免多进程共写/轮转失败
-    from backend.configure.logging_config import loguru_logging
+    from configure.logging_config import loguru_logging
 
     loguru_logging()
     _ensure_celery_logfile_sink_after_fork()
@@ -124,7 +124,7 @@ def _resolve_trigger_and_report(task: Task):
     :param task: 当前Celery Task实例
     :return: (trigger_type, report_type)元组
     """
-    from backend.enums import AutoTestReportType, AutoTestTaskTriggerType
+    from enums import AutoTestReportType, AutoTestTaskTriggerType
 
     req_kwargs = getattr(task.request, "kwargs", None) or {}
     report_type = req_kwargs.get("report_type")
@@ -186,10 +186,10 @@ async def _create_task_record(
     :param request_kwargs: Celery任务入参快照
     :return: None
     """
-    from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
-    from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
-    from backend.celery_scheduler.celery_task_contract import resolve_task_meta
-    from backend.enums import AutoTestTaskStatus
+    from applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
+    from applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
+    from celery_scheduler.celery_task_contract import resolve_task_meta
+    from enums import AutoTestTaskStatus
 
     def _normalize_username(raw: Any) -> Optional[str]:
         if raw is None:
@@ -302,9 +302,9 @@ async def _update_task_record_on_end(
     """
     if not celery_id:
         return
-    from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
-    from backend.celery_scheduler.celery_task_contract import normalize_task_summary
-    from backend.enums import AutoTestTaskStatus
+    from applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
+    from celery_scheduler.celery_task_contract import normalize_task_summary
+    from enums import AutoTestTaskStatus
 
     # 长任务后连接可能失效；与 create 一样先 init/探活，避免终态写库失败导致永远「正在执行」
     await init_tortoise_orm()
@@ -440,8 +440,8 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
 
     from loguru import logger as loguru_logger
 
-    from backend.configure.logging_config import LOG_FORMAT
-    from backend.configure.project_config import PROJECT_CONFIG
+    from configure.logging_config import LOG_FORMAT
+    from configure.project_config import PROJECT_CONFIG
 
     level = loglevel if isinstance(loglevel, int) else logging.INFO
     try:
@@ -783,9 +783,9 @@ celery = create_celery()
 
 # ========== 启动命令（在仓库根目录执行，保证 PYTHONPATH 可 import backend）==========
 # Worker：
-#   celery -A backend.celery_scheduler.celery_worker worker -Q default,autotest_queue -c 4 -l INFO
+#   celery -A celery_scheduler.celery_worker worker -Q default,autotest_queue -c 4 -l INFO
 # Beat：
-#   celery -A backend.celery_scheduler.celery_worker beat -l INFO
+#   celery -A celery_scheduler.celery_worker beat -l INFO
 # 日志默认写入：backend/output/logs/celery_logs/celery_worker.log | celery_beat.log
 # 也可显式指定：--logfile=/path/to/xxx.log  或  export CELERY_LOGFILE=/path/to/xxx.log
 

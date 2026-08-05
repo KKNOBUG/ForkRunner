@@ -16,13 +16,13 @@ from starlette.background import BackgroundTask
 from starlette.responses import FileResponse
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
-from backend.applications.aotutest.schemas.autotest_case_schema import (
+from applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
+from applications.aotutest.schemas.autotest_case_schema import (
     AutoTestApiCaseCreate,
     AutoTestApiCaseSelect,
     AutoTestApiCaseUpdate
 )
-from backend.applications.aotutest.services.autotest_case_excel_service import (
+from applications.aotutest.services.autotest_case_excel_service import (
     prepare_export_cases,
     build_export_workbook,
     build_export_file_name,
@@ -32,16 +32,16 @@ from backend.applications.aotutest.services.autotest_case_excel_service import (
     parse_script_workbook,
     import_script_rows,
 )
-from backend.celery_scheduler.tasks.task_export_case_datagram import export_testcases_task
-from backend.celery_scheduler.tasks.task_export_case_script import export_case_scripts_task
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from celery_scheduler.tasks.task_export_case_datagram import export_testcases_task
+from celery_scheduler.tasks.task_export_case_script import export_case_scripts_task
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     ParameterException,
     DataAlreadyExistsException,
     DataBaseStorageException,
 )
-from backend.core.responses import (
+from core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
@@ -50,8 +50,8 @@ from backend.core.responses import (
     DataAlreadyExistsResponse,
     FileExtensionResponse
 )
-from backend.enums import AutoTestReportType
-from backend.services import get_current_username
+from enums import AutoTestReportType
+from services import get_current_username
 
 autotest_case = APIRouter()
 

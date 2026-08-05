@@ -10,7 +10,7 @@ from typing import Optional, List, Union
 
 from pydantic import BaseModel, Field
 
-from backend.applications.base.services.scaffold import UpperStr
+from applications.base.services.scaffold import UpperStr
 
 
 class AutoTestApiEnvCreate(BaseModel):

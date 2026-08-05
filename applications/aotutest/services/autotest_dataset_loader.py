@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from backend.applications.aotutest.services.autotest_data_source_parser import normalize_dataset_record
+from applications.aotutest.services.autotest_data_source_parser import normalize_dataset_record
 
 
 class DatasetLoader:
@@ -56,7 +56,7 @@ class DatasetLoader:
         """
         if not (dataset_name and step_code and not executing_quote_case_id):
             return None
-        from backend.applications.aotutest.services.autotest_data_source_crud import AutoTestDataSourceCrud
+        from applications.aotutest.services.autotest_data_source_crud import AutoTestDataSourceCrud
 
         step_data = await AutoTestDataSourceCrud().get_dataset_scenario(
             case_id=case_id,

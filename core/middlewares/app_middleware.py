@@ -15,10 +15,10 @@ import orjson
 from fastapi import Request, Response
 from starlette.datastructures import FormData
 
-from backend.applications.base.models.audit_model import Audit
-from backend.applications.user.models.user_model import User
-from backend.configure import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER, ROUTER_SUMMARY, ROUTER_TAGS
-from backend.services import AuthControl
+from applications.base.models.audit_model import Audit
+from applications.user.models.user_model import User
+from configure import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER, ROUTER_SUMMARY, ROUTER_TAGS
+from services import AuthControl
 
 
 def is_upload_request(request: Request) -> bool:

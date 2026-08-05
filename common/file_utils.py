@@ -18,7 +18,7 @@ from typing import Union, Optional
 
 import yaml
 
-from backend.core.exceptions import (
+from core.exceptions import (
     TypeRejectException, NotFoundException, NotImplementedException, ParameterException
 )
 

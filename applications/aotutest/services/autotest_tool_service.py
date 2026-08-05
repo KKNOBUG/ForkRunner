@@ -10,17 +10,17 @@
 """
 from __future__ import annotations
 
-from backend.applications.aotutest.services.autotest_dataset_loader import DatasetLoader
-from backend.applications.aotutest.services.autotest_runtime.datagram.json_replace import JsonDatagram
-from backend.applications.aotutest.services.autotest_runtime.datagram.xml_replace import XmlDatagram
-from backend.applications.aotutest.services.autotest_runtime.exchange.assert_compare import AssertionCompare
-from backend.applications.aotutest.services.autotest_runtime.exchange.assert_pipeline import AssertPipeline
-from backend.applications.aotutest.services.autotest_runtime.exchange.extract_pipeline import ExtractPipeline
-from backend.applications.aotutest.services.autotest_runtime.exchange.extractors import Extractors
-from backend.applications.aotutest.services.autotest_runtime.exchange.pipeline import ExtractAssertPipeline
-from backend.applications.aotutest.services.autotest_runtime.placeholders.functions import PlaceholderFunctions
-from backend.applications.aotutest.services.autotest_runtime.placeholders.resolver import PlaceholderResolver
-from backend.applications.aotutest.services.autotest_runtime.sandbox import (
+from applications.aotutest.services.autotest_dataset_loader import DatasetLoader
+from applications.aotutest.services.autotest_runtime.datagram.json_replace import JsonDatagram
+from applications.aotutest.services.autotest_runtime.datagram.xml_replace import XmlDatagram
+from applications.aotutest.services.autotest_runtime.exchange.assert_compare import AssertionCompare
+from applications.aotutest.services.autotest_runtime.exchange.assert_pipeline import AssertPipeline
+from applications.aotutest.services.autotest_runtime.exchange.extract_pipeline import ExtractPipeline
+from applications.aotutest.services.autotest_runtime.exchange.extractors import Extractors
+from applications.aotutest.services.autotest_runtime.exchange.pipeline import ExtractAssertPipeline
+from applications.aotutest.services.autotest_runtime.placeholders.functions import PlaceholderFunctions
+from applications.aotutest.services.autotest_runtime.placeholders.resolver import PlaceholderResolver
+from applications.aotutest.services.autotest_runtime.sandbox import (
     RE_PLACEHOLDER,
     RE_QUOTED_CONCAT,
     RE_QUOTED_PLACEHOLDER,
@@ -28,10 +28,10 @@ from backend.applications.aotutest.services.autotest_runtime.sandbox import (
     USER_CODE_EXTRA_BUILTINS,
     safe_user_code_import,
 )
-from backend.applications.aotutest.services.autotest_runtime.util_kv import KvUtils
-from backend.applications.aotutest.services.autotest_runtime.validation.executor_fields import ExecutorFieldsValidation
-from backend.applications.aotutest.services.autotest_runtime.validation.step_tree import StepTreeValidation
-from backend.applications.aotutest.services.autotest_runtime.validation.variable_flow import VariableFlowValidation
+from applications.aotutest.services.autotest_runtime.util_kv import KvUtils
+from applications.aotutest.services.autotest_runtime.validation.executor_fields import ExecutorFieldsValidation
+from applications.aotutest.services.autotest_runtime.validation.step_tree import StepTreeValidation
+from applications.aotutest.services.autotest_runtime.validation.variable_flow import VariableFlowValidation
 
 __all__ = [
     "AutoTestToolService",

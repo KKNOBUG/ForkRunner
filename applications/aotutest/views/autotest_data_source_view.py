@@ -21,29 +21,29 @@ from starlette.responses import StreamingResponse
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
-from backend.applications.aotutest.models.autotest_model import AutoTestApiDataSourceInfo
-from backend.applications.aotutest.schemas.autotest_data_source_schema import (
+from applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
+from applications.aotutest.models.autotest_model import AutoTestApiDataSourceInfo
+from applications.aotutest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceCreate,
     AutoTestDataSourceUpdate,
     AutoTestDataSourceSaveOrUpdate,
     AutoTestDataSourceSelect,
 )
-from backend.applications.aotutest.services.autotest_data_source_parser import (
+from applications.aotutest.services.autotest_data_source_parser import (
     AXIS_VERTICAL,
     json_safe_value,
     parse_dataframe_matrix_async,
     parse_xlsx_first_sheet_async,
     parse_xlsx_to_parsed_data_async,
 )
-from backend.configure import LOGGER, PROJECT_CONFIG
-from backend.core.exceptions import (
+from configure import LOGGER, PROJECT_CONFIG
+from core.exceptions import (
     NotFoundException,
     DataAlreadyExistsException,
     ParameterException,
     DataBaseStorageException,
 )
-from backend.core.responses import (
+from core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
@@ -53,9 +53,9 @@ from backend.core.responses import (
     BadReqResponse,
     FileExtensionResponse
 )
-from backend.enums import AutoTestStepType, PUBLIC_CASE_TYPES
-from backend.services import get_current_username
-from backend.services.file_transfer import FileTransfer
+from enums import AutoTestStepType, PUBLIC_CASE_TYPES
+from services import get_current_username
+from services.file_transfer import FileTransfer
 
 autotest_data_source = APIRouter()
 

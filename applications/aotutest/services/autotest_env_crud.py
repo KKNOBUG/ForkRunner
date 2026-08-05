@@ -12,20 +12,20 @@ from typing import Optional, Dict, Any, List, Tuple
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo, AutoTestApiEnvConfigInfo
-from backend.applications.aotutest.schemas.autotest_env_schema import (
+from applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo, AutoTestApiEnvConfigInfo
+from applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
     AutoTestApiEnvUpdate,
     AutoTestApiEnvDelete
 )
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
 )
-from backend.enums import AutoTestConfigNodeType
+from enums import AutoTestConfigNodeType
 
 
 async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tuple[str, Optional[str]]:

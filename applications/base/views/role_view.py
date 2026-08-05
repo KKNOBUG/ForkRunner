@@ -12,19 +12,19 @@ from fastapi import APIRouter, Body, Depends
 from fastapi.params import Query, Form
 from tortoise.expressions import Q
 
-from backend.applications.base.dependencies import get_role_crud
-from backend.applications.base.schemas.role_schema import (
+from applications.base.dependencies import get_role_crud
+from applications.base.schemas.role_schema import (
     RoleCreate,
     RoleUpdate,
     RoleUpdateMenusRouters,
     RoleBatchDelete,
 )
-from backend.applications.base.services.role_crud import RoleCrud
-from backend.applications.user.models.user_model import User
-from backend.configure import LOGGER
-from backend.core.exceptions import DataAlreadyExistsException, ParameterException, NotFoundException
-from backend.core.responses import SuccessResponse, DataAlreadyExistsResponse, FailureResponse, ParameterResponse, NotFoundResponse
-from backend.services import DependAuth
+from applications.base.services.role_crud import RoleCrud
+from applications.user.models.user_model import User
+from configure import LOGGER
+from core.exceptions import DataAlreadyExistsException, ParameterException, NotFoundException
+from core.responses import SuccessResponse, DataAlreadyExistsResponse, FailureResponse, ParameterResponse, NotFoundResponse
+from services import DependAuth
 
 role = APIRouter()
 

@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
-from backend.applications.aotutest.schemas.autotest_step_schema import StepExtractVariableItem
-from backend.applications.aotutest.services.autotest_runtime.exchange.extractors import Extractors
+from applications.aotutest.schemas.autotest_step_schema import StepExtractVariableItem
+from applications.aotutest.services.autotest_runtime.exchange.extractors import Extractors
 
 
 class ExtractPipeline:

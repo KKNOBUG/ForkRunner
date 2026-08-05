@@ -10,11 +10,11 @@ from typing import List, Optional, Any, Tuple, Dict
 
 from tortoise.expressions import Q
 
-from backend.applications.base.models.audit_model import Audit
-from backend.applications.base.schemas.audit_schema import AuditCreate
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import ParameterException, NotFoundException
+from applications.base.models.audit_model import Audit
+from applications.base.schemas.audit_schema import AuditCreate
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import ParameterException, NotFoundException
 
 
 class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):

@@ -12,13 +12,13 @@ import datetime
 import uuid
 from typing import Any, Dict, List, Optional
 
-from backend.applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
-from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
-from backend.celery_scheduler.celery_base import run_async
-from backend.celery_scheduler.celery_worker import celery
-from backend.configure import LOGGER
-from backend.enums import AutoTestReportType
-from backend.services.ctx import CTX_USERNAME
+from applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
+from applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+from celery_scheduler.celery_base import run_async
+from celery_scheduler.celery_worker import celery
+from configure import LOGGER
+from enums import AutoTestReportType
+from services.ctx import CTX_USERNAME
 
 
 def _normalize_initial_variables(raw: Optional[List[Dict[str, Any]]]) -> List[StepVariablesBase]:

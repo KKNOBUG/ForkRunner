@@ -11,8 +11,8 @@ from typing import Optional, List, Dict, Any, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import (
+from applications.base.services.scaffold import UpperStr
+from enums import (
     AutoTestTaskStatus,
     AutoTestTaskTriggerType,
     AutoTestTaskType,

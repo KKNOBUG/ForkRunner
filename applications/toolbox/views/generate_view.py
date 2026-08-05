@@ -10,10 +10,10 @@ from typing import List, Dict, Any
 
 from fastapi import APIRouter, Body
 
-from backend.applications.toolbox.schemas.generate_schema import GenerateVirtualInfo
-from backend.common import GENERATE
-from backend.configure import LOGGER
-from backend.core.responses import SuccessResponse
+from applications.toolbox.schemas.generate_schema import GenerateVirtualInfo
+from common import GENERATE
+from configure import LOGGER
+from core.responses import SuccessResponse
 
 generate = APIRouter()
 

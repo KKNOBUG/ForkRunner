@@ -8,7 +8,7 @@
 """
 from tortoise import fields
 
-from backend.applications.base.services.scaffold import ScaffoldModel, TimestampMixin, MaintainMixin
+from applications.base.services.scaffold import ScaffoldModel, TimestampMixin, MaintainMixin
 
 
 class Role(ScaffoldModel, TimestampMixin, MaintainMixin):

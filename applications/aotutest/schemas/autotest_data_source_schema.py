@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.applications.base.services.scaffold import UpperStr
+from applications.base.services.scaffold import UpperStr
 
 
 class AutoTestDataSourceBase(BaseModel):

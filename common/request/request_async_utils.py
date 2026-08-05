@@ -15,9 +15,9 @@ import httpx
 from aiohttp import ClientSession, ClientTimeout, HttpVersion, TCPConnector, ClientResponse, FormData
 from httpx import Response
 
-from backend.common import FileUtils
-from backend.core.exceptions import ResInvalidException, ReqInvalidException
-from backend.enums import HTTPMethod
+from common import FileUtils
+from core.exceptions import ResInvalidException, ReqInvalidException
+from enums import HTTPMethod
 
 
 class AsyncHttpUtils:

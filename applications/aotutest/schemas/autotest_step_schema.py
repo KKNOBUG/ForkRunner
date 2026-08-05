@@ -10,9 +10,9 @@ from typing import Optional, List, Dict, Any, Type, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
-from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import (
+from applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
+from applications.base.services.scaffold import UpperStr
+from enums import (
     AutoTestStepType,
     AutoTestLoopMode,
     AutoTestReqArgsType,
@@ -21,7 +21,7 @@ from backend.enums import (
     AutoTestConfigNodeType,
     AutoTestReportType,
 )
-from backend.enums import HTTPMethod
+from enums import HTTPMethod
 
 NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
 NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]

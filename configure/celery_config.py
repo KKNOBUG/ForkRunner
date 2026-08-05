@@ -14,8 +14,8 @@ from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from typing_extensions import Self
 
-from backend.common import FileUtils
-from backend.configure.project_config import PROJECT_CONFIG
+from common import FileUtils
+from configure.project_config import PROJECT_CONFIG
 
 
 class CeleryConfig(BaseSettings):

@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 from xml.etree import ElementTree
 
-from backend.common.xpath_utils import XPathUtils
+from common.xpath_utils import XPathUtils
 
 
 class XmlDatagram:

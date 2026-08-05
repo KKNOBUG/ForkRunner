@@ -13,12 +13,12 @@ from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.exceptions import FieldError
 from tortoise.expressions import Q, RawSQL
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
-from backend.applications.aotutest.schemas.autotest_task_schema import AutoTestApiTaskCreate, AutoTestApiTaskUpdate
-from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
+from applications.aotutest.schemas.autotest_task_schema import AutoTestApiTaskCreate, AutoTestApiTaskUpdate
+from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     DataBaseStorageException,
     DataAlreadyExistsException,

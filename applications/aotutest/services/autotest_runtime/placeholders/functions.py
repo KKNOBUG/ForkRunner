@@ -11,7 +11,7 @@ from __future__ import annotations
 import ast
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.common.generate_utils import GenerateUtils
+from common.generate_utils import GenerateUtils
 
 
 class PlaceholderFunctions:

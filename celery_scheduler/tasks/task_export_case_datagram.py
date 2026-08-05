@@ -11,15 +11,15 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
 
-from backend.applications.aotutest.dependencies import get_autotest_api_services
-from backend.applications.aotutest.services.autotest_case_excel_service import (
+from applications.aotutest.dependencies import get_autotest_api_services
+from applications.aotutest.services.autotest_case_excel_service import (
     prepare_export_cases,
     build_export_workbook,
     build_export_file_name,
 )
-from backend.celery_scheduler.celery_base import run_async
-from backend.celery_scheduler.celery_worker import celery
-from backend.configure import LOGGER, PROJECT_CONFIG
+from celery_scheduler.celery_base import run_async
+from celery_scheduler.celery_worker import celery
+from configure import LOGGER, PROJECT_CONFIG
 
 
 async def _export_testcases_impl(case_ids: List[int], created_user: Optional[str]) -> Dict[str, Any]:

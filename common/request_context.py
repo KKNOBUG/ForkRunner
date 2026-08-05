@@ -44,7 +44,7 @@ def new_span_id() -> str:
 
 def _sync_celery_local(trace_id: str, span_id: str) -> None:
     try:
-        from backend.celery_scheduler.celery_base import LOCAL_CONTEXT_VAR
+        from celery_scheduler.celery_base import LOCAL_CONTEXT_VAR
 
         LOCAL_CONTEXT_VAR.trace_id = trace_id or None
         LOCAL_CONTEXT_VAR.span_id = span_id or None
@@ -57,7 +57,7 @@ def get_trace_id() -> str:
     if tid:
         return tid
     try:
-        from backend.celery_scheduler.celery_base import LOCAL_CONTEXT_VAR
+        from celery_scheduler.celery_base import LOCAL_CONTEXT_VAR
 
         legacy = getattr(LOCAL_CONTEXT_VAR, "trace_id", None)
         if legacy:
@@ -72,7 +72,7 @@ def get_span_id() -> str:
     if sid:
         return sid
     try:
-        from backend.celery_scheduler.celery_base import LOCAL_CONTEXT_VAR
+        from celery_scheduler.celery_base import LOCAL_CONTEXT_VAR
 
         legacy = getattr(LOCAL_CONTEXT_VAR, "span_id", None)
         if legacy:

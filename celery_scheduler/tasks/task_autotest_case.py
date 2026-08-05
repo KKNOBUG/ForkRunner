@@ -12,17 +12,17 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
-from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
-from backend.celery_scheduler.celery_base import (
+from applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
+from applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+from celery_scheduler.celery_base import (
     check_task_expired,
     get_scheduled_tasks,
     get_span_id_for_log,
     run_async,
 )
-from backend.celery_scheduler.celery_worker import celery
-from backend.configure import LOGGER
-from backend.enums import (
+from celery_scheduler.celery_worker import celery
+from configure import LOGGER
+from enums import (
     AutoTestReportType,
     AutoTestTaskPeriodicSwitch,
     AutoTestTaskStatus,

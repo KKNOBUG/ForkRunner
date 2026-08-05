@@ -22,18 +22,18 @@ from starlette.staticfiles import StaticFiles
 from tortoise.contrib.fastapi import register_tortoise
 from tortoise.exceptions import DoesNotExist, OperationalError
 
-from backend.configure import PROJECT_CONFIG, LOGGER
-from backend.core.exceptions.http_exceptions import (
+from configure import PROJECT_CONFIG, LOGGER
+from core.exceptions.http_exceptions import (
     request_validation_exception_handler,
     response_validation_exception_handler,
     http_exception_handler,
     null_point_exception_handler,
     app_exception_handler,
 )
-from backend.core.middlewares.app_middleware import logging_middleware
-from backend.core.middlewares.auth_middleware import auth_middleware
-from backend.core.middlewares.request_context_middleware import request_context_middleware
-from backend.services import DependPermission
+from core.middlewares.app_middleware import logging_middleware
+from core.middlewares.auth_middleware import auth_middleware
+from core.middlewares.request_context_middleware import request_context_middleware
+from services import DependPermission
 
 
 async def register_database(app: FastAPI) -> None:
@@ -182,11 +182,11 @@ def register_routers(app: FastAPI) -> None:
     redoc_modules["redoc_favicon_url"] = "/static/redoc/favicon.png"
 
     # 导入路由蓝图
-    from backend.applications.base.views import base_public, base_secure, router_secure, menu_secure, role_secure, audit_secure, file_secure
-    from backend.applications.department.views.department_view import dept
-    from backend.applications.user.views.user_view import user_public, user_secure
-    from backend.applications.toolbox.views import toolbox
-    from backend.applications.aotutest.views import autotest
+    from applications.base.views import base_public, base_secure, router_secure, menu_secure, role_secure, audit_secure, file_secure
+    from applications.department.views.department_view import dept
+    from applications.user.views.user_view import user_public, user_secure
+    from applications.toolbox.views import toolbox
+    from applications.aotutest.views import autotest
 
     # 挂在路由蓝图
     app.include_router(router=base_public, prefix="/base", tags=["基础服务"])

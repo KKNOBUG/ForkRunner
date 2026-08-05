@@ -12,21 +12,21 @@ from typing import Optional, Union, List
 from tortoise.exceptions import DoesNotExist
 from tortoise.expressions import F
 
-from backend.applications.base.schemas.token_schema import CredentialsSchema
-from backend.applications.base.services.role_crud import RoleCrud
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.applications.user.models.user_model import User
-from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate, UserBatchDelete
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.base.schemas.token_schema import CredentialsSchema
+from applications.base.services.role_crud import RoleCrud
+from applications.base.services.scaffold import ScaffoldCrud
+from applications.user.models.user_model import User
+from applications.user.schemas.user_schema import UserCreate, UserUpdate, UserBatchDelete
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     BaseExceptions,
     DataAlreadyExistsException,
     ParameterException,
     NoPermissionException
 )
-from backend.core.responses import ForbiddenResponse
-from backend.services import verify_password, get_password_hash
+from core.responses import ForbiddenResponse
+from services import verify_password, get_password_hash
 
 
 class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):

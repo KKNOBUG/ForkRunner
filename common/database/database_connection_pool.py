@@ -97,8 +97,8 @@ class DBConnPoolFromConfig:
             # ---------- Autotest（字段与 AutoTestApiConfigBase / 环境配置表一致）----------
             if "project_id" in field_names and "env_id" in field_names:
                 try:
-                    from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo
-                    from backend.enums import AutoTestConfigNodeType
+                    from applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo
+                    from enums import AutoTestConfigNodeType
                 except ImportError as e:
                     self.logger.error(f"无法导入自动化测试环境模型或枚举: {e}")
                     return None
@@ -460,6 +460,6 @@ def get_app_database_pool() -> "DBConnPoolFromConfig":
     """
     返回绑定自动化环境配置表的单例连接池管理器（首次调用时注入 Tortoise 模型）。
     """
-    from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
+    from applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
 
     return DBConnPoolFromConfig(config_model=AutoTestApiEnvConfigInfo)

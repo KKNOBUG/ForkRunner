@@ -6,7 +6,7 @@
 @Module  : program_env_enum.py
 @DateTime: 2025/4/2 19:44
 """
-from backend.enums.base_enum_cls import StringEnum
+from enums.base_enum_cls import StringEnum
 
 
 class TestCasePriorityEnum(StringEnum):

@@ -8,7 +8,7 @@
 """
 from fastapi import Request
 
-from backend.common.request_context import (
+from common.request_context import (
     apply_response_trace_headers,
     clear_trace_context,
     enter_server_span,

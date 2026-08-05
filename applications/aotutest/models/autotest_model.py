@@ -9,7 +9,7 @@
 from tortoise import fields
 from tortoise.validators import MinValueValidator, MaxValueValidator
 
-from backend.applications.base.services.scaffold import (
+from applications.base.services.scaffold import (
     ScaffoldModel,
     MaintainMixin,
     TimestampMixin,
@@ -18,7 +18,7 @@ from backend.applications.base.services.scaffold import (
     unique_identify,
     JSONTextField
 )
-from backend.enums import (
+from enums import (
     AutoTestCaseType,
     AutoTestStepType,
     AutoTestReportType,

@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import orjson
 
-from backend.common import JSONPathUtils
+from common import JSONPathUtils
 
 
 class JsonDatagram:

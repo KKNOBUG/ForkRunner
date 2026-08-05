@@ -14,8 +14,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import Response as FastAPIResponse
 from lxml import etree
 
-from backend.configure import LOGGER
-from backend.core.responses import SuccessResponse, FailureResponse
+from configure import LOGGER
+from core.responses import SuccessResponse, FailureResponse
 
 autotest_http_xml_test = APIRouter()
 

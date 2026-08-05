@@ -15,12 +15,12 @@ from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from backend.applications.aotutest.models.autotest_model import (
+from applications.aotutest.models.autotest_model import (
     AutoTestApiStepInfo,
     AutoTestApiCaseInfo,
 )
-from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
-from backend.applications.aotutest.schemas.autotest_step_schema import (
+from applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
+from applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
     AutoTestApiStepUpdate,
     AutoTestCaseStepTreeLoadResult,
@@ -31,20 +31,20 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     step_tree_item_from_storage,
     step_variables_list_from_storage,
 )
-from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud, _readd_explicit_null_fields
-from backend.applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
-from backend.applications.aotutest.services.autotest_report_crud import AutoTestApiReportCrud
-from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
-from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud, _readd_explicit_null_fields
+from applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
+from applications.aotutest.services.autotest_report_crud import AutoTestApiReportCrud
+from applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
+from applications.aotutest.services.autotest_tool_service import AutoTestToolService
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from backend.enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType, PUBLIC_CASE_TYPES
+from enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType, PUBLIC_CASE_TYPES
 
 # 列表/对象型JSON字段：schema已将空数组归一为None；payload显式给出这些字段时，None代表「显式清空」，需回补以落库NULL
 # 注意：branch_items由更新路径单独处理（仅条件分支步骤），不在此集合内
@@ -599,7 +599,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         instance.state = 1
         await instance.save()
         # 同步软删除该步骤关联的数据源与数据生成记录（延迟导入避免循环依赖）
-        from backend.applications.aotutest.services.autotest_data_source_crud import delete_step_create
+        from applications.aotutest.services.autotest_data_source_crud import delete_step_create
         await delete_step_create(case_id=instance.case_id, step_code_list=[instance.step_code])
         return instance
 
@@ -686,7 +686,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         # 步骤软删除提交后，同步清理对应用例下被删步骤的数据源与数据生成记录
         if deleted_by_case:
-            from backend.applications.aotutest.services.autotest_data_source_crud import delete_step_create
+            from applications.aotutest.services.autotest_data_source_crud import delete_step_create
             for ds_case_id, step_codes in deleted_by_case.items():
                 await delete_step_create(case_id=ds_case_id, step_code_list=step_codes)
 
@@ -933,7 +933,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 # 复制来的步骤携带数据源时，同步复制为新步骤的独立数据源（仅复制解析数据，文件字段置空）
                 source_data_source_id = getattr(step_data, "data_source_id", None)
                 if source_data_source_id:
-                    from backend.applications.aotutest.services.autotest_data_source_crud import AutoTestDataSourceCrud
+                    from applications.aotutest.services.autotest_data_source_crud import AutoTestDataSourceCrud
                     new_data_source_id: Optional[int] = None
                     try:
                         new_data_source_id = await AutoTestDataSourceCrud().copy_data_source_for_step(

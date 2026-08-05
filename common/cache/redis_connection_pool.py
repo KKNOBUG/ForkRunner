@@ -67,8 +67,8 @@ class RedisConnPoolFromConfig:
             )
 
         try:
-            from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo
-            from backend.enums import AutoTestConfigNodeType
+            from applications.aotutest.models.autotest_model import AutoTestApiEnvEnumInfo
+            from enums import AutoTestConfigNodeType
         except ImportError as e:
             self.logger.error(f"无法导入自动化测试环境模型或枚举: {e}")
             return None
@@ -272,6 +272,6 @@ class RedisConnPoolFromConfig:
 
 
 def get_app_redis_pool() -> "RedisConnPoolFromConfig":
-    from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
+    from applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
 
     return RedisConnPoolFromConfig(config_model=AutoTestApiEnvConfigInfo)

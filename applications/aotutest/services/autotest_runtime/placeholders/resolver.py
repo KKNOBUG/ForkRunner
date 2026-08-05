@@ -16,11 +16,11 @@ from xml.etree import ElementTree
 
 import orjson
 
-from backend.applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
-from backend.applications.aotutest.services.autotest_runtime.context import coerce_variable_resolver
-from backend.applications.aotutest.services.autotest_runtime.placeholders.arithmetic import PlaceholderArithmetic
-from backend.applications.aotutest.services.autotest_runtime.placeholders.functions import PlaceholderFunctions
-from backend.applications.aotutest.services.autotest_runtime.sandbox import RE_PLACEHOLDER
+from applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
+from applications.aotutest.services.autotest_runtime.context import coerce_variable_resolver
+from applications.aotutest.services.autotest_runtime.placeholders.arithmetic import PlaceholderArithmetic
+from applications.aotutest.services.autotest_runtime.placeholders.functions import PlaceholderFunctions
+from applications.aotutest.services.autotest_runtime.sandbox import RE_PLACEHOLDER
 
 
 class PlaceholderResolver:

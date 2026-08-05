@@ -12,9 +12,9 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter
 
-from backend.common.generate_utils import GenerateUtils
-from backend.configure import LOGGER
-from backend.core.responses import SuccessResponse, FailureResponse
+from common.generate_utils import GenerateUtils
+from configure import LOGGER
+from core.responses import SuccessResponse, FailureResponse
 
 autotest_tool = APIRouter()
 

@@ -11,31 +11,31 @@ import traceback
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
-from backend.applications.department.dependencies import get_dept_crud
-from backend.applications.department.services.department_crud import DepartmentCrud
-from backend.applications.user.dependencies import get_user_crud
-from backend.applications.user.schemas.user_schema import (
+from applications.department.dependencies import get_dept_crud
+from applications.department.services.department_crud import DepartmentCrud
+from applications.user.dependencies import get_user_crud
+from applications.user.schemas.user_schema import (
     UserCreate,
     UserUpdate,
     UserSelect,
     UpdatePassword,
     UserBatchDelete,
 )
-from backend.applications.user.services.user_crud import UserCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.user.services.user_crud import UserCrud
+from configure import LOGGER
+from core.exceptions import (
     DataAlreadyExistsException,
     NotFoundException,
     ParameterException
 )
-from backend.core.responses import (
+from core.responses import (
     NotFoundResponse,
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
     DataAlreadyExistsResponse,
 )
-from backend.services import CTX_USER_ID, verify_password, get_password_hash
+from services import CTX_USER_ID, verify_password, get_password_hash
 
 user_public = APIRouter()
 user_secure = APIRouter()

@@ -13,7 +13,7 @@ import orjson
 import requests
 from requests import exceptions
 
-from backend.enums import HTTPMethod
+from enums import HTTPMethod
 
 
 class RequestSyncUtils:

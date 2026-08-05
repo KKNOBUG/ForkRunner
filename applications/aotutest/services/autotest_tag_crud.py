@@ -12,15 +12,15 @@ from typing import Optional, Dict, Any, List, Union, Set, Tuple
 from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiTagInfo
-from backend.applications.aotutest.schemas.autotest_tag_schema import (
+from applications.aotutest.models.autotest_model import AutoTestApiTagInfo
+from applications.aotutest.schemas.autotest_tag_schema import (
     AutoTestApiTagCreate,
     AutoTestApiTagUpdate,
     AutoTestApiTagDelete,
 )
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
@@ -123,7 +123,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         tag_project: int = tag_in.tag_project
 
         # 业务层验证：检查应用是否存在
-        from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
+        from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
         await AutoTestApiProjectCrud().get_by_id(project_id=tag_project, on_error=True, state__not=1)
         # 业务层验证：同应用下相同大类及名称仅允许一条记录（含已禁用，命中则恢复启用）
         tag_dict: Dict[str, Any] = tag_in.model_dump(exclude_none=True, exclude_unset=True)
@@ -217,7 +217,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         else:
             instance = await self.get_by_code(tag_code=tag_code, on_error=True, state__not=1)
 
-        from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
+        from applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
         cases_count = await AutoTestApiCaseCrud().model.filter(case_tags__contains=[tag_id], state__not=1).count()
         if cases_count > 0:
             error_message: str = f"删除标签信息失败, 记录[id={instance.id}]被{cases_count}个用例关联"

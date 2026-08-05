@@ -14,25 +14,25 @@ from fastapi import APIRouter, Body, Query, Depends, Path
 from starlette.responses import FileResponse
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
-from backend.applications.aotutest.schemas.autotest_record_schema import AutoTestApiRecordSelect
-from backend.applications.aotutest.schemas.autotest_task_schema import (
+from applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
+from applications.aotutest.schemas.autotest_record_schema import AutoTestApiRecordSelect
+from applications.aotutest.schemas.autotest_task_schema import (
     AutoTestApiTaskCreate,
     AutoTestApiTaskSelect,
     AutoTestApiTaskUpdate,
 )
-from backend.celery_scheduler.celery_task_contract import (
+from celery_scheduler.celery_task_contract import (
     list_attachments_from_summary,
     resolve_storage_path,
 )
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     DataAlreadyExistsException,
     ParameterException,
     DataBaseStorageException,
 )
-from backend.core.responses import (
+from core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
@@ -275,9 +275,9 @@ async def run_task_info(
         if task_id is None:
             return ParameterResponse(message="参数[task_id]不允许为空")
         await services.task_curd.get_by_id(task_id=task_id, on_error=True, state__not=1)
-        from backend.celery_scheduler.tasks.task_autotest_case import run_autotest_task
-        from backend.enums import AutoTestReportType
-        from backend.services.ctx import get_current_username
+        from celery_scheduler.tasks.task_autotest_case import run_autotest_task
+        from enums import AutoTestReportType
+        from services.ctx import get_current_username
         # __task_id会随消息传到Worker，task_prerun从request.properties取出；
         # 只有传了__task_id，Worker端_create_task_record才会查任务表并写入record的task_id/task_name。
         # created_user 写入执行记录（Worker 无 HTTP 鉴权上下文）。

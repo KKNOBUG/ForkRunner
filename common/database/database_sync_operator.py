@@ -13,8 +13,8 @@ from warnings import filterwarnings
 import pymysql
 from pymysql.cursors import DictCursor
 
-from backend.common.database.database_sync_pool import DatabaseSyncPool
-from backend.core.decorators import synchronized
+from common.database.database_sync_pool import DatabaseSyncPool
+from core.decorators import synchronized
 
 filterwarnings("ignore", category=pymysql.Warning)
 

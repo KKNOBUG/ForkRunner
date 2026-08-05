@@ -6,7 +6,7 @@
 @Module  : http_enum.py
 @DateTime: 2025/1/13 12:57
 """
-from backend.enums.base_enum_cls import StringEnum
+from enums.base_enum_cls import StringEnum
 
 
 class HTTPMethod(StringEnum):

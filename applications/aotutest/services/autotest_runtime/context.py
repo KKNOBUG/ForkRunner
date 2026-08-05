@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Protocol, Sequence
 
-from backend.applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
+from applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
 
 
 class VariableResolver(Protocol):
@@ -62,7 +62,7 @@ class ListVariableResolver:
         :return: 对应value
         :raises KeyError: 未找到或值为空定义时
         """
-        from backend.applications.aotutest.services.autotest_runtime.util_kv import KvUtils
+        from applications.aotutest.services.autotest_runtime.util_kv import KvUtils
 
         resolved = KvUtils.get_value_from_list(self._variables, name)
         if resolved is None:

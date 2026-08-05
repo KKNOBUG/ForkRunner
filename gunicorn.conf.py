@@ -11,7 +11,7 @@ import logging
 from gunicorn.glogging import Logger
 from uvicorn.workers import UvicornWorker as _BaseUvicornWorker
 
-from backend.configure import PROJECT_CONFIG
+from configure import PROJECT_CONFIG
 
 
 class InterceptGunicornLogger(Logger):
@@ -21,7 +21,7 @@ class InterceptGunicornLogger(Logger):
 
     def setup(self, cfg) -> None:
         super().setup(cfg)
-        from backend.configure.logging_config import InterceptHandler
+        from configure.logging_config import InterceptHandler
 
         intercept = InterceptHandler()
         for stdlog in (self.error_log, self.access_log):
@@ -74,6 +74,6 @@ def post_worker_init(worker) -> None:
 
     :param worker: Gunicorn Worker 实例（本函数未使用，签名由 Gunicorn 约定）
     """
-    from backend.configure.logging_config import wire_standard_loggers
+    from configure.logging_config import wire_standard_loggers
 
     wire_standard_loggers()

@@ -6,7 +6,7 @@
 @Module  : dependencies.py
 @DateTime: 2026/6/8 09:47
 """
-from backend.applications.user.services.user_crud import UserCrud
+from applications.user.services.user_crud import UserCrud
 
 
 async def get_user_crud() -> UserCrud:

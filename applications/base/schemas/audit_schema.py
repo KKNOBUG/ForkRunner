@@ -11,7 +11,7 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
-from backend.enums import HTTPMethod
+from enums import HTTPMethod
 
 
 class AuditBase(BaseModel):

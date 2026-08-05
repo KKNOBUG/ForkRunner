@@ -8,17 +8,17 @@
 """
 from dataclasses import dataclass
 
-from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
-from backend.applications.aotutest.services.autotest_data_source_crud import AutoTestDataSourceCrud
-from backend.applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
-from backend.applications.aotutest.services.autotest_env_config_crud import AutoTestApiEnvConfigCrud
-from backend.applications.aotutest.services.autotest_env_crud import AutoTestApiEnvEnumCrud
-from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
-from backend.applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
-from backend.applications.aotutest.services.autotest_report_crud import AutoTestApiReportCrud
-from backend.applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
-from backend.applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
-from backend.applications.aotutest.services.autotest_task_crud import AutoTestApiTaskCrud
+from applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
+from applications.aotutest.services.autotest_data_source_crud import AutoTestDataSourceCrud
+from applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
+from applications.aotutest.services.autotest_env_config_crud import AutoTestApiEnvConfigCrud
+from applications.aotutest.services.autotest_env_crud import AutoTestApiEnvEnumCrud
+from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
+from applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
+from applications.aotutest.services.autotest_report_crud import AutoTestApiReportCrud
+from applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+from applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
+from applications.aotutest.services.autotest_task_crud import AutoTestApiTaskCrud
 
 
 @dataclass

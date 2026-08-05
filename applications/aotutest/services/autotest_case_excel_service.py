@@ -22,13 +22,13 @@ from openpyxl.styles import Alignment, PatternFill
 from openpyxl.utils import get_column_letter
 from tortoise.transactions import in_transaction
 
-from backend.applications.aotutest.models.autotest_model import (
+from applications.aotutest.models.autotest_model import (
     AutoTestApiCaseInfo,
     AutoTestApiProjectInfo,
     AutoTestApiStepInfo,
 )
-from backend.configure import LOGGER, PROJECT_CONFIG
-from backend.enums import (
+from configure import LOGGER, PROJECT_CONFIG
+from enums import (
     AutoTestAssertionOperation,
     AutoTestCaseAttr,
     AutoTestCaseType,

@@ -12,17 +12,17 @@ from typing import Optional, Dict, Any, List, Tuple
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiProjectInfo, AutoTestApiEnvConfigInfo
-from backend.applications.aotutest.schemas.autotest_project_schema import (
+from applications.aotutest.models.autotest_model import AutoTestApiProjectInfo, AutoTestApiEnvConfigInfo
+from applications.aotutest.schemas.autotest_project_schema import (
     AutoTestApiProjectCreate,
     AutoTestApiProjectUpdate,
     AutoTestApiProjectDelete,
 )
-from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
-from backend.applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
+from applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,

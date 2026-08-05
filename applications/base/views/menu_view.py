@@ -10,16 +10,16 @@ import traceback
 
 from fastapi import APIRouter, Query, Depends
 
-from backend.applications.base.dependencies import get_menu_crud
-from backend.applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
-from backend.applications.base.services.menu_crud import MenuCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.base.dependencies import get_menu_crud
+from applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
+from applications.base.services.menu_crud import MenuCrud
+from configure import LOGGER
+from core.exceptions import (
     ParameterException,
     NotFoundException,
     DataAlreadyExistsException
 )
-from backend.core.responses import (
+from core.responses import (
     NotFoundResponse,
     SuccessResponse,
     FailureResponse,

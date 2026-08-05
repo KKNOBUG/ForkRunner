@@ -19,10 +19,10 @@ from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from backend.applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
-from backend.applications.aotutest.models.autotest_model import AutoTestApiCaseInfo
-from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
-from backend.applications.aotutest.schemas.autotest_step_schema import (
+from applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
+from applications.aotutest.models.autotest_model import AutoTestApiCaseInfo
+from applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
+from applications.aotutest.schemas.autotest_step_schema import (
     AutoTestApiStepCreate,
     AutoTestApiStepUpdate,
     AutoTestApiStepSelect,
@@ -40,13 +40,13 @@ from backend.applications.aotutest.schemas.autotest_step_schema import (
     StepAssertValidatorItem,
     StepsExecuteConfigBase,
 )
-from backend.applications.aotutest.services.autotest_data_source_crud import delete_step_create
-from backend.applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
-from backend.applications.aotutest.services.autotest_tool_service import AutoTestToolService
-from backend.common import AioTcpClient, TcpFrameMode, AsyncTcpUtils
-from backend.common.cache.redis_connection_pool import get_app_redis_pool
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.aotutest.services.autotest_data_source_crud import delete_step_create
+from applications.aotutest.services.autotest_step_engine import AutoTestStepExecutionEngine
+from applications.aotutest.services.autotest_tool_service import AutoTestToolService
+from common import AioTcpClient, TcpFrameMode, AsyncTcpUtils
+from common.cache.redis_connection_pool import get_app_redis_pool
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     ParameterException,
     TypeRejectException,
@@ -54,7 +54,7 @@ from backend.core.exceptions import (
     DataAlreadyExistsException,
     ReqInvalidException,
 )
-from backend.core.responses import (
+from core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
@@ -63,8 +63,8 @@ from backend.core.responses import (
     DataAlreadyExistsResponse,
     BadReqResponse
 )
-from backend.enums import AutoTestReportType, AutoTestReqArgsType, AutoTestStepType, AutoTestConfigNodeType
-from backend.services.ctx import get_current_username
+from enums import AutoTestReportType, AutoTestReqArgsType, AutoTestStepType, AutoTestConfigNodeType
+from services.ctx import get_current_username
 
 autotest_step = APIRouter()
 
@@ -1281,7 +1281,7 @@ async def debug_python_code(
             StepVariablesBase(key=k, value=v, desc="") for k, v in merge_all_variables.items()
         ]
         # 创建执行上下文（使用虚拟的case_id和case_code）
-        from backend.applications.aotutest.services.autotest_step_engine import StepExecutionContext, StepExecutionError, StepExecutionResult
+        from applications.aotutest.services.autotest_step_engine import StepExecutionContext, StepExecutionError, StepExecutionResult
         async with StepExecutionContext(case_id=0, case_code="DEBUG", initial_variables=initial_variables) as context:
             try:
                 # 执行Python代码
@@ -1793,7 +1793,7 @@ async def execute_step_tree(
         # ========== SCHEDULE_EXEC：Celery 后台执行 ==========
         if execute_type == AutoTestReportType.SCHEDULE_EXEC:
             try:
-                from backend.celery_scheduler.tasks.task_execute_assign_case import execute_step_tree_task
+                from celery_scheduler.tasks.task_execute_assign_case import execute_step_tree_task
 
                 # 与 ASYNC_EXEC / 任务批量执行一致：同一次触发共用 batch_code，
                 # 多数据源时各报告才能归为「同一次执行」。

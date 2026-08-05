@@ -10,7 +10,7 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
-from backend.enums import MenuType
+from enums import MenuType
 
 
 class BaseMenu(BaseModel):

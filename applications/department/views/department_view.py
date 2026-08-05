@@ -11,29 +11,29 @@ import traceback
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
-from backend.applications.department.dependencies import get_dept_crud
-from backend.applications.department.schemas.department_schema import (
+from applications.department.dependencies import get_dept_crud
+from applications.department.schemas.department_schema import (
     DepartmentCreate,
     DepartmentUpdate,
     DepartmentSelect,
     DepartmentBatchDelete,
 )
-from backend.applications.department.services.department_crud import DepartmentCrud
-from backend.applications.user.models.user_model import User
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.department.services.department_crud import DepartmentCrud
+from applications.user.models.user_model import User
+from configure import LOGGER
+from core.exceptions import (
     DataAlreadyExistsException,
     NotFoundException,
     ParameterException,
 )
-from backend.core.responses import (
+from core.responses import (
     SuccessResponse,
     FailureResponse,
     DataAlreadyExistsResponse,
     NotFoundResponse,
     ParameterResponse,
 )
-from backend.services import DependAuth
+from services import DependAuth
 
 dept = APIRouter()
 

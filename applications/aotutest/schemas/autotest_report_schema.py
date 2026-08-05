@@ -10,8 +10,8 @@ from typing import Optional, List, Union, Any, Dict
 
 from pydantic import BaseModel, Field
 
-from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import AutoTestReportType, AutoTestTaskStatus
+from applications.base.services.scaffold import UpperStr
+from enums import AutoTestReportType, AutoTestTaskStatus
 
 
 class AutoTestApiReportBase(BaseModel):

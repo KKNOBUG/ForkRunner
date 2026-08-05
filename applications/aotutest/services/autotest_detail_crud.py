@@ -12,16 +12,16 @@ from typing import Optional, List, Tuple
 from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiDetailInfo
-from backend.applications.aotutest.schemas.autotest_detail_schema import (
+from applications.aotutest.models.autotest_model import AutoTestApiDetailInfo
+from applications.aotutest.schemas.autotest_detail_schema import (
     AutoTestApiDetailCreate,
     AutoTestApiDetailUpdate
 )
-from backend.applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
-from backend.applications.aotutest.services.autotest_report_crud import AutoTestApiReportCrud
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
+from applications.aotutest.services.autotest_report_crud import AutoTestApiReportCrud
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,

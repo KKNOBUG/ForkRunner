@@ -11,7 +11,7 @@ from __future__ import annotations
 import operator
 from typing import Any, Callable, Dict
 
-from backend.enums.autotest_enum import AutoTestAssertionOperation
+from enums.autotest_enum import AutoTestAssertionOperation
 
 
 class AssertionCompare:

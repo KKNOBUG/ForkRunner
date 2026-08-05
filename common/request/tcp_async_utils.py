@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Union
 import orjson
 from lxml import etree
 
-from backend.core.exceptions import ReqInvalidException, ResInvalidException
+from core.exceptions import ReqInvalidException, ResInvalidException
 
 
 class TcpFrameMode(str, Enum):

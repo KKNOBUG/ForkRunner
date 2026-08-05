@@ -13,23 +13,23 @@ from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
-from backend.applications.aotutest.schemas.autotest_env_config_schema import (
+from applications.aotutest.models.autotest_model import AutoTestApiEnvConfigInfo
+from applications.aotutest.schemas.autotest_env_config_schema import (
     AutoTestApiConfigCreate,
     AutoTestApiConfigUpdate,
     AutoTestApiConfigDelete
 )
-from backend.applications.aotutest.services.autotest_env_crud import AutoTestApiEnvEnumCrud
-from backend.applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.aotutest.services.autotest_env_crud import AutoTestApiEnvEnumCrud
+from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from backend.enums import AutoTestConfigNodeType
+from enums import AutoTestConfigNodeType
 
 
 class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestApiConfigCreate, AutoTestApiConfigUpdate]):

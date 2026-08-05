@@ -10,8 +10,8 @@ from typing import Optional, Dict, Any, List, Union
 
 from pydantic import BaseModel, Field
 
-from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import AutoTestDataBaseType, AutoTestConfigNodeType
+from applications.base.services.scaffold import UpperStr
+from enums import AutoTestDataBaseType, AutoTestConfigNodeType
 
 
 class AutoTestApiConfigBase(BaseModel):

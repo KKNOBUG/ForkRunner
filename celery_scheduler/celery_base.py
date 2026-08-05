@@ -18,7 +18,7 @@ from tortoise import Tortoise, connections
 from tortoise.exceptions import DBConnectionError
 from tortoise.expressions import Q
 
-from backend.configure import PROJECT_CONFIG, LOGGER
+from configure import PROJECT_CONFIG, LOGGER
 
 # 全局变量，标记数据库是否已初始化
 _tortoise_orm_initialized = False
@@ -42,7 +42,7 @@ def run_async(func: Union[Coroutine, Awaitable]) -> Any:
     :param func: 待执行的协程对象
     :return: 协程执行结果
     """
-    from backend.common import AsyncEventLoopContextIOPool
+    from common import AsyncEventLoopContextIOPool
     return AsyncEventLoopContextIOPool.run_in_pool(func)
 
 
@@ -112,7 +112,7 @@ def ensure_tortoise_orm_initialized() -> None:
 
     :return: None
     """
-    from backend.common import AsyncEventLoopContextIOPool
+    from common import AsyncEventLoopContextIOPool
 
     try:
         AsyncEventLoopContextIOPool.run_in_pool(init_tortoise_orm())
@@ -126,7 +126,7 @@ def get_span_id_for_log() -> str:
 
     :return: span_id字符串；不可用时返回空串
     """
-    from backend.common.request_context import get_span_id as _get
+    from common.request_context import get_span_id as _get
 
     sid = _get()
     if sid and sid != "-":
@@ -146,7 +146,7 @@ async def get_scheduled_tasks(task_type: Any) -> List[Any]:
     type_val = getattr(task_type, "value", task_type)
     if not type_val:
         return []
-    from backend.applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
+    from applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
 
     q = (
             Q(state=0)

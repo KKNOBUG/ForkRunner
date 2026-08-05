@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional
 import aiomysql
 import orjson
 
-from backend.configure.database_config import DATABASES
+from configure.database_config import DATABASES
 
 
 class DatabaseAsyncPool:

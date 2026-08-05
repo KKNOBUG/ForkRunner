@@ -12,11 +12,11 @@ from typing import Optional, List
 from tortoise.exceptions import DoesNotExist
 from tortoise.expressions import Q
 
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.applications.department.models.dept_model import Department, DeptStruct
-from backend.applications.department.schemas.department_schema import DepartmentCreate, DepartmentUpdate
-from backend.configure import LOGGER
-from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
+from applications.base.services.scaffold import ScaffoldCrud
+from applications.department.models.dept_model import Department, DeptStruct
+from applications.department.schemas.department_schema import DepartmentCreate, DepartmentUpdate
+from configure import LOGGER
+from core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 
 
 class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate]):

@@ -6,7 +6,7 @@
 @Module  : base_error_enum.py
 @DateTime: 2025/1/12 23:15
 """
-from backend.enums.base_enum_cls import StringEnum
+from enums.base_enum_cls import StringEnum
 
 
 class BaseErrorEnum(StringEnum):

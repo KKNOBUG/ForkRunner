@@ -13,15 +13,15 @@ from typing import Optional, Dict, Any, Union, List, Tuple
 from tortoise.exceptions import FieldError
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiRecordInfo
-from backend.applications.aotutest.schemas.autotest_record_schema import (
+from applications.aotutest.models.autotest_model import AutoTestApiRecordInfo
+from applications.aotutest.schemas.autotest_record_schema import (
     AutoTestApiRecordCreate,
     AutoTestApiRecordUpdate,
     AutoTestApiRecordSelect,
 )
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import ParameterException, NotFoundException
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import ParameterException, NotFoundException
 
 
 class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiRecordCreate, AutoTestApiRecordUpdate]):
@@ -107,7 +107,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
         }
         # Worker 更新终态时无 HTTP 用户上下文：优先入参，其次沿用创建人
         if not update_dict.get("updated_user"):
-            from backend.services.ctx import get_current_username
+            from services.ctx import get_current_username
             username = get_current_username() or (
                 str(record.created_user).strip() if record.created_user else None
             )

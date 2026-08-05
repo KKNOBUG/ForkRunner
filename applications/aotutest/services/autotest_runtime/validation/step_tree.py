@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, List, Optional, Set, Tuple
 
-from backend.applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem
+from applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem
 
 
 class StepTreeValidation:
@@ -24,7 +24,7 @@ class StepTreeValidation:
         :param steps_data: 根步骤列表(每项可为带children的树节点)
         :return: (True, None)表示通过；(False, str)表示失败及错误信息
         """
-        from backend.enums import AutoTestStepType
+        from enums import AutoTestStepType
 
         # 允许有子步骤的步骤类型
         allowed_children_types = {AutoTestStepType.LOOP, AutoTestStepType.IF}

@@ -13,19 +13,19 @@ from fastapi.routing import APIRoute
 from tortoise import Tortoise
 from tortoise.exceptions import DBConnectionError
 
-from backend.core.initializations import (
+from core.initializations import (
     register_database,
     register_exceptions,
     register_middlewares,
     register_routers,
     init_database_table,
 )
-from backend.core.responses import SuccessResponse
+from core.responses import SuccessResponse
 
 try:
-    from backend.configure import PROJECT_CONFIG, ROUTER_SUMMARY, ROUTER_TAGS
+    from configure import PROJECT_CONFIG, ROUTER_SUMMARY, ROUTER_TAGS
 except ImportError as e:
-    from backend.core.exceptions import NotImplementedException
+    from core.exceptions import NotImplementedException
 
     raise NotImplementedException(message="导入依赖配置失败,请检查 configure.project_config.py 文件") from e
 
@@ -92,4 +92,4 @@ if __name__ == '__main__':
     # source ~/.zshrc
     # redis-server
 
-    # MacOS: gunicorn -c backend/gunicorn.conf.py backend.backend_main:app
+    # MacOS: gunicorn -c backend/gunicorn.conf.py backend_main:app

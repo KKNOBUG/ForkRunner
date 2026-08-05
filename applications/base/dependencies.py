@@ -6,10 +6,10 @@
 @Module  : dependencies.py
 @DateTime: 2026/6/8 09:47
 """
-from backend.applications.base.services.audit_crud import AuditCrud
-from backend.applications.base.services.menu_crud import MenuCrud
-from backend.applications.base.services.role_crud import RoleCrud
-from backend.applications.base.services.router_crud import RouterCrud
+from applications.base.services.audit_crud import AuditCrud
+from applications.base.services.menu_crud import MenuCrud
+from applications.base.services.role_crud import RoleCrud
+from applications.base.services.router_crud import RouterCrud
 
 
 async def get_audit_crud() -> AuditCrud:

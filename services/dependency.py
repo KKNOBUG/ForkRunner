@@ -11,11 +11,11 @@ from typing import Optional, List
 import jwt
 from fastapi import Depends, Header, HTTPException, Request
 
-from backend.applications.base.models.role_model import Role
-from backend.applications.user.models.user_model import User
-from backend.configure import PROJECT_CONFIG
-from backend.enums import HTTPMethod
-from backend.services import CTX_USER_ID, CTX_USERNAME
+from applications.base.models.role_model import Role
+from applications.user.models.user_model import User
+from configure import PROJECT_CONFIG
+from enums import HTTPMethod
+from services import CTX_USER_ID, CTX_USERNAME
 
 
 class AuthControl:

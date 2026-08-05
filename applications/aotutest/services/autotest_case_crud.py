@@ -12,18 +12,18 @@ from typing import Optional, Dict, Any, List, Set, Tuple
 from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
 
-from backend.applications.aotutest.models.autotest_model import AutoTestApiStepInfo, AutoTestApiCaseInfo
-from backend.applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate, AutoTestApiCaseUpdate
-from backend.applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
-from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
-from backend.core.exceptions import (
+from applications.aotutest.models.autotest_model import AutoTestApiStepInfo, AutoTestApiCaseInfo
+from applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseCreate, AutoTestApiCaseUpdate
+from applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
+from applications.base.services.scaffold import ScaffoldCrud
+from configure import LOGGER
+from core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from backend.enums import AutoTestCaseType, AutoTestStepType, PUBLIC_CASE_TYPES
+from enums import AutoTestCaseType, AutoTestStepType, PUBLIC_CASE_TYPES
 
 # 列表/对象型JSON字段：schema已将空数组归一为None；payload显式给出这些字段时，None代表显式清空，需回补以落库NULL
 CASE_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = ("case_tags", "session_variables")
