@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : generate_utils.py
-@DateTime: 2025/1/15 13:57
-"""
 import random
 import string
 import threading

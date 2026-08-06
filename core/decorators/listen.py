@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : listen.py
-@DateTime: 2025/1/16 21:08
-"""
 import asyncio
 import functools
 import time

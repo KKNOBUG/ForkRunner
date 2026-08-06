@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_http_xml_test_view
-@DateTime: 2026/7/23 10:00:00
-"""
 import datetime
 import traceback
 from typing import Optional

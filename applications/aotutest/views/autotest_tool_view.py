@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_tool_view
-@DateTime: 2026/1/17 16:13
-"""
 import inspect
 import traceback
 from typing import Any, Dict, List

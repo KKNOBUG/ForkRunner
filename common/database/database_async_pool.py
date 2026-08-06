@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : database_async_pool.py
-@DateTime: 2025/1/12 19:55
-"""
 import asyncio
 from datetime import date, time, datetime, timedelta
 from decimal import Decimal

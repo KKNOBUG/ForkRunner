@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : menu_schema.py
-@DateTime: 2025/2/19 12:49
-"""
 from typing import Optional, List
 
 from pydantic import BaseModel, Field

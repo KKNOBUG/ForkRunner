@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : app_middleware.py
-@DateTime: 2025/1/17 22:29
-"""
 import time
 from io import BytesIO
 from typing import Dict, Any, Optional

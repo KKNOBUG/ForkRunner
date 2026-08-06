@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : user_crud.py
-@DateTime: 2025/1/18 11:36
-"""
 from datetime import datetime
 from typing import Optional, Union, List
 

@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : role_model.py
-@DateTime: 2025/2/11 17:19
-"""
 from tortoise import fields
 
 from applications.base.services.scaffold import ScaffoldModel, TimestampMixin, MaintainMixin

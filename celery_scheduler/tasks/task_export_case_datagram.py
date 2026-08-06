@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : task_export_case_datagram.py
-@DateTime: 2026/7/27
-"""
 from __future__ import annotations
 
 import os

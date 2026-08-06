@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : __init__.py.py
-@DateTime: 2025/1/12 19:38
-"""
 from .api_doc_convert import APIDocConvert
 from .async_or_sync_convert import sync_to_async, async_to_sync, AsyncEventLoopContextIOPool
 from .configparser_utils import ConfigparserUtils

@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : request_sync_utils.py
-@DateTime: 2025/1/13 09:17
-"""
 import threading
 from typing import Optional, Dict, Any, Union, List, Literal
 

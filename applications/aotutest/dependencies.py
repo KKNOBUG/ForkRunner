@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : KeenRunner
-@Module  : dependencies.py
-@DateTime: 2026/6/8 10:06
-"""
 from dataclasses import dataclass
 
 from applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud

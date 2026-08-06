@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : openpyxl_utils.py
-@DateTime: 2025/1/16 12:38
-"""
 import os
 import re
 from typing import Optional, List, Dict, Union, Any, Generator, Literal, Tuple, Pattern

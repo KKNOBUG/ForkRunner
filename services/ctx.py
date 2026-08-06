@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : dependency.py
-@DateTime: 2025/2/18 19:03
-"""
 import contextvars
 from typing import Optional
 

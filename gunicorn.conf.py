@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : gunicorn_config.py
-@DateTime: 2025/1/12 19:41
-"""
 import logging
 
 from gunicorn.glogging import Logger

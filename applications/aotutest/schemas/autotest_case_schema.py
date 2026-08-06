@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_case_schema.py
-@DateTime: 2025/4/28
-"""
 from typing import Optional, List, Dict, Any, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator

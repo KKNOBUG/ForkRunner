@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : http_exceptions.py
-@DateTime: 2025/1/17 22:30
-"""
 import traceback
 
 from fastapi import Request, status

@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : http_response.py
-@DateTime: 2025/2/1 21:43
-"""
 from typing import Optional, Union, List, Any, Dict
 
 from core.responses import BaseResponse

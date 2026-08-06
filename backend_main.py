@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : backend_main.py
-@DateTime: 2025/1/12 19:41
-"""
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI

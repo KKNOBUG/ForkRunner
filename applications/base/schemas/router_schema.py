@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : router_schema.py
-@DateTime: 2025/1/31 17:36
-"""
 from typing import Optional
 
 from pydantic import BaseModel, Field

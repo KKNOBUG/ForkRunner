@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : task_autotest_case
-@DateTime: 2026/2/1 16:10
-"""
 from __future__ import annotations
 
 import traceback

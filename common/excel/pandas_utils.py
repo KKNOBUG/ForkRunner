@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : pandas_utils.py
-@DateTime: 2025/1/16 12:40
-"""
 
 import os
 

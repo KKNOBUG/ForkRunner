@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : redis_sync_pool.py
-@DateTime: 2025/1/14 15:30
-"""
 import pickle
 from typing import Optional, Union, List, Any, Dict
 

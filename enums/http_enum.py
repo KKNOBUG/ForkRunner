@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : http_enum.py
-@DateTime: 2025/1/13 12:57
-"""
 from enums.base_enum_cls import StringEnum
 
 

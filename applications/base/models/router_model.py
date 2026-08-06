@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : router_model.py
-@DateTime: 2025/2/19 22:41
-"""
 from tortoise import fields
 
 from enums import HTTPMethod

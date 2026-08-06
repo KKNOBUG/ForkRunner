@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : __init__.py
-@DateTime: 2025/1/12 19:38
-"""
 from .celery_config import CELERY_CONFIG
 from .global_config import GLOBAL_CONFIG
 from .logging_config import LOGGER

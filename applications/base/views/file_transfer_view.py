@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : basic_view.py
-@DateTime: 2025/4/7 09:10
-"""
 import os.path
 import traceback
 from pathlib import Path

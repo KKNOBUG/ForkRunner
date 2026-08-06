@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : role_schema.py
-@DateTime: 2025/2/19 23:05
-"""
 from typing import List, Optional
 
 from pydantic import BaseModel, Field

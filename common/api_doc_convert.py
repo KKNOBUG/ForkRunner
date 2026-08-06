@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : api_doc_convert.py
-@DateTime: 2025/4/7 15:44
-"""
 from typing import List
 from xml.etree import ElementTree as ET
 

@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_tcp_test_view
-@DateTime: 2026/7/21 10:00:00
-"""
 import asyncio
 import datetime
 import traceback

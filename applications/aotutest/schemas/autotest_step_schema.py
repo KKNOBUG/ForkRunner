@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_step_schema.py
-@DateTime: 2025/4/28
-"""
 from typing import Optional, List, Dict, Any, Type, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -40,7 +33,7 @@ class DataBaseOperates(BaseModel):
 
 
 class RedisOperates(BaseModel):
-    """步骤定义中的单条 Redis 操作字段模型。"""
+    """步骤定义中的单条Redis操作字段模型。"""
 
     name: str = Field(..., max_length=128, description="Redis操作名称")
     expr: str = Field(..., max_length=4096, description="Redis命令(支持多行)")

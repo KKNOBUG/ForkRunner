@@ -1,12 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_record_crud
-@DateTime: 2026/2/1 12:13
-"""
-import traceback
+# -*- coding: utf-8 -*-import traceback
 from datetime import datetime
 from typing import Optional, Dict, Any, Union, List, Tuple
 

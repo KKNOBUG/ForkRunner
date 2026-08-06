@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : task_execute_assign_case.py
-@DateTime: 2026/3/20
-"""
 from __future__ import annotations
 
 import datetime

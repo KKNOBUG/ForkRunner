@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : json_replace.py
-@DateTime: 2025/12/28 16:15
-"""
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Union

@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : audit_crud
-@DateTime: 2026/4/20 16:53
-"""
 from typing import List, Optional, Any, Tuple, Dict
 
 from tortoise.expressions import Q

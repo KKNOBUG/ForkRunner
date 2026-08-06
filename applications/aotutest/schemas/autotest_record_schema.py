@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_record_schema
-@DateTime: 2026/2/1 12:13
-"""
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Union
 

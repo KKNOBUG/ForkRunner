@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : convert_utils.py
-@DateTime: 2025/1/15 14:30
-"""
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from typing import Dict, Any

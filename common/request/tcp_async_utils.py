@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : tcp_async_utils
-@DateTime: 2026/3/24 09:50
-"""
 from __future__ import annotations
 
 import asyncio

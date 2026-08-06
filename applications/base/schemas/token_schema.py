@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : token_schema.py
-@DateTime: 2025/1/18 12:07
-"""
 from datetime import datetime
 from typing import Optional
 

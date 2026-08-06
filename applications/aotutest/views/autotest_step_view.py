@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_step_view.py
-@DateTime: 2025/4/28
-"""
 import time
 import traceback
 import uuid

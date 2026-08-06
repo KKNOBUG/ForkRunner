@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : auth_view.py
-@DateTime: 2025/1/18 10:03
-"""
 import traceback
 from datetime import timedelta, datetime, timezone
 from typing import List

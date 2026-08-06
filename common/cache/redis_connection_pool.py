@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : redis_connection_pool
-@DateTime: 2026/6/6
-"""
 import asyncio
 import shlex
 import traceback

@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_env_schema
-@DateTime: 2026/1/2 16:44
-"""
 from typing import Optional, List, Union
 
 from pydantic import BaseModel, Field

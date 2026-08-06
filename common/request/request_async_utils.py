@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : request_async_utils.py
-@DateTime: 2025/1/16 20:11
-"""
 import asyncio
 from datetime import timedelta
 from pathlib import Path

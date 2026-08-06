@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : database_sync_operator.py
-@DateTime: 2025/1/16 12:52
-"""
 import traceback
 from typing import Union, Any, Optional
 from warnings import filterwarnings

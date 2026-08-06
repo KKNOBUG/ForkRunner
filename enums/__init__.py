@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : __init__.py.py
-@DateTime: 2025/1/12 19:39
-"""
 from .app_enum import Code, Message, Status
 from .autotest_enum import (
     AutoTestCaseAttr,

@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : department_view.py
-@DateTime: 2025/2/3 18:21
-"""
 import traceback
 
 from fastapi import APIRouter, Body, Query, Depends

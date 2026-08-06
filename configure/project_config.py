@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : project_config.py
-@DateTime: 2025/1/15 16:08
-"""
 import os.path
 import platform
 from functools import lru_cache

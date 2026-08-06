@@ -1,12 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_project_crud
-@DateTime: 2026/1/2 18:01
-"""
-import traceback
+# -*- coding: utf-8 -*-import traceback
 from typing import Optional, Dict, Any, List, Tuple, Union, Set
 
 from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist

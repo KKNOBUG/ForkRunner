@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : base_exceptions.py
-@DateTime: 2025/1/13 13:45
-"""
 from typing import Union, Optional
 
 import orjson

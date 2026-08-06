@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : base_response.py
-@DateTime: 2025/1/16 16:14
-"""
 from typing import Optional, Union, List, Any, Dict
 
 import orjson

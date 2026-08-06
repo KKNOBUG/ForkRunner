@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : audit_schema.py
-@DateTime: 2025/3/7 21:48
-"""
 from datetime import datetime
 from typing import Optional, List
 

@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : department_schema.py
-@DateTime: 2025/2/3 16:27
-"""
 from datetime import datetime
 from typing import List, Optional
 

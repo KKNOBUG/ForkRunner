@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : menu_model.py
-@DateTime: 2025/2/19 22:42
-"""
 from tortoise import fields
 
 from enums import MenuType

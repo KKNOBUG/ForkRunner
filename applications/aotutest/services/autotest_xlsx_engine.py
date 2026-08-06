@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_xlsx_engine
-@DateTime: 2026/4/10 15:31
-"""
 import asyncio
 import re
 from concurrent.futures import ThreadPoolExecutor

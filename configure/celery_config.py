@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : celery_config
-@DateTime: 2026/1/3 22:09
-"""
 import os
 from functools import lru_cache
 from typing import Dict, Any

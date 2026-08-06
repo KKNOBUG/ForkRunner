@@ -1,15 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : request_context.py
-@DateTime: 2026/5/29
-
-轻量分布式追踪：X-Trace-ID + X-Span-ID + X-Parent-Span-ID。
-- TraceID：仅来自请求头 X-Trace-ID，未传则由后端留空（日志为 -）
-- SpanID：每个入站 HTTP、Celery 任务由服务端分配，经 X-Span-ID 回传/下发
-"""
 from __future__ import annotations
 
 import uuid

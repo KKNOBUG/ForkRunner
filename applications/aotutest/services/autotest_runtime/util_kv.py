@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : util_kv.py
-@DateTime: 2025/11/9 11:58
-"""
 from __future__ import annotations
 
 import traceback

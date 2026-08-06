@@ -1,12 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_report_crud
-@DateTime: 2025/11/27 09:34
-"""
-import traceback
+# -*- coding: utf-8 -*-import traceback
 from collections import defaultdict
 from typing import Optional, List, Tuple, Dict, Any
 

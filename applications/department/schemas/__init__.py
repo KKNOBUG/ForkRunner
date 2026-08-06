@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : __init__.py.py
-@DateTime: 2025/2/18 16:16
-"""
 
 
 def print_hi(name):

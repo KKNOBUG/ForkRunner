@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : scaffold.py
-@DateTime: 2025/1/18 10:48
-"""
 import asyncio
 import traceback
 import uuid

@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : base_enum_cls.py
-@DateTime: 2025/1/12 22:58
-"""
 from enum import Enum
 from typing import cast
 

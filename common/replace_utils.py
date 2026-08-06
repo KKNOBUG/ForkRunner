@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : replace_utils.py
-@DateTime: 2025/1/15 16:33
-"""
 import json
 import re
 from typing import Dict, Any, Union, Type, Set, List

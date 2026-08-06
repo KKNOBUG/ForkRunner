@@ -1,13 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_tool_service
-@DateTime: 2026/1/17 12:20
-
-自动化测试工具服务门面：对外 API 保持稳定，实现位于 autotest_runtime / dataset_loader。
-"""
 from __future__ import annotations
 
 from applications.aotutest.services.autotest_dataset_loader import DatasetLoader

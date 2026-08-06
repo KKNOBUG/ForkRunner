@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : generate_view.py
-@DateTime: 2025/2/28 14:43
-"""
 from typing import List, Dict, Any
 
 from fastapi import APIRouter, Body

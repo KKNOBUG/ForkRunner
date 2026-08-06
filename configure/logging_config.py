@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : logging_config.py
-@DateTime: 2025/1/16 15:33
-"""
 import logging
 import os
 import re

@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_env_config_view
-@DateTime: 2026/4/16 15:54
-"""
 import asyncio
 import traceback
 from typing import Optional

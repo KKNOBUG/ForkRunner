@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : shell_utils.py
-@DateTime: 2025/1/15 12:35
-"""
 import re
 import subprocess
 import socket

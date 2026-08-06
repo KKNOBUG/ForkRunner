@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : KeenRunner
-@Module  : dependencies.py
-@DateTime: 2026/6/8 09:47
-"""
 from applications.base.services.audit_crud import AuditCrud
 from applications.base.services.menu_crud import MenuCrud
 from applications.base.services.role_crud import RoleCrud

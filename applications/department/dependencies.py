@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : KeenRunner
-@Module  : dependencies.py
-@DateTime: 2026/6/8 09:47
-"""
 from applications.department.services.department_crud import DepartmentCrud
 
 

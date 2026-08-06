@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : configparser_utils.py
-@DateTime: 2025/1/15 16:00
-"""
 import configparser
 import os
 import typing

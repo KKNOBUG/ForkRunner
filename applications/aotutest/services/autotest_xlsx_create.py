@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_xlsx_create
-@DateTime: 2026/4/10 15:54
-"""
 
 import random
 import string

@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : yaml_utils.py
-@DateTime: 2025/1/15 10:49
-"""
 import orjson
 import os.path
 from typing import Dict, Any

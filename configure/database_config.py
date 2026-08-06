@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : database_config.py
-@DateTime: 2025/1/12 22:20
-"""
 from typing import Dict, Any
 
 DATABASES: Dict[str, Dict[str, Dict[str, Any]]] = {

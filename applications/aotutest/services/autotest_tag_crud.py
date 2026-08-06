@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_tag_crud
-@DateTime: 2026/1/16 16:35
-"""
 import traceback
 from typing import Optional, Dict, Any, List, Union, Set, Tuple
 

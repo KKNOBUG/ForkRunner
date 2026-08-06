@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : file_utils.py
-@DateTime: 2025/1/14 12:28
-"""
 import glob
 import mimetypes
 import os

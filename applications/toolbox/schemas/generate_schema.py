@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : generate_schema.py
-@DateTime: 2025/2/28 15:02
-"""
 from typing import List, Dict
 
 from pydantic import BaseModel, Field, field_validator, model_validator

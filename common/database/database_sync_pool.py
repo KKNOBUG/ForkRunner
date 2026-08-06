@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : database_sync_pool.py
-@DateTime: 2025/1/16 12:45
-"""
 import dbutils
 import pymysql
 from dbutils.pooled_db import PooledDB

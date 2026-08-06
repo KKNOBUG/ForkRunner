@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : task_example
-@DateTime: 2026/1/27 16:25
-"""
 import random
 import time
 from datetime import datetime

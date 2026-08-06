@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : file_transfer.py
-@DateTime: 2025/4/7 09:13
-"""
 import base64
 import mimetypes
 import os

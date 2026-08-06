@@ -1,12 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_data_source_parser.py
-@DateTime: 2026/3/6
-"""
-import asyncio
+# -*- coding: utf-8 -*-import asyncio
 import math
 import os
 import re

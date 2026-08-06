@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : xpath_utils
-"""
 from typing import Any, List, Optional, Union
 from xml.etree import ElementTree
 

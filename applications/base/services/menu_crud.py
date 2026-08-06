@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : menu_crud.py
-@DateTime: 2025/2/19 12:48
-"""
 from typing import Optional
 
 from tortoise.exceptions import DoesNotExist

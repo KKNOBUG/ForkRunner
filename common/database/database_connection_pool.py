@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : database_connection_pool
-@DateTime: 2026/4/21 14:33
-"""
 import asyncio
 import traceback
 from datetime import date, time, datetime, timedelta

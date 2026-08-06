@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : global_config.py
-@DateTime: 2025/1/16 15:30
-"""
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings

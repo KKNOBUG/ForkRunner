@@ -1,12 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : celery_worker
-@DateTime: 2026/1/27 16:25
-"""
-import asyncio
+# -*- coding: utf-8 -*-import asyncio
 import logging
 import traceback
 from abc import ABC

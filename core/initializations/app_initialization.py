@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : app_initialization.py
-@DateTime: 2025/1/17 21:55
-"""
 import os
 import shutil
 import sys

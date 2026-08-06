@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_detail_schema
-@DateTime: 2025/11/27 10:42
-"""
 from typing import Optional, List, Dict, Any, Type, Union
 
 import orjson

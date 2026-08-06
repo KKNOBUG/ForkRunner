@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : request_context_middleware.py
-@DateTime: 2026/5/29
-"""
 from fastapi import Request
 
 from common.request_context import (

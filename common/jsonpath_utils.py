@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : jsonpath_utils.py
-@DateTime: 2025/1/15 13:36
-"""
 import typing
 
 import jsonpath

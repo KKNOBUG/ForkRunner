@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : executor_fields.py
-@DateTime: 2025/12/28 16:15
-"""
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
@@ -14,7 +7,6 @@ from applications.aotutest.schemas.autotest_step_schema import AutoTestStepTreeU
 
 
 class ExecutorFieldsValidation:
-    """保存前第三层：HTTP/TCP/DB/Redis/Python等执行器字段完整性。"""
 
     @classmethod
     def validate_executor_fields(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[Dict[str, Any]]:

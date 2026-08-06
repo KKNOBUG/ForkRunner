@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : auth_middleware
-@DateTime: 2026/3/25 15:40
-"""
 from __future__ import annotations
 
 from typing import Iterable

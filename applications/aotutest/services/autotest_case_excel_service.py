@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_case_excel_service.py
-@DateTime: 2026/8/1
-"""
 from __future__ import annotations
 
 import io

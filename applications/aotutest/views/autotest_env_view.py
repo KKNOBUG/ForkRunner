@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_env_view
-@DateTime: 2026/1/2 21:21
-"""
 import traceback
 from typing import Optional
 

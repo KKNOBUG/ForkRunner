@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : autotest_data_source_view.py
-@DateTime: 2026/3/6
-"""
 import hashlib
 import io
 import os.path
