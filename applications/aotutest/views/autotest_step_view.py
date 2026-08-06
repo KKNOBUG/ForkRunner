@@ -968,7 +968,7 @@ async def debug_tcp_request(
     :return: 统一HTTP响应
     """
     try:
-        env_id: int = debug_in.env_id
+        env_name: str = (debug_in.env_name or "").strip()
         step_name: str = debug_in.step_name
         request_project_id: int = debug_in.request_project_id
         request_config_name: str = debug_in.request_config_name
@@ -1002,7 +1002,7 @@ async def debug_tcp_request(
 
         append_debugging_log(
             message=f"TCP请求调试开始: \n\t"
-                    f"环境ID: {env_id}\n\t"
+                    f"环境名称: {env_name}\n\t"
                     f"应用ID: {request_project_id}\n\t"
                     f"配置名称: {request_config_name}\n\t"
                     f"请求体类型: {request_args_type}\n\t"
@@ -1039,15 +1039,33 @@ async def debug_tcp_request(
                 )
         append_debugging_log(message="【参数替换】结束")
 
-        # 根据env_id + 应用 + 配置名解析host/port（与 HTTP 调试一致，不使用 request_url/request_port）
+        # 按环境名+应用+配置名解析 host/port（与 HTTP 调试一致）
         host: str = ""
         port: Optional[str] = None
         try:
+            if not env_name:
+                return ParameterResponse(message="TCP请求调试失败, 参数[env_name]不允许为空")
+            env_row = await services.env_enum_curd.model.filter(
+                project_id=request_project_id,
+                env_name__iexact=env_name,
+                env_type=1,
+                state__not=1,
+            ).first()
+            if not env_row:
+                env_row = await services.env_enum_curd.model.filter(
+                    project_id=request_project_id,
+                    env_name__iexact=env_name,
+                    state__not=1,
+                ).first()
+            if not env_row:
+                msg = f"TCP请求调试失败, 应用[{request_project_id}]下环境[{env_name}]不存在"
+                append_debugging_log(message=msg)
+                return NotFoundResponse(message=msg)
             env_config_instance = await services.env_config_curd.get_by_conditions(
                 only_one=True,
                 on_error=False,
                 state__not=1,
-                env_id=env_id,
+                env_id=env_row.id,
                 project_id=request_project_id,
                 config_name=request_config_name,
                 config_type=AutoTestConfigNodeType.API
@@ -1244,7 +1262,6 @@ async def debug_tcp_request(
 @autotest_step.post("/python_code_debugging", summary="调试Python代码")
 async def debug_python_code(
         debug_in: AutoTestPythonCodeDebugRequest = Body(..., description="Python代码步骤数据"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     Python代码调试。
@@ -1359,7 +1376,7 @@ async def debug_redis_request(
     :return: 统一HTTP响应
     """
     try:
-        env_id: int = debug_in.env_id
+        env_name: str = (debug_in.env_name or "").strip()
         step_name: str = debug_in.step_name
         redis_operates: List[RedisOperates] = debug_in.redis_operates or []
         redis_searched: bool = bool(debug_in.redis_searched)
@@ -1386,18 +1403,11 @@ async def debug_redis_request(
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
             debugging_logs.append(f"[{timestamp}] [{step_name}] {message}")
 
-        env_instance = await services.env_enum_curd.get_by_id(env_id=env_id, on_error=False, state__not=1)
-        if not env_instance:
-            msg = f"Redis请求调试失败, 环境ID[{env_id}]不存在"
-            append_debugging_log(message=msg)
-            return NotFoundResponse(message=msg)
-        env_name: str = str(env_instance.env_name or "").strip()
         if not env_name:
-            return FailureResponse(message="参数[env_name]不允许为空")
+            return ParameterResponse(message="Redis请求调试失败, 参数[env_name]不允许为空")
 
         append_debugging_log(
             message=f"Redis请求调试开始: \n\t"
-                    f"环境ID: {env_id}\n\t"
                     f"环境名称: {env_name}\n\t"
                     f"操作条数: {len(redis_operates)}\n\t"
                     f"查到即止: {redis_searched}"
@@ -1478,11 +1488,29 @@ async def debug_redis_request(
                 if not operate_variable_name:
                     return FailureResponse(message=f"{operate_no}：参数[variable_name]不允许为空")
 
+                # 按环境名+应用解析环境，再取 Redis 配置（与 HTTP/TCP 调试一致）
+                env_row = await services.env_enum_curd.model.filter(
+                    project_id=operate_project_id,
+                    env_name__iexact=env_name,
+                    env_type=1,
+                    state__not=1,
+                ).first()
+                if not env_row:
+                    env_row = await services.env_enum_curd.model.filter(
+                        project_id=operate_project_id,
+                        env_name__iexact=env_name,
+                        state__not=1,
+                    ).first()
+                if not env_row:
+                    msg = f"{operate_no}：应用[{operate_project_id}]下环境[{env_name}]不存在"
+                    append_debugging_log(message=msg)
+                    return NotFoundResponse(message=msg)
+
                 env_config_instance = await services.env_config_curd.get_by_conditions(
                     only_one=True,
                     on_error=False,
                     state__not=1,
-                    env_id=env_id,
+                    env_id=env_row.id,
                     project_id=operate_project_id,
                     config_name=operate_config_name,
                     config_type=AutoTestConfigNodeType.REDIS

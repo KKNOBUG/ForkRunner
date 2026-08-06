@@ -464,7 +464,7 @@ class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
 class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
     """TCP 步骤调试入参。"""
 
-    env_id: int = Field(..., ge=1, description="环境枚举ID")
+    env_name: str = Field(..., max_length=64, description="环境名称")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_text: Optional[str] = Field(None, description="请求体数据(Text格式)")
     request_project_id: int = Field(..., ge=1, description="请求应用ID")
@@ -481,7 +481,7 @@ class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
 class AutoTestRedisDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepRedisBase):
     """Redis 步骤调试入参。"""
 
-    env_id: int = Field(..., ge=1, description="环境枚举ID")
+    env_name: str = Field(..., max_length=64, description="环境名称")
     step_name: str = Field(..., max_length=255, description="步骤名称")
 
     @model_validator(mode="after")
