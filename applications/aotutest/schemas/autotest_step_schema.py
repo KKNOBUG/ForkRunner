@@ -149,6 +149,19 @@ class StepAssertValidatorItem(BaseModel):
     operation: str = Field(..., max_length=128, description="比较符")
     except_value: Any = Field(default=None, description="期待值")
 
+    @field_validator("operation", mode="before")
+    @classmethod
+    def validate_operation(cls, v: Any) -> str:
+        """
+        校验并规范化比较符为AutoTestAssertionOperation枚举值（与HTTP步骤断言一致）。
+
+        :param v: 原始比较符
+        :return: 规范化后的比较符字符串
+        """
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            raise ValueError("参数[operation]不允许为空")
+        return AutoTestAssertionOperation(str(v).strip()).value
+
 
 class AutoTestApiStepReqBase(BaseModel):
     """步骤请求相关基础字段模型。"""
