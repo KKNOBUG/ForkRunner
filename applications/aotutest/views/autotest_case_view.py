@@ -239,16 +239,19 @@ async def batch_fetch_related_data(
     acquire_project_instance_task = services.project_curd.get_by_ids(
         project_ids=list(project_ids),
         on_error=True,
+        state__not=1
     ) if project_ids else asyncio.sleep(0, result=[])
 
     acquire_tag_instance_task = services.tag_curd.get_by_ids(
         tag_ids=list(tag_ids),
         on_error=True,
+        state__not=1
     ) if tag_ids else asyncio.sleep(0, result=[])
 
     acquire_step_type_instance_task = services.step_curd.model.filter(
         ~Q(case_id__isnull=True),
-        case_id__in=case_ids
+        case_id__in=case_ids,
+        state__not = 1
     ).values_list("case_id", "step_type") if case_ids else asyncio.sleep(0, result=[])
 
     project_objs, tag_objs, step_type_raw = await asyncio.gather(
