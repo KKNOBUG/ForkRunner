@@ -8,7 +8,7 @@
 """
 import traceback
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query, Depends, Body
 
 from applications.base.dependencies import get_menu_crud
 from applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
@@ -146,7 +146,7 @@ async def get_menu(
 
 @menu.post("/create", summary="创建菜单")
 async def create_menu(
-        menu_in: MenuCreate,
+        menu_in: MenuCreate = Body(..., description="菜单信息"),
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
     """
@@ -170,7 +170,7 @@ async def create_menu(
 
 @menu.post("/update", summary="更新菜单", description="根据id更新菜单信息")
 async def update_menu(
-        menu_in: MenuUpdate,
+        menu_in: MenuUpdate = Body(..., description="菜单信息"),
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
     """

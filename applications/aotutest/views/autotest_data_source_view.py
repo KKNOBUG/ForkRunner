@@ -109,19 +109,19 @@ def _safe_sheet_name(name: Any, used: Set[str]) -> str:
 
 
 @autotest_data_source.post("/create", summary="新增数据源")
-async def create_data_source_info(
-        data_in: AutoTestDataSourceCreate = Body(..., description="数据源信息"),
+async def create_data_source(
+        data_source_in: AutoTestDataSourceCreate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     新增数据源。
 
-    :param data_in: 数据源入参
+    :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.data_source_curd.create_data_source(data_source_in=data_in)
+        instance = await services.data_source_curd.create_data_source(data_source_in=data_source_in)
         data = await _serialize_data_source(instance)
         LOGGER.info(f"新增数据源成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
@@ -137,7 +137,7 @@ async def create_data_source_info(
 
 
 @autotest_data_source.delete("/delete", summary="删除数据源", description="软删除数据源信息")
-async def delete_data_source_info(
+async def delete_data_source(
         data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
         data_source_code: Optional[str] = Query(None, description="数据驱动标识代码"),
         case_id: Optional[int] = Query(None, description="用例ID"),
@@ -203,26 +203,26 @@ async def unbind_case_data_source(
 
 
 @autotest_data_source.post("/update", summary="更新数据源")
-async def update_data_source_info(
-        data_in: AutoTestDataSourceUpdate = Body(..., description="数据源信息"),
+async def update_data_source(
+        data_source_in: AutoTestDataSourceUpdate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     更新数据源。
 
-    :param data_in: 数据源入参
+    :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        effective = data_in
-        if data_in.dataframe is not None:
+        effective = data_source_in
+        if data_source_in.dataframe is not None:
             try:
-                step_data, dataset_names, norm_matrix, axis = await parse_dataframe_matrix_async(data_in.dataframe)
+                step_data, dataset_names, norm_matrix, axis = await parse_dataframe_matrix_async(data_source_in.dataframe)
             except ValueError as e:
                 return BadReqResponse(message=f"解析表格数据失败: {e}")
             updated_user = get_current_username()
-            effective = data_in.model_copy(
+            effective = data_source_in.model_copy(
                 update={
                     "dataset": step_data,
                     "dataset_names": dataset_names,
@@ -247,24 +247,24 @@ async def update_data_source_info(
 
 
 @autotest_data_source.post("/save_or_update", summary="保存数据源", description="保存或更新数据源信息")
-async def save_or_update_data_source_info(
-        data_in: AutoTestDataSourceSaveOrUpdate = Body(..., description="数据源信息"),
+async def save_or_update_data_source(
+        data_source_in: AutoTestDataSourceSaveOrUpdate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     保存或更新数据源, 根据case_id, step_id, step_code定位：存在则更新，不存在则新增; case_code 缺失时自动查询用例表补齐。
 
-    :param data_in: 数据源入参
+    :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        case_id: int = data_in.case_id
-        case_code: str = data_in.case_code
-        step_id: int = data_in.step_id
-        step_code: str = data_in.step_code
-        data_id: Optional[int] = data_in.data_source_id
-        data_code: Optional[str] = data_in.data_source_code
+        case_id: int = data_source_in.case_id
+        case_code: str = data_source_in.case_code
+        step_id: int = data_source_in.step_id
+        step_code: str = data_source_in.step_code
+        data_id: Optional[int] = data_source_in.data_source_id
+        data_code: Optional[str] = data_source_in.data_source_code
         if data_id:
             data_source_instance: Optional[AutoTestApiDataSourceInfo] = await services.data_source_curd.get_by_id(
                 data_source_id=data_id,
@@ -291,26 +291,26 @@ async def save_or_update_data_source_info(
                 message="请提供参数[data_source_id, data_source_code]或[case_id, case_code, step_id, step_code]进行保存或更新"
             )
 
-        if data_in.dataframe is not None:
+        if data_source_in.dataframe is not None:
             try:
-                step_data, dataset_names, norm_matrix, axis = await parse_dataframe_matrix_async(data_in.dataframe)
+                step_data, dataset_names, norm_matrix, axis = await parse_dataframe_matrix_async(data_source_in.dataframe)
             except ValueError as e:
                 return BadReqResponse(message=f"解析表格数据失败: {e}")
-            data_in.dataset = step_data
-            data_in.dataset_names = dataset_names
-            data_in.dataframe = norm_matrix
-            data_in.axis = axis
+            data_source_in.dataset = step_data
+            data_source_in.dataset_names = dataset_names
+            data_source_in.dataframe = norm_matrix
+            data_source_in.axis = axis
 
         if data_source_instance:
             # 已有启用记录 → 更新
-            data_in.updated_user = get_current_username()
-            instance = await services.data_source_curd.update_data_source(data_source_in=data_in)
+            data_source_in.updated_user = get_current_username()
+            instance = await services.data_source_curd.update_data_source(data_source_in=data_source_in)
         else:
             # 无启用记录 → 新增（case_code 缺失则自动查询补齐）
-            data_in.data_source_id = None
-            data_in.created_user = get_current_username()
-            data_in.cache_key = f"dataset_{case_id}_{step_code}"
-            instance = await services.data_source_curd.create_data_source(data_source_in=data_in)
+            data_source_in.data_source_id = None
+            data_source_in.created_user = get_current_username()
+            data_source_in.cache_key = f"dataset_{case_id}_{step_code}"
+            instance = await services.data_source_curd.create_data_source(data_source_in=data_source_in)
 
         # 同步步骤数据源元信息
         await _sync_step_data_source_meta(
@@ -337,7 +337,7 @@ async def save_or_update_data_source_info(
 
 
 @autotest_data_source.get("/get", summary="查询数据源", description="根据条件查询单条数据源信息")
-async def get_data_source_info(
+async def get_data_source(
         data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
         data_source_code: Optional[str] = Query(None, description="数据驱动标识代码"),
         case_id: Optional[int] = Query(None, description="用例ID"),
@@ -380,8 +380,8 @@ async def get_data_source_info(
 
 
 @autotest_data_source.post(path="/query_dataset_names", summary="查询数据场景", description="查询案例数据场景名称")
-async def query_case_name(
-        case_id: int = Form(..., title="案例ID"),
+async def get_dataset_names(
+        case_id: int = Form(..., description="用例ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -415,42 +415,42 @@ async def query_case_name(
 
 
 @autotest_data_source.post("/search", summary="查询数据源列表", description="根据条件分页查询数据源列表信息(Body)")
-async def search_data_source_info(
-        sel_in: AutoTestDataSourceSelect = Body(..., description="查询条件"),
+async def search_data_sources(
+        data_source_in: AutoTestDataSourceSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     根据条件分页查询数据源。
 
-    :param sel_in: 数据源查询入参
+    :param data_source_in: 数据源查询入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
         q = Q()
-        if sel_in.data_source_id:
-            q &= Q(id=sel_in.data_source_id)
-        if sel_in.data_source_code:
-            q &= Q(data_source_code__icontains=sel_in.data_source_code.strip())
-        if sel_in.case_id:
-            q &= Q(case_id=sel_in.case_id)
-        if sel_in.case_code:
-            q &= Q(case_code__icontains=sel_in.case_code)
-        if sel_in.step_id:
-            q &= Q(step_id=sel_in.step_id)
-        if sel_in.step_code:
-            q &= Q(step_code__icontains=sel_in.step_code)
-        if sel_in.file_name:
-            q &= Q(file_name__icontains=sel_in.file_name)
-        if sel_in.file_path:
-            q &= Q(file_path__icontains=sel_in.file_path)
-        q &= Q(state=sel_in.state)
+        if data_source_in.data_source_id:
+            q &= Q(id=data_source_in.data_source_id)
+        if data_source_in.data_source_code:
+            q &= Q(data_source_code__icontains=data_source_in.data_source_code.strip())
+        if data_source_in.case_id:
+            q &= Q(case_id=data_source_in.case_id)
+        if data_source_in.case_code:
+            q &= Q(case_code__icontains=data_source_in.case_code)
+        if data_source_in.step_id:
+            q &= Q(step_id=data_source_in.step_id)
+        if data_source_in.step_code:
+            q &= Q(step_code__icontains=data_source_in.step_code)
+        if data_source_in.file_name:
+            q &= Q(file_name__icontains=data_source_in.file_name)
+        if data_source_in.file_path:
+            q &= Q(file_path__icontains=data_source_in.file_path)
+        q &= Q(state=data_source_in.state)
 
         total, instances = await services.data_source_curd.select_data_sources(
             search=q,
-            page=sel_in.page,
-            page_size=sel_in.page_size,
-            order=sel_in.order,
+            page=data_source_in.page,
+            page_size=data_source_in.page_size,
+            order=data_source_in.order,
         )
         serializes: List[Dict[str, Any]] = []
         for inst in instances:
@@ -600,7 +600,7 @@ async def get_scene_names_by_case(
 
 
 @autotest_data_source.get("/dataset_scenario", summary="查询数据集场景", description="查询某步骤下单个数据集场景")
-async def get_dataset_scenario_info(
+async def get_dataset_scenario(
         case_id: int = Query(..., description="用例ID"),
         step_code: str = Query(..., description="步骤标识代码"),
         dataset_name: str = Query(..., description="数据集/场景名称"),
@@ -631,7 +631,7 @@ async def get_dataset_scenario_info(
 
 
 @autotest_data_source.get("/import_template_download", summary="下载数据源导入模板", description="下载请求步骤数据集导入模板xlsx")
-async def import_template_download():
+async def download_import_template():
     """分发仓库内置于output/template的xlsx（HTTP/TCP请求步骤共用）；流式读取，不加UTF-8 BOM，避免损坏二进制格式。"""
     filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "测试用例HTTP请求步骤数据源模板.xlsx"))
     if not filepath.startswith(PROJECT_CONFIG.OUTPUT_DIR) or not os.path.isfile(filepath):

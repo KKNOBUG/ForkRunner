@@ -39,8 +39,8 @@ dept = APIRouter()
 
 
 @dept.post("/create", summary="新增部门信息")
-async def create_dept(
-        department_in: DepartmentCreate = Body(),
+async def create_department(
+        department_in: DepartmentCreate = Body(..., description="部门信息"),
         current_user: User = DependAuth,
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
@@ -70,7 +70,7 @@ async def create_dept(
 
 
 @dept.delete("/delete", summary="删除部门信息", description="根据id删除部门信息")
-async def delete_dept_one(
+async def delete_department(
         department_id: int = Query(..., description="部门ID"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
@@ -94,7 +94,7 @@ async def delete_dept_one(
 
 
 @dept.post("/delete", summary="批量删除部门", description="根据id列表批量删除部门信息")
-async def delete_depts_batch(
+async def batch_delete_departments(
         body_in: DepartmentBatchDelete = Body(..., description="批量删除参数"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
@@ -115,7 +115,7 @@ async def delete_depts_batch(
 
 
 @dept.post("/update", summary="更新部门信息", description="根据id更新部门信息")
-async def update_dept(
+async def update_department(
         department_in: DepartmentUpdate = Body(..., description="部门信息"),
         current_user: User = DependAuth,
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
@@ -146,7 +146,7 @@ async def update_dept(
 
 
 @dept.get("/get", summary="查询部门信息", description="根据id查询部门信息")
-async def get_dept(
+async def get_department(
         department_id: int = Query(..., description="部门ID"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
@@ -171,7 +171,7 @@ async def get_dept(
 
 
 @dept.get("/list", summary="查询部门列表", description="根据name查询部门列表信息")
-async def list_dept(
+async def list_departments(
         name: str = Query(default=None, description="部门名称"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
@@ -192,8 +192,8 @@ async def list_dept(
 
 
 @dept.post("/search", summary="查询部门列表", description="根据条件分页查询部门列表信息(Body)")
-async def search_dept(
-        department_in: DepartmentSelect = Body(),
+async def search_departments(
+        department_in: DepartmentSelect = Body(..., description="查询条件"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """

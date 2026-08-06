@@ -246,7 +246,7 @@ async def delete_audit(
 
 
 @audit.post("/delete", summary="批量删除日志", description="根据id列表批量删除日志信息")
-async def delete_audits_batch(
+async def batch_delete_audits(
         body_in: AuditBatchDelete = Body(..., description="审计日志ID列表"),
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):

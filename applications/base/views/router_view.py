@@ -29,7 +29,7 @@ router = APIRouter()
 
 @router.post("/create", summary="新增路由信息")
 async def create_router(
-        router_in: RouterCreate = Body(),
+        router_in: RouterCreate = Body(..., description="路由信息"),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
     """
@@ -76,7 +76,7 @@ async def delete_router(
 
 
 @router.post("/update", summary="更新路由信息", description="根据id更新路由信息")
-async def update_user(
+async def update_router(
         router_in: RouterUpdate = Body(..., description="接口信息"),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
@@ -100,7 +100,7 @@ async def update_user(
 
 
 @router.get("/get", summary="查询路由信息", description="根据id查询路由信息")
-async def get_user(
+async def get_router(
         router_id: int = Query(None, description="接口ID"),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
@@ -126,7 +126,7 @@ async def get_user(
 
 @router.post("/search", summary="查询路由列表", description="根据条件分页查询路由列表信息(Body)")
 async def get_routers(
-        router_in: RouterSelect = Body(),
+        router_in: RouterSelect = Body(..., description="查询条件"),
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
     """

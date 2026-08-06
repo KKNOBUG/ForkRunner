@@ -132,7 +132,7 @@ async def get_user_menu():
 
 
 @auth_secure.post("/userinfo", summary="查看当前用户信息")
-async def get_userinfo(
+async def get_user_info(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """

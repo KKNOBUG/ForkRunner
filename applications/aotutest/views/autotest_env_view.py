@@ -37,19 +37,19 @@ autotest_env = APIRouter()
 
 
 @autotest_env.post("/list", summary="获取环境列表", response_model=None)
-async def get_env_list(
-        data: EnvListQuery,
+async def list_envs(
+        env_in: EnvListQuery = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     按节点类型/应用聚合环境名称。
 
-    :param data: 可选应用ID列表
+    :param env_in: 可选应用ID列表
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        result_data = await services.env_enum_curd.get_envs(data.project_id)
+        result_data = await services.env_enum_curd.get_envs(env_in.project_id)
         return SuccessResponse(message="查询成功", data=result_data)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -59,7 +59,7 @@ async def get_env_list(
 
 
 @autotest_env.get("/page", summary="环境分页列表")
-async def get_env_page(
+async def search_envs(
         project_id: Optional[int] = Query(None, description="应用ID", ge=1),
         env_name: Optional[str] = Query(None, description="环境名称"),
         env_type: Optional[int] = Query(None, description="节点类型"),
@@ -92,18 +92,18 @@ async def get_env_page(
 
 @autotest_env.post("/create", summary="新增环境")
 async def create_env(
-        data: EnvCreate = Body(..., description="环境信息"),
+        env_in: EnvCreate = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     新增环境（确保环境枚举存在）。
 
-    :param data: 环境入参
+    :param env_in: 环境入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        env_info = await services.env_enum_curd.create_automation_env(data, get_current_username() or "system")
+        env_info = await services.env_enum_curd.create_automation_env(env_in, get_current_username() or "system")
         return SuccessResponse(message="新增环境成功", data=env_info, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -118,7 +118,7 @@ async def create_env(
 
 @autotest_env.post("/update", summary="编辑环境")
 async def update_env(
-        data: EnvEditRequest = Body(..., description="环境信息"),
+        env_in: EnvEditRequest = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -127,7 +127,7 @@ async def update_env(
     :return: 统一HTTP响应
     """
     try:
-        env_info = await services.env_enum_curd.update_automation_env(data, get_current_username() or "system")
+        env_info = await services.env_enum_curd.update_automation_env(env_in, get_current_username() or "system")
         return SuccessResponse(message="更新环境成功", data=env_info, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -142,7 +142,7 @@ async def update_env(
 
 @autotest_env.post("/delete", summary="删除环境")
 async def delete_env(
-        data: EnvDeleteRequest = Body(..., description="环境信息"),
+        env_in: EnvDeleteRequest = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -152,7 +152,7 @@ async def delete_env(
     """
     try:
         result = await services.env_enum_curd.delete_automation_env(
-            data.id, data.env_type, get_current_username() or "system"
+            env_in.id, env_in.env_type, get_current_username() or "system"
         )
         return SuccessResponse(message="删除环境成功", data=result, total=1)
     except NotFoundException as e:
@@ -165,7 +165,7 @@ async def delete_env(
 
 
 @autotest_env.get("/get_all_app", summary="获取全部应用")
-async def get_all_app(
+async def get_all_apps(
         page: int = Query(1, ge=1, description="页码"),
         page_size: int = Query(10000, ge=1, description="每页条数"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -185,7 +185,7 @@ async def get_all_app(
 
 
 @autotest_env.post("/query", summary="API自动化测试-按应用列表查询环境配置并分类")
-async def query_classify_env_config(
+async def classify_env_configs(
         env_config_in: AutoTestApiEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):

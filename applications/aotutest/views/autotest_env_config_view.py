@@ -46,7 +46,7 @@ autotest_env_config = APIRouter()
 
 
 @autotest_env_config.get("/get", summary="查询环境配置", description="根据id或code查询环境配置信息")
-async def get_env_info(
+async def get_env_config(
         config_id: Optional[int] = Query(None, description="环境配置ID"),
         config_code: Optional[str] = Query(None, description="环境配置标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -85,7 +85,7 @@ async def get_env_info(
 
 
 @autotest_env_config.post("/search", summary="查询环境配置列表", description="根据条件分页查询环境配置列表信息(Body)")
-async def search_env_info(
+async def search_env_configs(
         config_in: AutoTestApiConfigSelect = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -168,8 +168,8 @@ async def search_env_info(
 
 
 @autotest_env_config.post("/query", summary="查询环境配置分类", description="根据应用列表查询环境配置并分类")
-async def query_classify_env_config(
-        body: AutoTestEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
+async def classify_env_configs(
+        env_config_in: AutoTestEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -178,7 +178,7 @@ async def query_classify_env_config(
     """
     try:
         data = await services.env_config_curd.query_classified_by_project_ids(
-            project_ids=body.project_ids,
+            project_ids=env_config_in.project_ids,
         )
         total_configs: int = sum(
             len(names)
@@ -187,7 +187,7 @@ async def query_classify_env_config(
             for names in buckets.values()
         )
         LOGGER.info(
-            f"根据应用列表查询环境配置并分类成功, project_ids={body.project_ids}, 配置条数: {total_configs}"
+            f"根据应用列表查询环境配置并分类成功, project_ids={env_config_in.project_ids}, 配置条数: {total_configs}"
         )
         return SuccessResponse(message="查询成功", data=data, total=total_configs)
     except ParameterException as e:
@@ -198,7 +198,7 @@ async def query_classify_env_config(
 
 
 @autotest_env_config.get("/config_names", summary="查询配置名称", description="获取去重后的配置名称列表")
-async def get_unique_env_config_name_list(
+async def get_env_config_names(
         project_id: Optional[int] = Query(None, ge=1, description="应用ID，可选"),
         env_id: Optional[int] = Query(None, ge=1, description="环境ID，可选"),
         config_type: Optional[AutoTestConfigNodeType] = Query(None, description="配置类型，可选"),
@@ -231,14 +231,14 @@ async def get_unique_env_config_name_list(
 
 
 @autotest_env_config.post("/app/create", summary="新增APP类型环境配置")
-async def add_app_config(
-        data: APPEnvConfigCreate = Body(..., description="环境配置信息"),
+async def create_app_config(
+        config_in: APPEnvConfigCreate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """新增 APP 类型环境配置。"""
     try:
         result = await services.env_config_curd.create_config_by_env_type(
-            env_type=1, data_dict=data.model_dump(), user=get_current_username() or ""
+            env_type=1, data_dict=config_in.model_dump(), user=get_current_username()
         )
         return SuccessResponse(message="新增APP配置成功", data=result, total=1)
     except DataAlreadyExistsException as e:
@@ -253,14 +253,14 @@ async def add_app_config(
 
 
 @autotest_env_config.post("/file/create", summary="新增FILE类型环境配置")
-async def add_file_config(
-        data: FILEEnvConfigCreate = Body(..., description="环境配置信息"),
+async def create_file_config(
+        config_in: FILEEnvConfigCreate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """新增 FILE 类型环境配置。"""
     try:
         result = await services.env_config_curd.create_config_by_env_type(
-            env_type=2, data_dict=data.model_dump(), user=get_current_username() or ""
+            env_type=2, data_dict=config_in.model_dump(), user=get_current_username()
         )
         return SuccessResponse(message="新增FILE配置成功", data=result, total=1)
     except DataAlreadyExistsException as e:
@@ -275,14 +275,14 @@ async def add_file_config(
 
 
 @autotest_env_config.post("/database/create", summary="新增DB类型环境配置")
-async def add_db_config(
-        data: DBEnvConfigCreate = Body(..., description="环境配置信息"),
+async def create_db_config(
+        config_in: DBEnvConfigCreate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """新增 DB 类型环境配置。"""
     try:
         result = await services.env_config_curd.create_config_by_env_type(
-            env_type=3, data_dict=data.model_dump(), user=get_current_username() or ""
+            env_type=3, data_dict=config_in.model_dump(), user=get_current_username()
         )
         return SuccessResponse(message="新增DB配置成功", data=result, total=1)
     except DataAlreadyExistsException as e:
@@ -297,7 +297,7 @@ async def add_db_config(
 
 
 @autotest_env_config.get("/list", summary="查询子表环境配置列表")
-async def get_env_config_list(
+async def list_env_configs(
         env_info_id: Optional[int] = Query(None, description="应用ID"),
         env_name: Optional[str] = Query(None, description="环境"),
         env_type: Optional[int] = Query(None, description="节点类型"),
@@ -324,13 +324,13 @@ async def get_env_config_list(
 
 @autotest_env_config.post("/app/update", summary="修改APP类型环境配置")
 async def update_app_config(
-        data: APPEnvConfigUpdate = Body(..., description="环境配置信息"),
+        config_in: APPEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """修改 APP 类型环境配置。"""
     try:
         result = await services.env_config_curd.update_config_by_env_type(
-            env_type=1, data_dict=data.model_dump(), user=get_current_username() or ""
+            env_type=1, data_dict=config_in.model_dump(), user=get_current_username()
         )
         return SuccessResponse(message="修改APP配置成功", data=result, total=1)
     except DataAlreadyExistsException as e:
@@ -346,13 +346,13 @@ async def update_app_config(
 
 @autotest_env_config.post("/file/update", summary="修改FILE类型环境配置")
 async def update_file_config(
-        data: FILEEnvConfigUpdate = Body(..., description="环境配置信息"),
+        config_in: FILEEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """修改 FILE 类型环境配置。"""
     try:
         result = await services.env_config_curd.update_config_by_env_type(
-            env_type=2, data_dict=data.model_dump(), user=get_current_username() or ""
+            env_type=2, data_dict=config_in.model_dump(), user=get_current_username()
         )
         return SuccessResponse(message="修改FILE配置成功", data=result, total=1)
     except DataAlreadyExistsException as e:
@@ -368,13 +368,13 @@ async def update_file_config(
 
 @autotest_env_config.post("/database/update", summary="修改DB类型环境配置")
 async def update_db_config(
-        data: DBEnvConfigUpdate = Body(..., description="环境配置信息"),
+        config_in: DBEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """修改 DB 类型环境配置。"""
     try:
         result = await services.env_config_curd.update_config_by_env_type(
-            env_type=3, data_dict=data.model_dump(), user=get_current_username() or ""
+            env_type=3, data_dict=config_in.model_dump(), user=get_current_username()
         )
         return SuccessResponse(message="修改DB配置成功", data=result, total=1)
     except DataAlreadyExistsException as e:
@@ -389,8 +389,8 @@ async def update_db_config(
 
 
 @autotest_env_config.post("/delete", summary="删除子表环境配置")
-async def delete_config_by_type(
-        data: EnvConfigDelete = Body(..., description="环境配置信息"),
+async def delete_env_config(
+        config_in: EnvConfigDelete = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -400,7 +400,7 @@ async def delete_config_by_type(
     """
     try:
         result = await services.env_config_curd.delete_config_by_env_type(
-            record_id=data.id, env_type=data.env_type, user=get_current_username() or ""
+            record_id=config_in.id, env_type=config_in.env_type, user=get_current_username()
         )
         return SuccessResponse(message="删除配置成功", data=result, total=1)
     except NotFoundException as e:
@@ -414,23 +414,23 @@ async def delete_config_by_type(
 
 @autotest_env_config.post("/database/test_connection", summary="测试数据库连接并创建连接池")
 async def test_db_connection(
-        data: TestDBConnectionRequest = Body(..., description="环境配置信息"),
+        config_in: TestDBConnectionRequest = Body(..., description="连接测试入参"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     测试数据库连接并创建连接池（出参为业务字典，非统一包装）。
 
-    :param data: 连接测试入参
+    :param config_in: 连接测试入参
     :param services: 自动化测试CRUD依赖聚合
-    :return: {code, status, message, data}
+    :return: {code, status, message, config_in}
     """
     try:
         return await services.env_config_curd.test_db_connection(
-            config_id=data.id,
-            app_id=data.app_id,
-            env=data.env,
-            config_name=data.config_name,
-            db_name=data.db_name,
+            config_id=config_in.id,
+            app_id=config_in.app_id,
+            env=config_in.env,
+            config_name=config_in.config_name,
+            db_name=config_in.db_name,
         )
     except Exception as e:
         LOGGER.error(f"测试数据库连接失败: {e}\n{traceback.format_exc()}")
@@ -438,5 +438,5 @@ async def test_db_connection(
             "code": "999999",
             "status": "failure",
             "message": f"测试数据库连接失败：{e}",
-            "data": None,
+            "config_in": None,
         }

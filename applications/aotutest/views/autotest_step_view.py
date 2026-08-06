@@ -346,20 +346,20 @@ async def copy_step_tree(
 
 @autotest_step.post("/update_or_create_tree", summary="更新步骤树", description="更新或创建用例级步骤树")
 async def batch_update_steps_tree(
-        data: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)"),
+        tree_in: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     更新用例级步骤树。
 
-    :param data: 步骤树入参
+    :param tree_in: 步骤树入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
         # 获取用例信息和步骤数据
-        case_data: AutoTestApiCaseUpdate = data.case
-        steps_data: List[AutoTestStepTreeUpdateItem] = data.steps
+        case_data: AutoTestApiCaseUpdate = tree_in.case
+        steps_data: List[AutoTestStepTreeUpdateItem] = tree_in.steps
 
         # 1. 校验步骤树结构合法性
         is_valid, error_msg = AutoTestToolService.validate_step_tree_structure(steps_data)
@@ -519,33 +519,33 @@ async def batch_update_steps_tree(
 
 @autotest_step.post("/validate_tree", summary="校验步骤树", description="校验步骤树JSON合法性")
 async def validate_step_tree(
-        steps: List[AutoTestStepTreeUpdateItem] = Body(..., description="待校验的步骤树根步骤列表"),
+        steps_in: List[AutoTestStepTreeUpdateItem] = Body(..., description="待校验的步骤树根步骤列表"),
         deep_validate: bool = Query(True, description="是否做深度校验(执行器字段+变量引用链)"),
 ):
     """
     校验步骤树JSON合法性。
 
-    :param steps: 步骤树入参
+    :param steps_in: 步骤树入参
     :param deep_validate: 是否深度校验
     :return: 统一HTTP响应
     """
     try:
         # 第2层：树结构校验
-        is_valid_structure, structure_error = AutoTestToolService.validate_step_tree_structure(steps)
+        is_valid_structure, structure_error = AutoTestToolService.validate_step_tree_structure(steps_in)
 
         field_errors: List[Dict[str, Any]] = []
         variable_errors: List[Dict[str, Any]] = []
         if deep_validate:
             # 第3层：执行器字段校验
-            field_errors = AutoTestToolService.validate_executor_fields(steps)
+            field_errors = AutoTestToolService.validate_executor_fields(steps_in)
             # 第4层：变量引用链校验
-            variable_errors = AutoTestToolService.validate_variable_flow(steps)
+            variable_errors = AutoTestToolService.validate_variable_flow(steps_in)
 
         is_valid: bool = is_valid_structure and not field_errors and not variable_errors
 
         total_steps: int = 0
         step_types: List[str] = []
-        walk: List[AutoTestStepTreeUpdateItem] = list(steps)
+        walk: List[AutoTestStepTreeUpdateItem] = list(steps_in)
         while walk:
             node = walk.pop()
             total_steps += 1
@@ -557,7 +557,7 @@ async def validate_step_tree(
 
         has_container: bool = any(
             str(s.step_type) in (str(AutoTestStepType.LOOP), str(AutoTestStepType.IF))
-            for s in steps
+            for s in steps_in
         )
 
         result_data: Dict[str, Any] = {
@@ -580,38 +580,38 @@ async def validate_step_tree(
 
 @autotest_step.post("/http_debugging", summary="调试HTTP请求")
 async def debug_http_request(
-        step_data: AutoTestHttpDebugRequest = Body(..., description="HTTP请求步骤数据"),
+        debug_in: AutoTestHttpDebugRequest = Body(..., description="HTTP请求步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     HTTP请求调试。
 
-    :param step_data: 步骤调试入参
+    :param debug_in: 步骤调试入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
         # 提取请求参数（使用 Pydantic 模型，自动验证）
-        env_name: str = (step_data.env_name or "").strip()
-        step_name: str = step_data.step_name
-        request_project_id: int = step_data.request_project_id
-        request_config_name: str = step_data.request_config_name
-        request_args_type: Optional[AutoTestReqArgsType] = step_data.request_args_type
+        env_name: str = (debug_in.env_name or "").strip()
+        step_name: str = debug_in.step_name
+        request_project_id: int = debug_in.request_project_id
+        request_config_name: str = debug_in.request_config_name
+        request_args_type: Optional[AutoTestReqArgsType] = debug_in.request_args_type
 
-        request_url: str = step_data.request_url.lstrip("/")
-        request_method: str = (step_data.request_method or "GET").upper()
-        request_header: Optional[List[Dict[str, Any]]] = step_data.request_header
-        request_params: Optional[List[Dict[str, Any]]] = step_data.request_params
-        request_form_data: Optional[List[Dict[str, Any]]] = step_data.request_form_data
-        request_form_file: Optional[List[Dict[str, Any]]] = step_data.request_form_file
-        request_form_urlencoded: Optional[List[Dict[str, Any]]] = step_data.request_form_urlencoded
-        request_body: Optional[Dict[str, Any]] = step_data.request_body
-        request_text: Optional[str] = step_data.request_text
+        request_url: str = debug_in.request_url.lstrip("/")
+        request_method: str = (debug_in.request_method or "GET").upper()
+        request_header: Optional[List[Dict[str, Any]]] = debug_in.request_header
+        request_params: Optional[List[Dict[str, Any]]] = debug_in.request_params
+        request_form_data: Optional[List[Dict[str, Any]]] = debug_in.request_form_data
+        request_form_file: Optional[List[Dict[str, Any]]] = debug_in.request_form_file
+        request_form_urlencoded: Optional[List[Dict[str, Any]]] = debug_in.request_form_urlencoded
+        request_body: Optional[Dict[str, Any]] = debug_in.request_body
+        request_text: Optional[str] = debug_in.request_text
 
-        session_variables: List[StepVariablesBase] = step_data.session_variables or []
-        defined_variables: List[StepVariablesBase] = step_data.defined_variables or []
-        extract_variables: List[StepExtractVariableItem] = step_data.extract_variables or []
-        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators or []
+        session_variables: List[StepVariablesBase] = debug_in.session_variables or []
+        defined_variables: List[StepVariablesBase] = debug_in.defined_variables or []
+        extract_variables: List[StepExtractVariableItem] = debug_in.extract_variables or []
+        assert_validators: List[StepAssertValidatorItem] = debug_in.assert_validators or []
 
         # 将defined/session变量合并为查找dict（提取/断言用）及StepVariablesBase列表（占位符解析用）
         merged_all_variables: Dict[str, Any] = {}
@@ -964,29 +964,29 @@ async def debug_http_request(
 
 @autotest_step.post("/tcp_debugging", summary="调试TCP请求")
 async def debug_tcp_request(
-        step_data: AutoTestTcpDebugRequest = Body(..., description="TCP请求步骤数据"),
+        debug_in: AutoTestTcpDebugRequest = Body(..., description="TCP请求步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     TCP请求调试。
 
-    :param step_data: 步骤调试入参
+    :param debug_in: 步骤调试入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        env_id: int = step_data.env_id
-        step_name: str = step_data.step_name
-        request_project_id: int = step_data.request_project_id
-        request_config_name: str = step_data.request_config_name
-        request_args_type: Optional[AutoTestReqArgsType] = step_data.request_args_type
-        request_text: Optional[str] = step_data.request_text
-        request_body: Any = step_data.request_body
+        env_id: int = debug_in.env_id
+        step_name: str = debug_in.step_name
+        request_project_id: int = debug_in.request_project_id
+        request_config_name: str = debug_in.request_config_name
+        request_args_type: Optional[AutoTestReqArgsType] = debug_in.request_args_type
+        request_text: Optional[str] = debug_in.request_text
+        request_body: Any = debug_in.request_body
 
-        session_variables: List[StepVariablesBase] = step_data.session_variables or []
-        defined_variables: List[StepVariablesBase] = step_data.defined_variables or []
-        extract_variables: List[StepExtractVariableItem] = step_data.extract_variables or []
-        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators or []
+        session_variables: List[StepVariablesBase] = debug_in.session_variables or []
+        defined_variables: List[StepVariablesBase] = debug_in.defined_variables or []
+        extract_variables: List[StepExtractVariableItem] = debug_in.extract_variables or []
+        assert_validators: List[StepAssertValidatorItem] = debug_in.assert_validators or []
 
         # 合并变量池（同 HTTP 调试）
         merge_all_variables: Dict[str, Any] = {}
@@ -1087,23 +1087,23 @@ async def debug_tcp_request(
             payload = request_text
 
         # TCP 配置（与 TcpStepExecutor 一致，不再硬编码）
-        tcp_frame_mode = (step_data.tcp_frame_mode or "length_prefix_json").strip().lower()
+        tcp_frame_mode = (debug_in.tcp_frame_mode or "length_prefix_json").strip().lower()
         frame_mode = TcpFrameMode.RAW if tcp_frame_mode == "raw" else TcpFrameMode.LENGTH_PREFIX_JSON
-        length_field_size = step_data.tcp_length_field_size or 8
-        encoding = step_data.tcp_encoding or "utf-8"
-        max_response_bytes = step_data.tcp_max_response_bytes or (10 * 1024 * 1024)
-        response_type = (step_data.tcp_response_type or "text").strip().lower()
+        length_field_size = debug_in.tcp_length_field_size or 8
+        encoding = debug_in.tcp_encoding or "utf-8"
+        max_response_bytes = debug_in.tcp_max_response_bytes or (10 * 1024 * 1024)
+        response_type = (debug_in.tcp_response_type or "text").strip().lower()
 
         connect_td: Optional[timedelta] = None
-        if step_data.tcp_connect_timeout not in (None, ""):
+        if debug_in.tcp_connect_timeout not in (None, ""):
             try:
-                connect_td = timedelta(seconds=float(step_data.tcp_connect_timeout))
+                connect_td = timedelta(seconds=float(debug_in.tcp_connect_timeout))
             except Exception:
                 connect_td = None
         read_td: Optional[timedelta] = None
-        if step_data.tcp_read_timeout not in (None, ""):
+        if debug_in.tcp_read_timeout not in (None, ""):
             try:
-                read_td = timedelta(seconds=float(step_data.tcp_read_timeout))
+                read_td = timedelta(seconds=float(debug_in.tcp_read_timeout))
             except Exception:
                 read_td = None
 
@@ -1250,24 +1250,24 @@ async def debug_tcp_request(
 
 @autotest_step.post("/python_code_debugging", summary="调试Python代码")
 async def debug_python_code(
-        step_data: AutoTestPythonCodeDebugRequest = Body(..., description="Python代码步骤数据"),
+        debug_in: AutoTestPythonCodeDebugRequest = Body(..., description="Python代码步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     Python代码调试。
 
-    :param step_data: 步骤调试入参
+    :param debug_in: 步骤调试入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
         # 提取请求参数
-        code = step_data.code
-        step_name = step_data.step_name or "代码请求(Python)调试"
+        code = debug_in.code
+        step_name = debug_in.step_name or "代码请求(Python)调试"
         # defined_variables、session_variables 必须是列表格式
-        defined_variables: List[StepVariablesBase] = step_data.defined_variables or []
-        session_variables: List[StepVariablesBase] = step_data.session_variables or []
-        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators or []
+        defined_variables: List[StepVariablesBase] = debug_in.defined_variables or []
+        session_variables: List[StepVariablesBase] = debug_in.session_variables or []
+        assert_validators: List[StepAssertValidatorItem] = debug_in.assert_validators or []
 
         # 合并变量到执行上下文（列表格式）
         # 如果存在相同的key，使用 defined_variables 中的值（优先级更高）
@@ -1355,25 +1355,25 @@ async def debug_python_code(
 
 @autotest_step.post("/redis_debugging", summary="调试Redis请求")
 async def debug_redis_request(
-        step_data: AutoTestRedisDebugRequest = Body(..., description="Redis请求步骤数据"),
+        debug_in: AutoTestRedisDebugRequest = Body(..., description="Redis请求步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     Redis请求调试。
 
-    :param step_data: 步骤调试入参
+    :param debug_in: 步骤调试入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        env_id: int = step_data.env_id
-        step_name: str = step_data.step_name
-        redis_operates: List[RedisOperates] = step_data.redis_operates or []
-        redis_searched: bool = bool(step_data.redis_searched)
-        session_variables: List[StepVariablesBase] = step_data.session_variables or []
-        defined_variables: List[StepVariablesBase] = step_data.defined_variables or []
-        extract_variables: List[StepExtractVariableItem] = step_data.extract_variables or []
-        assert_validators: List[StepAssertValidatorItem] = step_data.assert_validators or []
+        env_id: int = debug_in.env_id
+        step_name: str = debug_in.step_name
+        redis_operates: List[RedisOperates] = debug_in.redis_operates or []
+        redis_searched: bool = bool(debug_in.redis_searched)
+        session_variables: List[StepVariablesBase] = debug_in.session_variables or []
+        defined_variables: List[StepVariablesBase] = debug_in.defined_variables or []
+        extract_variables: List[StepExtractVariableItem] = debug_in.extract_variables or []
+        assert_validators: List[StepAssertValidatorItem] = debug_in.assert_validators or []
 
         merge_all_variables: Dict[str, Any] = {}
         for item in defined_variables:
@@ -1677,22 +1677,22 @@ async def debug_redis_request(
 
 @autotest_step.post("/execute_or_debugging", summary="执行步骤树", description="执行或调试步骤树")
 async def execute_step_tree(
-        request: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
+        exec_in: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     执行或调试步骤树。无 steps 为运行模式，有 steps 为调试模式。
 
-    :param request: 业务入参
+    :param exec_in: 业务入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        case_id: int = request.case_id
-        steps: Optional[List[AutoTestStepTreeUpdateItem]] = request.steps
-        initial_variables: Optional[List[StepVariablesBase]] = request.initial_variables
-        steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = request.steps_execute_config
-        selected_dataset_names: Optional[List[str]] = request.selected_dataset_names
+        case_id: int = exec_in.case_id
+        steps: Optional[List[AutoTestStepTreeUpdateItem]] = exec_in.steps
+        initial_variables: Optional[List[StepVariablesBase]] = exec_in.initial_variables
+        steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = exec_in.steps_execute_config
+        selected_dataset_names: Optional[List[str]] = exec_in.selected_dataset_names
 
         # 与 yangkai 一致：无 steps → 运行模式；有 steps → 调试模式
         is_run_mode = case_id is not None and (steps is None or len(steps) == 0)
@@ -1904,27 +1904,26 @@ async def execute_step_tree(
 
 
 @autotest_step.post("/batch_execute", summary="批量执行用例")
-async def batch_execute_cases_endpoint(
-        request: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数"),
+async def batch_execute_cases(
+        batch_in: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     批量执行用例。
 
-    :param request: 业务入参
+    :param batch_in: 业务入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        case_ids = request.case_ids
-        env_name = request.env_name
-        initial_variables = request.initial_variables if request.initial_variables is not None else []
-        if not isinstance(initial_variables, list):
-            initial_variables = []
-        if not case_ids or len(case_ids) == 0:
-            return BadReqResponse(message="参数[case_ids]不允许为空")
+        case_ids = batch_in.case_ids
+        initial_variables = batch_in.initial_variables or []
+        if batch_in.env_name:
+            LOGGER.warning(
+                f"批量执行入参[env_name={batch_in.env_name}]暂未接入执行引擎, "
+                f"请通过步骤执行配置steps_execute_config指定环境"
+            )
 
-        # 异步执行
         exec_result = await services.step_curd.batch_execute_cases(
             case_ids=case_ids,
             initial_variables=initial_variables,

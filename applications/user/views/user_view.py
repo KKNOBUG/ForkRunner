@@ -43,7 +43,7 @@ user_secure = APIRouter()
 
 @user_public.post("/create", summary="新增用户")
 async def create_user(
-        user_in: UserCreate = Body(),
+        user_in: UserCreate = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
@@ -92,7 +92,7 @@ async def delete_user(
 
 
 @user_secure.post("/deletes", summary="批量删除用户", description="根据id列表批量删除用户信息")
-async def delete_users(
+async def batch_delete_users(
         user_in: UserBatchDelete = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
@@ -192,7 +192,7 @@ async def get_user_by_username(
 
 
 @user_secure.get("/list", summary="查询用户列表", description="根据条件分页查询用户列表信息(Query)")
-async def list_user(
+async def search_users(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
         order: list = Query(default=["id"], description="排序字段"),
@@ -269,8 +269,8 @@ async def list_user(
 
 
 @user_secure.post("/search", summary="查询用户列表", description="根据条件分页查询用户列表信息(Body)")
-async def get_users(
-        user_in: UserSelect = Body(),
+async def list_users(
+        user_in: UserSelect = Body(..., description="查询条件"),
         user_crud: UserCrud = Depends(get_user_crud),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
