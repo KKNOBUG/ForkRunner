@@ -326,8 +326,8 @@ async def search_cases(
         if case_in.case_tags:
             for tag_id in case_in.case_tags:
                 q |= Q(case_tags__contains=tag_id)
-        if case_in.case_type:
-            q &= Q(case_type__in=case_in.case_type)
+        if case_in.case_types:
+            q &= Q(case_type__in=case_in.case_types)
         if case_in.case_steps:
             q &= Q(case_steps__gte=case_in.case_steps)
         if case_in.case_project:
