@@ -64,6 +64,16 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             on_error: bool = False,
             **kwargs
     ) -> Optional[Union[bool, List[AutoTestApiProjectInfo]]]:
+        """
+        根据主键ID列表批量查询应用。
+
+        :param project_ids: 应用主键ID列表
+        :param on_error: 存在缺失ID时是否抛出NotFoundException
+        :param kwargs: 额外过滤条件
+        :return: 应用列表；缺失且on_error为False时返回False
+        :raises ParameterException: project_ids为空或类型非法
+        :raises NotFoundException: on_error为True且存在缺失ID
+        """
         if not project_ids:
             error_message: str = "查询应用信息失败, 参数[project_ids]不允许为空"
             LOGGER.error(error_message)
@@ -81,7 +91,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             if on_error:
                 raise NotFoundException(message=error_message)
             return False
-        return await self.model.filter(id__in=project_ids, state__not=1).all()
+        return await self.model.filter(id__in=project_ids, **kwargs).all()
 
     async def get_by_code(self, project_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiProjectInfo]:
         """
@@ -139,17 +149,17 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         """
         project_name: str = project_in.project_name
 
-        # 业务层验证：检查应用名称是否存在
         existing_project: Optional[AutoTestApiProjectInfo] = await self.model.filter(project_name=project_name).first()
         project_dict: Dict[str, Any] = project_in.model_dump(exclude_none=True, exclude_unset=True)
-        if project_in.project_dev_owners is not None:
-            project_in.project_dev_owners = sorted(project_in.project_dev_owners, key=str.lower)
-        if project_in.project_developers is not None:
-            project_in.project_developers = sorted(project_in.project_developers, key=str.lower)
-        if project_in.project_test_owners is not None:
-            project_in.project_test_owners = sorted(project_in.project_test_owners, key=str.lower)
-        if project_in.project_testers is not None:
-            project_in.project_testers = sorted(project_in.project_testers, key=str.lower)
+        for owner_field in (
+                "project_dev_owners",
+                "project_developers",
+                "project_test_owners",
+                "project_testers",
+        ):
+            owners = project_dict.get(owner_field)
+            if owners is not None:
+                project_dict[owner_field] = sorted(owners, key=str.lower)
         if not existing_project:
             try:
                 instance: AutoTestApiProjectInfo = await self.create(obj_in=project_dict)
@@ -180,20 +190,31 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         """
         project_id: Optional[int] = project_in.project_id
         project_code: Optional[str] = project_in.project_code
-        # 业务层验证：检查应用是否存在
+        if not project_id and not project_code:
+            error_message: str = "更新应用信息失败, 参数[project_id]或[project_code]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if project_id:
             instance = await self.get_by_id(project_id=project_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_code(project_code=project_code, on_error=True, state__not=1)
-            project_id: int = instance.id
+            project_id = instance.id
 
         update_dict: Dict[str, Any] = project_in.model_dump(
             exclude_none=True,
             exclude_unset=True,
             exclude={"project_id", "project_code"}
         )
+        for owner_field in (
+                "project_dev_owners",
+                "project_developers",
+                "project_test_owners",
+                "project_testers",
+        ):
+            owners = update_dict.get(owner_field)
+            if owners is not None:
+                update_dict[owner_field] = sorted(owners, key=str.lower)
 
-        # 业务层验证：检查应用名称是否重复
         if "project_name" in update_dict:
             project_name: str = update_dict.get("project_name", instance.project_name)
             existing_project = await self.model.filter(project_name=project_name, state__not=1).exclude(id=project_id).first()
@@ -225,7 +246,6 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         :raises NotFoundException: 应用不存在
         :raises DataBaseStorageException: 存在关联数据
         """
-        # 业务层验证：检查应用是否存在, project_id与project_code二选一，不能都为空
         if not project_id and not project_code:
             error_message: str = "删除应用信息失败, 参数[project_id]或[project_code]不允许为空"
             LOGGER.error(error_message)
@@ -236,19 +256,16 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             instance = await self.get_by_code(project_code=project_code, on_error=True, state__not=1)
 
         pid: int = instance.id
-        # 业务层验证：检查是否存在关联用例
         cases_count = await AutoTestApiCaseCrud().model.filter(case_project=pid, state__not=1).count()
         if cases_count > 0:
             msg = f"应用[name={instance.project_name}]存在{cases_count}个用例, 无法直接删除"
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
-        # 业务层验证：检查是否存在关联环境配置明细（应用+环境枚举下的配置）
         config_count = await AutoTestApiEnvConfigInfo.filter(project_id=pid, state__not=1).count()
         if config_count > 0:
             msg = f"应用[name={instance.project_name}]存在{config_count}条环境配置, 无法直接删除"
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
-        # 业务层验证：检查是否存在关联标签
         tag_count = await AutoTestApiTagCrud().model.filter(tag_project=pid, state__not=1).count()
         if tag_count > 0:
             msg = f"应用[name={instance.project_name}]存在{tag_count}个标签信息, 无法直接删除"

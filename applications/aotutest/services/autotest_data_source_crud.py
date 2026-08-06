@@ -695,7 +695,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
         :param data_in: 创建入参
         :return: 创建或更新后的生成记录
-        :raises DataAlreadyExistsException: 持久化异常时
+        :raises DataBaseStorageException: 持久化异常时
         """
         try:
             instance = await self.get_by_hash(file_hash=data_in.file_hash, state__not=1)
@@ -715,7 +715,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         except Exception as e:
             error_message: str = f"新增数据源生成信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise DataAlreadyExistsException(message=error_message) from e
+            raise DataBaseStorageException(message=error_message) from e
 
     async def update_data_create(self, data_in: AutoTestApiDataCreateUpdate) -> AutoTestApiDataCreateInfo:
         """
@@ -723,7 +723,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
         :param data_in: 更新入参
         :return: 更新后的生成记录
-        :raises DataAlreadyExistsException: 更新异常时
+        :raises DataBaseStorageException: 更新异常时
         """
         try:
             data_dict = data_in.model_dump(exclude_none=True, exclude_unset=True)
@@ -732,7 +732,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         except Exception as e:
             error_message: str = f"更新数据源生成信息异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise DataAlreadyExistsException(message=error_message) from e
+            raise DataBaseStorageException(message=error_message) from e
 
     async def delete_data_create(self, create_code: Optional[str] = None) -> AutoTestApiDataCreateInfo:
         """
@@ -748,14 +748,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 业务层验证：检查明细信息是否存在
-        instance = await self.get_by_code(create_code=create_code, on_error=False, state__not=1)
-
-        if not instance:
-            error_message: str = f"删除数据源生成信息失败, 记录[create_code={create_code}]不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-
+        instance = await self.get_by_code(create_code=create_code, on_error=True, state__not=1)
         instance.state = 1
         await instance.save()
         return instance
@@ -805,4 +798,3 @@ async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
                 await aos.remove(file_path)
         if step_info and step_info.file_path and await aos.path.exists(step_info.file_path):
             await aos.remove(step_info.file_path)
-    LOGGER.warning(f"删除更新后多余步骤: [case_id={case_id}, step_code__in={list(step_code_list)}]已被清理")

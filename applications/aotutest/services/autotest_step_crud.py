@@ -116,7 +116,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :return: AutoTestCaseStepTreeLoadResult(根步骤为AutoTestStepTreeUpdateItem)
         :raises NotFoundException: 用例不存在
         """
-        # 业务层验证：检查用例是否存在
         case_crud = AutoTestApiCaseCrud()
         if case_id:
             case_instance = await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
@@ -212,13 +211,11 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             else:
                 step_dict["children"] = []
 
-            # 业务层验证：是否引用了公共脚本
             if not step.quote_case_id:
                 step_dict["quote_steps"] = []
                 step_dict["quote_case"] = None
                 return step_dict
 
-            # 业务层验证：检查引用的公共脚本是否存在
             quote_case = await case_crud.get_by_id(case_id=step.quote_case_id, on_error=False, state__not=1)
             if not quote_case:
                 step_dict["quote_steps"] = []
@@ -392,18 +389,15 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :raises NotFoundException: 用例、父步骤或引用脚本不存在时
         :raises DataBaseStorageException: 违反数据库约束时
         """
-        # 业务层验证：检查用例是否存在
         case_id: int = step_in.case_id
         step_no: int = step_in.step_no
         case_crud = AutoTestApiCaseCrud()
         await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
 
-        # 业务层验证：如果指定了父步骤，检查父步骤是否存在
         if step_in.parent_step_id:
             parent_step_id: int = step_in.parent_step_id
             parent_step = await self.get_by_id(step_id=parent_step_id, on_error=True, state__not=1)
 
-            # 业务层验证：确保父步骤属于同一个用例
             if parent_step.case_id != step_in.case_id:
                 error_message: str = (
                     f"根据(step_id={parent_step_id})条件检查步骤信息失败, "
@@ -412,7 +406,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 LOGGER.error(error_message)
                 raise NotFoundException(message=error_message)
 
-        # 业务层验证：如果指定了引用脚本，检查引用脚本是否存在
         if step_in.quote_case_id:
             quote_case_id: int = step_in.quote_case_id
             quote_case = await case_crud.get_by_id(case_id=quote_case_id, on_error=False, state__not=1)
@@ -424,7 +417,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 LOGGER.error(error_message)
                 raise NotFoundException(message=error_message)
 
-        # 业务层验证：检查同一用例下步骤序号是否已存在
         step_dict = step_in.model_dump(exclude_none=True, exclude_unset=True)
         existing_step = await self.model.filter(case_id=case_id, step_no=step_no).first()
         if not existing_step:
@@ -458,7 +450,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         step_id: Optional[int] = step_in.step_id
         step_code: Optional[str] = step_in.step_code
 
-        # 业务层验证：检查步骤信息是否存在
         if step_id:
             instance = await self.get_by_id(step_id=step_id, on_error=True, state__not=1)
         else:
@@ -474,7 +465,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         if not update_dict:
             return instance
 
-        # 业务层验证：如果更新了步骤序号，检查是否冲突
         if "step_no" in update_dict:
             case_id = update_dict.get("case_id", instance.case_id)
             step_no = update_dict.get("step_no", instance.step_no)
@@ -490,12 +480,10 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
-        # 业务层验证：如果更新了用例ID，检查用例是否存在
         if "case_id" in update_dict:
             case_id: int = update_dict.get("case_id", instance.case_id)
             await AutoTestApiCaseCrud().get_by_id(case_id=case_id, on_error=True, state__not=1)
 
-        # 业务层验证：如果更新了父步骤ID，检查父步骤是否存在
         if "parent_step_id" in update_dict:
             parent_step_id: Optional[int] = update_dict["parent_step_id"]
             if parent_step_id:
@@ -512,20 +500,17 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     LOGGER.error(error_message)
                     raise NotFoundException(message=error_message)
 
-                # 业务层验证：确保父步骤属于同一个用例
                 case_id: int = update_dict.get("case_id", instance.case_id)
                 if parent_step.case_id != case_id:
                     error_message: str = f"父级步骤(case_id={parent_step.case_id})和当前步骤(case_id={case_id})不一致"
                     LOGGER.error(error_message)
                     raise NotFoundException(message=error_message)
 
-                # 业务层验证：检查是否形成循环引用
                 if parent_step.id == step_id:
                     error_message: str = f"父级步骤(id={parent_step.id})和当前步骤(id={step_id})冲突, 不能将自身设置为父级步骤"
                     LOGGER.error(error_message)
                     raise DataBaseStorageException(message=error_message)
 
-                # 业务层验证：检查循环引用（防止父步骤的父步骤链中包含当前步骤）
                 visited: Set[int] = set()
                 current_parent_id = parent_step.parent_step_id
                 while current_parent_id:
@@ -541,7 +526,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         break
                     current_parent_id = parent.parent_step_id
 
-        # 业务层验证：如果更新了引用脚本ID，检查引用公共用例是否存在（公共脚本/公共接口均可被引用）
         if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
             quote_case_id: int = update_dict["quote_case_id"]
             quote_case = await AutoTestApiCaseCrud().get_by_conditions(
@@ -578,14 +562,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :raises NotFoundException: 步骤不存在时
         :raises DataAlreadyExistsException: 存在子步骤时
         """
-        # 业务层验证：检查步骤信息是否存在
         if step_id:
             instance = await self.get_by_id(step_id=step_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_code(step_code=step_code, on_error=True, state__not=1)
             step_id: int = instance.id
 
-        # 业务层验证：检查步骤是否拥有子步骤
         children_count = await self.model.filter(parent_step_id=step_id, state__not=1).count()
         if children_count > 0:
             error_message: str = (
@@ -851,10 +833,8 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
 
-                # 业务层验证: 检查用例是否存在
                 case_instance = await case_crud.get_by_id(case_id=step_data.case_id, on_error=True, state__not=1)
 
-                # 业务层验证: 检查同一用例下步骤序号是否已存在
                 existing_step_instance: Optional[AutoTestApiStepInfo] = await self.get_by_conditions(
                     only_one=True,
                     on_error=False,
@@ -870,7 +850,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     LOGGER.error(error_message)
                     raise DataAlreadyExistsException(message=error_message)
 
-                # 业务层验证: 验证父步骤
                 final_parent_step_id = parent_step_id if parent_step_id is not None else step_data.parent_step_id
                 if final_parent_step_id:
                     parent_step = await self.get_by_id(
@@ -887,13 +866,11 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         LOGGER.error(error_message)
                         raise NotFoundException(message=error_message)
 
-                    # 业务层验证: 确保父步骤属于同一个用例
                     if parent_step.case_id != step_data.case_id:
                         error_message: str = f"父级步骤(case_id={parent_step.case_id})和当前步骤(case_id={case_id})不一致"
                         LOGGER.error(error_message)
                         raise DataAlreadyExistsException(message=error_message)
 
-                    # 业务层验证: 验证父步骤类型(只有循环结构和条件分支允许拥有子级步骤)
                     if parent_step.step_type not in allowed_children_types:
                         error_message: str = (
                             f"第{sid}步骤新增失败, "
@@ -1022,7 +999,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     ]
                     update_dict.pop("conditions", None)
 
-                # 业务层验证：如果更新了步骤序号，检查是否冲突
                 if "step_no" in update_dict:
                     case_id = update_dict.get("case_id", step_instance.case_id)
                     step_no = update_dict.get("step_no", step_instance.step_no)
@@ -1041,7 +1017,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         LOGGER.error(error_message)
                         raise DataBaseStorageException(message=error_message)
 
-                # 业务层验证：如果更新了用例ID，检查用例是否存在
                 if "case_id" in update_dict:
                     case_id: int = update_dict.get("case_id", step_instance.case_id)
                     case: Optional[AutoTestApiCaseInfo] = await case_crud.get_by_id(
@@ -1058,7 +1033,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         LOGGER.error(error_message)
                         raise NotFoundException(message=error_message)
 
-                # 业务层验证：如果更新了父步骤ID，检查父步骤是否存在
                 if "parent_step_id" in update_dict and update_dict["parent_step_id"]:
                     parent_step_id: int = update_dict["parent_step_id"]
                     parent_step = await self.get_by_id(step_id=parent_step_id, on_error=False, state__not=1)
@@ -1071,7 +1045,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         LOGGER.error(error_message)
                         raise NotFoundException(message=error_message)
 
-                    # 业务层验证：确保父步骤属于同一个用例
                     case_id = update_dict.get("case_id", step_instance.case_id)
                     if parent_step.case_id != case_id:
                         error_message: str = (
@@ -1081,7 +1054,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         LOGGER.error(error_message)
                         raise DataBaseStorageException(message=error_message)
 
-                    # 业务层验证：验证父步骤类型(只有循环结构和条件分支允许拥有子级步骤)
                     if parent_step.step_type not in allowed_children_types:
                         error_message: str = (
                             f"第{sid}步骤更新失败, "
@@ -1091,7 +1063,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         LOGGER.error(error_message)
                         raise ParameterException(message=error_message)
 
-                    # 业务层验证：检查是否形成循环引用（包括深层循环引用）
                     if parent_step.id == step_id:
                         error_message: str = (
                             f"第{sid}步骤更新失败, "
@@ -1101,7 +1072,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         LOGGER.error(error_message)
                         raise DataBaseStorageException(message=error_message)
 
-                    # 业务层验证：检查深层循环引用（防止父步骤的父步骤链中包含当前步骤）
                     visited: Set[int] = set()
                     current_parent_id = parent_step.parent_step_id
                     while current_parent_id:
@@ -1124,7 +1094,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                     if current_parent_id == step_id:
                         continue
 
-                # 业务层验证：如果更新了引用脚本ID，检查引用脚本是否存在
                 if "quote_case_id" in update_dict and update_dict["quote_case_id"]:
                     quote_case_id: int = update_dict["quote_case_id"]
                     await case_crud.get_by_id(case_id=quote_case_id, on_error=True, state__not=1)

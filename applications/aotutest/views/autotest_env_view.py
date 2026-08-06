@@ -31,6 +31,7 @@ from core.responses import (
     NotFoundResponse,
     DataAlreadyExistsResponse,
 )
+from services import get_current_username
 
 autotest_env = APIRouter()
 
@@ -49,20 +50,12 @@ async def get_env_list(
     """
     try:
         result_data = await services.env_enum_curd.get_envs(data.project_id)
-        return {
-            "code": "000000",
-            "status": "success",
-            "message": "查询成功",
-            "data": result_data,
-        }
+        return SuccessResponse(message="查询成功", data=result_data)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"获取环境列表失败: {e}\n{traceback.format_exc()}")
-        return {
-            "code": "999999",
-            "status": "error",
-            "message": f"查询失败: {e}",
-            "data": {} if data.project_id is not None else [],
-        }
+        return FailureResponse(message=f"查询失败: {e}")
 
 
 @autotest_env.get("/page", summary="环境分页列表")
@@ -98,22 +91,20 @@ async def get_env_page(
 
 
 @autotest_env.post("/create", summary="新增环境")
-async def add_env(
-        data: EnvCreate,
-        user: str = Query("admin", description="操作人"),
+async def create_env(
+        data: EnvCreate = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     新增环境（确保环境枚举存在）。
 
     :param data: 环境入参
-    :param user: 操作人
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        env_info = await services.env_enum_curd.create_automation_env(data, user)
-        return SuccessResponse(message="新增应用成功", data=env_info, total=1)
+        env_info = await services.env_enum_curd.create_automation_env(data, get_current_username() or "system")
+        return SuccessResponse(message="新增环境成功", data=env_info, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except NotFoundException as e:
@@ -122,13 +113,12 @@ async def add_env(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增环境失败: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增应用环境失败, 错误描述: {e}")
+        return FailureResponse(message=f"新增环境失败, 错误描述: {e}")
 
 
 @autotest_env.post("/update", summary="编辑环境")
 async def update_env(
-        data: EnvEditRequest,
-        user: str = Query("admin", description="操作人"),
+        data: EnvEditRequest = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -137,8 +127,8 @@ async def update_env(
     :return: 统一HTTP响应
     """
     try:
-        env_info = await services.env_enum_curd.update_automation_env(data, user)
-        return SuccessResponse(message="编辑环境成功", data=env_info, total=1)
+        env_info = await services.env_enum_curd.update_automation_env(data, get_current_username() or "system")
+        return SuccessResponse(message="更新环境成功", data=env_info, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except NotFoundException as e:
@@ -146,14 +136,13 @@ async def update_env(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"编辑环境失败: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"编辑环境失败, 错误描述: {e}")
+        LOGGER.error(f"更新环境失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"更新环境失败, 错误描述: {e}")
 
 
 @autotest_env.post("/delete", summary="删除环境")
 async def delete_env(
-        data: EnvDeleteRequest,
-        user: str = Query("admin", description="操作人"),
+        data: EnvDeleteRequest = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -162,7 +151,9 @@ async def delete_env(
     :return: 统一HTTP响应
     """
     try:
-        result = await services.env_enum_curd.delete_automation_env(data.id, data.env_type, user)
+        result = await services.env_enum_curd.delete_automation_env(
+            data.id, data.env_type, get_current_username() or "system"
+        )
         return SuccessResponse(message="删除环境成功", data=result, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))

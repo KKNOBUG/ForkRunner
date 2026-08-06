@@ -75,6 +75,7 @@ async def _serialize_data_source(instance: AutoTestApiDataSourceInfo) -> Dict[st
 
 
 async def _sync_step_data_source_meta(
+        services: AutoTestApiServices,
         case_id: int,
         step_code: str,
         data_source_id: Optional[int],
@@ -82,19 +83,15 @@ async def _sync_step_data_source_meta(
         file_desc: Optional[str],
 ) -> None:
     """上传数据源后，同步回写步骤上的数据源元信息，供前端步骤编辑页直接回显。"""
-    try:
-        services: AutoTestApiServices = await get_autotest_api_services()
-        await services.step_curd.model.filter(
-            case_id=case_id,
-            step_code=step_code,
-            state=0,
-        ).update(
-            data_source_id=data_source_id,
-            data_source_name=(file_name or "")[:2048] or None,
-            data_source_desc=(file_desc or "")[:2048] or None,
-        )
-    except Exception as e:
-        LOGGER.warning(f"同步步骤数据源元信息失败[case_id={case_id}, step_code={step_code}]: {e}")
+    await services.step_curd.model.filter(
+        case_id=case_id,
+        step_code=step_code,
+        state=0,
+    ).update(
+        data_source_id=data_source_id,
+        data_source_name=(file_name or "")[:2048] or None,
+        data_source_desc=(file_desc or "")[:2048] or None,
+    )
 
 
 def _safe_sheet_name(name: Any, used: Set[str]) -> str:
@@ -317,6 +314,7 @@ async def save_or_update_data_source_info(
 
         # 同步步骤数据源元信息
         await _sync_step_data_source_meta(
+            services=services,
             case_id=case_id,
             step_code=step_code,
             data_source_id=instance.id,
@@ -767,6 +765,7 @@ async def single_step_dataset_upload(
         return FailureResponse(message=f"数据源保存失败，异常描述: {e}")
 
     await _sync_step_data_source_meta(
+        services=services,
         case_id=case_id,
         step_code=step_code,
         data_source_id=instance.id,
@@ -949,6 +948,7 @@ async def batch_step_dataset_upload(
                 )
                 created.append(await _serialize_data_source(instance))
                 await _sync_step_data_source_meta(
+                    services=services,
                     case_id=case_id,
                     step_code=step_code,
                     data_source_id=instance.id,

@@ -47,6 +47,44 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         super().__init__(model=AutoTestApiEnvConfigInfo)
         self.required_fields = ["config_host", "config_port", "config_username", "config_password"]
 
+    def _validate_config_required_fields(self, config_type: Any, payload: Any) -> None:
+        """
+        根据配置类型校验必填字段。
+
+        :param config_type: 配置类型枚举或枚举值
+        :param payload: 含配置字段的对象(支持getattr)
+        :raises ParameterException: 类型非法或必填字段缺失
+        """
+        type_value = config_type.value if hasattr(config_type, "value") else config_type
+        if type_value not in AutoTestConfigNodeType.get_values():
+            error_message: str = f"参数[config_type]枚举值[{config_type}]不被允许"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        if type_value == AutoTestConfigNodeType.API.value:
+            if not getattr(payload, "config_host", None):
+                error_message: str = "参数[config_type]枚举值为API时, 参数[config_host]不允许为空"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
+        elif type_value == AutoTestConfigNodeType.DB.value:
+            missing_fields = [field for field in self.required_fields if not getattr(payload, field, None)]
+            if missing_fields:
+                error_message: str = f"参数[config_type]枚举值为DB时, 参数[{', '.join(missing_fields)}]不允许为空"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
+        elif type_value == AutoTestConfigNodeType.FILE.value:
+            missing_fields = [field for field in self.required_fields if not getattr(payload, field, None)]
+            if getattr(payload, "is_authorization", None) is None:
+                missing_fields.append("is_authorization")
+            if missing_fields:
+                error_message: str = f"参数[config_type]枚举值为FILE时, 参数[{', '.join(missing_fields)}]不允许为空"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
+        elif type_value == AutoTestConfigNodeType.REDIS.value:
+            if not getattr(payload, "config_host", None):
+                error_message: str = "参数[config_type]枚举值为REDIS时, 参数[config_host]不允许为空"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
+
     async def get_by_id(self, config_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiEnvConfigInfo]:
         """
         根据主键ID查询环境配置。
@@ -107,10 +145,9 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         config_name: str = config_in.config_name
         config_type: AutoTestConfigNodeType = config_in.config_type
         config_dict: Dict[str, Any] = config_in.model_dump(exclude_none=True, exclude_unset=True)
-        # 业务层验证: 检查环境是否存在
         await AutoTestApiEnvEnumCrud().get_by_id(env_id=env_id, on_error=True, state__not=1)
-        # 业务层验证: 检查应用是否存在
         await AutoTestApiProjectCrud().get_by_id(project_id=project_id, on_error=True, state__not=1)
+        self._validate_config_required_fields(config_type, config_in)
         existing_config = await self.get_by_conditions(
             only_one=True,
             on_error=False,
@@ -121,36 +158,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             config_name=config_name,
         )
         if not existing_config:
-            # 业务层验证: 根据配置类型进行检查参数是否匹配
-            if config_type not in AutoTestConfigNodeType.get_values():
-                error_message: str = f"参数[config_type]枚举值[{config_type}]不被允许"
-                LOGGER.error(error_message)
-                raise ParameterException(message=error_message)
-            if config_type == AutoTestConfigNodeType.API.value:
-                if not config_in.config_host:
-                    error_message: str = "参数[config_type]枚举值为API时, 参数[config_host]不允许为空"
-                    LOGGER.error(error_message)
-                    raise ParameterException(message=error_message)
-            elif config_type == AutoTestConfigNodeType.DB.value:
-                missing_fields = [field for field in self.required_fields if not getattr(config_in, field, None)]
-                if missing_fields:
-                    error_message: str = f"参数[config_type]枚举值为DB时, 参数[{', '.join(missing_fields)}]不允许为空"
-                    LOGGER.error(error_message)
-                    raise ParameterException(message=error_message)
-            elif config_type == AutoTestConfigNodeType.FILE.value:
-                missing_fields = [field for field in self.required_fields if not getattr(config_in, field, None)]
-                if getattr(config_in, "is_authorization", None) is None:
-                    missing_fields.append("is_authorization")
-                if missing_fields:
-                    error_message: str = f"参数[config_type]枚举值为FILE时, 参数[{', '.join(missing_fields)}]不允许为空"
-                    LOGGER.error(error_message)
-                    raise ParameterException(message=error_message)
-            elif config_type == AutoTestConfigNodeType.REDIS.value:
-                if not config_in.config_host:
-                    error_message: str = "参数[config_type]枚举值为REDIS时, 参数[config_host]不允许为空"
-                    LOGGER.error(error_message)
-                    raise ParameterException(message=error_message)
-
             try:
                 instance: AutoTestApiEnvConfigInfo = await self.create(config_dict)
                 return instance
@@ -160,7 +167,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 raise DataBaseStorageException(message=error_message) from e
 
         try:
-            config_dict = config_in.model_dump(exclude_none=True, exclude_unset=True)
             instance = await self.update(id=existing_config.id, obj_in=config_dict)
             return instance
         except IntegrityError as e:
@@ -183,20 +189,22 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         config_code: Optional[str] = config_in.config_code
         config_type: AutoTestConfigNodeType = config_in.config_type
 
-        # 业务层验证：检查配置信息是否存在
+        if not config_id and not config_code:
+            error_message: str = "更新配置信息失败, 参数[config_id]或[config_code]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if config_id:
             instance = await self.get_by_id(config_id=config_id, on_error=True, state__not=1)
-            config_code: str = instance.config_code
+            config_code = instance.config_code
         else:
             instance = await self.get_by_code(config_code=config_code, on_error=True, state__not=1)
-            config_id: int = instance.id
+            config_id = instance.id
         update_dict = config_in.model_dump(
             exclude_none=True,
             exclude_unset=True,
             exclude={"config_id", "config_code"}
         )
 
-        # 业务层验证：检查应用、环境、名称是否唯一
         if "env_id" in update_dict or "project_id" in update_dict or "config_name" in update_dict:
             env_id = update_dict.get("env_id", instance.env_id)
             project_id = update_dict.get("project_id", instance.project_id)
@@ -208,41 +216,14 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 state__not=1
             ).exclude(id=config_id).first()
             if existing_config:
-                LOGGER.error(
+                error_message: str = (
                     f"相同应用及环境下配置名称不允许重复, "
                     f"查询条件: [env_id={env_id}, project_id={project_id}, config_name={config_name}]"
                 )
-                raise DataAlreadyExistsException(message="相同应用及环境下配置名称不允许重复")
+                LOGGER.error(error_message)
+                raise DataAlreadyExistsException(message=error_message)
 
-        # 业务层验证: 根据配置类型进行检查参数是否匹配
-        if config_type not in AutoTestConfigNodeType.get_values():
-            error_message: str = f"参数[config_type]枚举值[{config_type}]不被允许"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-        if config_type == AutoTestConfigNodeType.API.value:
-            if not config_in.config_host:
-                error_message: str = "参数[config_type]枚举值为API时, 参数[config_host]不允许为空"
-                LOGGER.error(error_message)
-                raise ParameterException(message=error_message)
-        elif config_type == AutoTestConfigNodeType.DB.value:
-            missing_fields = [field for field in self.required_fields if not getattr(config_in, field, None)]
-            if missing_fields:
-                error_message: str = f"参数[config_type]枚举值为DB时, 参数[{', '.join(missing_fields)}]不允许为空"
-                LOGGER.error(error_message)
-                raise ParameterException(message=error_message)
-        elif config_type == AutoTestConfigNodeType.FILE.value:
-            missing_fields = [field for field in self.required_fields if not getattr(config_in, field, None)]
-            if getattr(config_in, "is_authorization", None) is None:
-                missing_fields.append("is_authorization")
-            if missing_fields:
-                error_message: str = f"参数[config_type]枚举值为FILE时, 参数[{', '.join(missing_fields)}]不允许为空"
-                LOGGER.error(error_message)
-                raise ParameterException(message=error_message)
-        elif config_type == AutoTestConfigNodeType.REDIS.value:
-            if not config_in.config_host:
-                error_message: str = "参数[config_type]枚举值为REDIS时, 参数[config_host]不允许为空"
-                LOGGER.error(error_message)
-                raise ParameterException(message=error_message)
+        self._validate_config_required_fields(config_type, config_in)
         try:
             instance = await self.update(id=config_id, obj_in=update_dict)
             return instance
@@ -262,8 +243,13 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :param config_id: 配置主键，与config_code二选一
         :param config_code: 配置标识代码，与config_id二选一
         :return: 软删除后的配置实例
+        :raises ParameterException: config_id与config_code均未传
         :raises NotFoundException: 配置不存在
         """
+        if not config_id and not config_code:
+            error_message: str = "删除配置信息失败, 参数[config_id]或[config_code]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if config_id:
             instance = await self.get_by_id(config_id=config_id, on_error=True, state__not=1)
         else:
@@ -275,11 +261,12 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     async def delete_configs(self, config_in: AutoTestApiConfigDelete) -> int:
         """
-        根据ID或code列表批量软删除环境配置。
+        根据ID或code列表批量软删除环境配置；逐条复用单删校验。
 
         :param config_in: 环境配置删除schema
         :return: 更新条数
         :raises ParameterException: config_ids与config_codes均未传
+        :raises NotFoundException: 配置不存在
         """
         config_ids: Optional[List[int]] = config_in.config_ids
         config_codes: Optional[List[str]] = config_in.config_codes
@@ -287,11 +274,19 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             error_message: str = "删除配置信息失败, 参数[config_ids]或[config_codes]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
+
+        targets: List[AutoTestApiEnvConfigInfo] = []
         if config_ids:
-            count = await self.model.filter(id__in=config_ids).update(state=1)
+            for cid in config_ids:
+                targets.append(await self.get_by_id(config_id=cid, on_error=True, state__not=1))
         else:
-            count = await self.model.filter(config_code__in=config_codes).update(state=1)
-        return count
+            for ccode in config_codes:
+                targets.append(await self.get_by_code(config_code=ccode, on_error=True, state__not=1))
+
+        for instance in targets:
+            await self.delete_config(config_id=instance.id)
+
+        return len(targets)
 
     async def select_config(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiEnvConfigInfo]]:
         """
@@ -404,13 +399,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         names = await stmt.values_list("config_name", flat=True)
         return sorted(set(names))
 
-    @staticmethod
-    def _trim_port(port: Optional[str]) -> Optional[str]:
-        """端口字段库表长度上限为8，超出截断。"""
-        if port is None:
-            return None
-        return str(port).strip()[:8]
-
     def _map_typed_config_fields(self, env_type: int, data_dict: dict) -> Dict[str, Any]:
         """
         将按节点类型拆分的入参映射为 EnvConfig 落库字段。
@@ -427,10 +415,12 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         }
         if env_type == 1:
             fields["config_host"] = data_dict["env_host"]
-            fields["config_port"] = self._trim_port(data_dict.get("env_port"))
+            port = data_dict.get("env_port")
+            fields["config_port"] = None if port is None else str(port).strip()[:8]
         elif env_type == 2:
             fields["config_host"] = data_dict["server_ip"]
-            fields["config_port"] = self._trim_port(data_dict.get("server_port"))
+            port = data_dict.get("server_port")
+            fields["config_port"] = None if port is None else str(port).strip()[:8]
             fields["config_username"] = data_dict.get("server_account")
             fields["config_password"] = data_dict.get("server_password")
             # is_no_password: 0=免密 → is_authorization=True
@@ -443,7 +433,8 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 else AutoTestDataBaseType.MYSQL.value
             )
             fields["config_host"] = data_dict["db_host"]
-            fields["config_port"] = self._trim_port(data_dict.get("db_port"))
+            port = data_dict.get("db_port")
+            fields["config_port"] = None if port is None else str(port).strip()[:8]
             fields["config_username"] = data_dict.get("db_user")
             fields["config_password"] = data_dict.get("db_password")
             fields["database_name"] = data_dict.get("db_name")

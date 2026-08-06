@@ -95,7 +95,6 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         case_id: int = report_in.case_id
         case_code: str = report_in.case_code
 
-        # 业务层验证：检查用例是否存在
         await AutoTestApiCaseCrud().get_by_conditions(
             only_one=True,
             on_error=True,
@@ -125,7 +124,6 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         report_id: Optional[int] = report_in.report_id
         report_code: Optional[str] = report_in.report_code
 
-        # 业务层验证：检查用例是否存在
         if report_id:
             await self.get_by_id(report_id=report_id, on_error=True, state__not=1)
         else:
@@ -154,13 +152,11 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         :return: 软删除后的报告实例
         :raises NotFoundException: 报告不存在
         """
-        # 业务层验证：检查用例是否存在
         if report_id:
             instance = await self.get_by_id(report_id=report_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_code(report_code=report_code, on_error=True, state__not=1)
 
-        # 业务层验证：检查报告是否存在明细信息, 如果存在则删除
         async with in_transaction():
             report_code = instance.report_code
             from applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud

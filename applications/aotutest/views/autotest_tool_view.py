@@ -19,63 +19,20 @@ from core.responses import SuccessResponse, FailureResponse
 autotest_tool = APIRouter()
 
 
-def _get_func_desc(attr_name: str) -> str:
-    """从 GenerateUtils 获取属性/方法的doc作为简短说明，无则返回空字符串。"""
-    if not hasattr(GenerateUtils, attr_name):
-        return ""
-    attr = getattr(GenerateUtils, attr_name)
-    # 可能是property，取fget的doc
-    if isinstance(attr, property) and attr.fget is not None:
-        doc = inspect.getdoc(attr.fget)
-    else:
-        doc = inspect.getdoc(attr)
-    if doc:
-        first_line = doc.strip().split("\n")[0].strip()
-        return first_line[:200] if len(first_line) > 200 else first_line
-    return ""
-
-
-# 公共函数列表：name 与 execute_func_string 解析格式一致
-FUNC_LIST: List[Dict[str, Any]] = [
-    {"value": "generate_country()", "key": ""},
-    {"value": "generate_province()", "key": ""},
-    {"value": "generate_city()", "key": ""},
-    {"value": "generate_district()", "key": ""},
-    {"value": "generate_address()", "key": ""},
-    {"value": "generate_company()", "key": ""},
-    {"value": "generate_email()", "key": ""},
-    {"value": "generate_job()", "key": ""},
-    {"value": "generate_name()", "key": ""},
-    {"value": "generate_week_number()", "key": ""},
-    {"value": "generate_week_name()", "key": ""},
-    {"value": "generate_day()", "key": ""},
-    {"value": "generate_am_or_pm()", "key": ""},
-    {"value": "generate_uuid()", "key": ""},
-    {"value": "generate_phone()", "key": ""},
-    {"value": "generate_random_int(min_=1, max_=100)", "key": ""},
-    {"value": "generate_ident_card_number()", "key": ""},
-    {"value": "generate_ident_card_number_condition(min_age=18, max_age=65)", "key": ""},
-    {"value": 'generate_ident_card_birthday(ident_card_number="310224199508081212")', "key": ""},
-    {"value": 'generate_ident_card_gender(ident_card_number="310224199508081212")', "key": ""},
-    {"value": "generate_string(length=6, digit=False, char=False, chinese=False)", "key": ""},
-    {"value": "generate_global_serial_number()", "key": ""},
-    {"value": "generate_information(minAge=18, maxAge=60)", "key": ""},
-    {"value": "generate_datetime(year=0, month=0, day=0, hour=0, minute=0, second=0, fmt=52, isMicrosecond=False)", "key": ""},
-]
-
-
-# 获取GenerateUtils类型公共函数方法
 def _build_func_list_with_desc(cls) -> List[Dict[str, Any]]:
     """
     获取类下所有公共方法信息
-    支持：实例方法/@classmethod/@staticmethod
+    支持：实例方法、@classmethod、@staticmethod
     返回结构：[{"name": "函数名(干净无类型参数)", "desc": "函数首行文档注释"}]
     规则：
-    1. 仅收集非下划线开头公共方法
-    2. 剔除 self/cls
-    3. 剔除所有类型注解、返回值注解
-    4. 保留参数默认值
-    5. desc 取函数首行文档注释，无注释则为空
+        1. 仅收集非下划线开头公共方法
+        2. 剔除 self/cls
+        3. 剔除所有类型注解、返回值注解
+        4. 保留参数默认值
+        5. desc 取函数首行文档注释，无注释则为空
+
+    :param cls: 目标类，通常为 GenerateUtils
+    :return: [{"name": "func(a=1)", "desc": "..."}, ...]
     """
     result: List[Dict[str, Any]] = []
 
@@ -97,10 +54,8 @@ def _build_func_list_with_desc(cls) -> List[Dict[str, Any]]:
             params = list(sig.parameters.values())
 
             # 剔除 self/cls
-            if params:
-                first_p = params[0]
-                if first_p.name in ("self", "cls"):
-                    params = params[1:]
+            if params and params[0].name in ("self", "cls"):
+                params = params[1:]
 
             # 拼接纯参数（无类型注解）
             param_parts = []

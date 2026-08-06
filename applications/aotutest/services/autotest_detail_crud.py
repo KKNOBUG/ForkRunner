@@ -92,7 +92,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         case_id: int = detail_in.case_id
         case_code: str = detail_in.case_code
 
-        # 业务层验证：检查用例是否存在
         await AutoTestApiCaseCrud().get_by_conditions(
             only_one=True,
             on_error=True,
@@ -101,7 +100,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             state__not=1,
         )
 
-        # 业务层验证：检查报告是否存在
         if not skip_report_check:
             report_code: str = detail_in.report_code
             await AutoTestApiReportCrud().get_by_conditions(
@@ -138,7 +136,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         case_id: Optional[int] = detail_in.case_id
         case_code: Optional[str] = detail_in.case_code
 
-        # 业务层验证：检查用例是否存在
         await AutoTestApiCaseCrud().get_by_conditions(
             only_one=True,
             on_error=True,
@@ -147,7 +144,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             state__not=1,
         )
 
-        # 业务层验证：检查报告是否存在
         report_code = detail_in.report_code
         await AutoTestApiReportCrud().get_by_conditions(
             only_one=True,
@@ -158,7 +154,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             state__not=1,
         )
 
-        # 业务层验证：更新明细传递参数
         detail_id: Optional[int] = detail_in.detail_id
         step_code: Optional[str] = detail_in.step_code
         if not detail_id and (not report_code or not step_code):
@@ -210,7 +205,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 业务层验证：检查明细信息是否存在
         if detail_id:
             instance = await self.get_by_id(detail_id=detail_id, on_error=True, state__not=1)
         else:

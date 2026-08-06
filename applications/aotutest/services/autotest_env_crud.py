@@ -59,7 +59,9 @@ def resolve_config_type(env_type: int) -> str:
     """
     config_type = ENV_TYPE_TO_CONFIG_TYPE.get(env_type)
     if not config_type:
-        raise ParameterException(message=f"节点类型[{env_type}]不被允许, 仅支持1:APP/2:FILE/3:DB")
+        error_message: str = f"节点类型[{env_type}]不被允许, 仅支持1:APP/2:FILE/3:DB"
+        LOGGER.error(error_message)
+        raise ParameterException(message=error_message)
     return config_type
 
 
@@ -257,13 +259,16 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         env_id: Optional[int] = env_in.env_id
         env_code: Optional[str] = env_in.env_code
 
-        # 业务层验证：检查环境信息是否存在
+        if not env_id and not env_code:
+            error_message: str = "更新环境枚举信息失败, 参数[env_id]或[env_code]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if env_id:
             instance = await self.get_by_id(env_id=env_id, on_error=True, state__not=1)
-            env_code: str = instance.env_code
+            env_code = instance.env_code
         else:
             instance = await self.get_by_code(env_code=env_code, on_error=True, state__not=1)
-            env_id: int = instance.id
+            env_id = instance.id
 
         update_dict: Dict[str, Any] = env_in.model_dump(
             exclude_none=True,
@@ -289,9 +294,13 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         :param env_id: 环境枚举主键，与env_code二选一
         :param env_code: 环境枚举标识代码，与env_id二选一
         :return: 软删除后的环境枚举实例
+        :raises ParameterException: env_id与env_code均未传
         :raises NotFoundException: 环境枚举不存在
         """
-        # 业务层验证：检查环境信息是否存在
+        if not env_id and not env_code:
+            error_message: str = "删除环境枚举信息失败, 参数[env_id]或[env_code]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         if env_id:
             instance = await self.get_by_id(env_id=env_id, on_error=True, state__not=1)
         else:
@@ -303,11 +312,12 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def delete_envs(self, env_in: AutoTestApiEnvDelete) -> int:
         """
-        根据ID或code列表批量软删除环境枚举。
+        根据ID或code列表批量软删除环境枚举；逐条复用单删校验。
 
         :param env_in: 环境枚举删除schema
         :return: 更新条数
         :raises ParameterException: env_ids与env_codes均未传
+        :raises NotFoundException: 环境枚举不存在
         """
         env_ids: Optional[List[int]] = env_in.env_ids
         env_codes: Optional[List[str]] = env_in.env_codes
@@ -315,11 +325,19 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             error_message: str = "删除环境枚举信息失败, 参数[env_ids]或[env_codes]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
+
+        targets: List[AutoTestApiEnvEnumInfo] = []
         if env_ids:
-            count = await self.model.filter(id__in=env_ids).update(state=1)
+            for eid in env_ids:
+                targets.append(await self.get_by_id(env_id=eid, on_error=True, state__not=1))
         else:
-            count = await self.model.filter(env_code__in=env_codes).update(state=1)
-        return count
+            for ecode in env_codes:
+                targets.append(await self.get_by_code(env_code=ecode, on_error=True, state__not=1))
+
+        for instance in targets:
+            await self.delete_env(env_id=instance.id)
+
+        return len(targets)
 
     async def select_envs(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiEnvEnumInfo]]:
         """

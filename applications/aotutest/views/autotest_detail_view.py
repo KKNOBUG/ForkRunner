@@ -72,7 +72,7 @@ async def create_step_detail(
 
 
 @autotest_detail.delete("/delete", summary="删除明细", description="根据id或code删除明细信息")
-async def delete_report(
+async def delete_step_detail(
         detail_id: Optional[int] = Query(None, description="明细ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         report_code: Optional[str] = Query(None, description="报告标识代码"),
@@ -114,7 +114,7 @@ async def delete_report(
 
 
 @autotest_detail.post("/update", summary="更新明细", description="根据id或code更新明细信息")
-async def update_report(
+async def update_step_detail(
         detail_in: AutoTestApiDetailUpdate = Body(..., description="明细信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
