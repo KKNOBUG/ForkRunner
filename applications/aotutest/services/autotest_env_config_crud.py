@@ -810,19 +810,26 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
-    async def test_db_connection(self, config_id: int, app_id: str, env: str, config_name: str, db_name: str) -> Dict[str, Any]:
+    async def test_db_connection(
+            self,
+            config_id: int,
+            project_id: str,
+            env_name: str,
+            config_name: str,
+            db_name: str,
+    ) -> Dict[str, Any]:
         """
         校验DB配置存在后创建连接池。
 
         :param config_id: 配置ID
-        :param app_id: 应用ID
-        :param env: 环境名称
+        :param project_id: 应用主键ID
+        :param env_name: 环境名称
         :param config_name: 配置名称
         :param db_name: 数据库名称
         :return: {code, status, message, data}
         """
         try:
-            app_id_int = int(str(app_id).strip())
+            project_id_int = int(str(project_id).strip())
         except (TypeError, ValueError):
             return {
                 "code": "999999",
@@ -832,15 +839,15 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             }
 
         env_row = await AutoTestApiEnvEnumInfo.filter(
-            project_id=app_id_int,
-            env_name__iexact=(env or "").strip(),
+            project_id=project_id_int,
+            env_name__iexact=(env_name or "").strip(),
             env_type=3,
             state__not=1,
         ).first()
         if not env_row:
             env_row = await AutoTestApiEnvEnumInfo.filter(
-                project_id=app_id_int,
-                env_name__iexact=(env or "").strip(),
+                project_id=project_id_int,
+                env_name__iexact=(env_name or "").strip(),
                 state__not=1,
             ).first()
         if not env_row:
@@ -853,7 +860,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
         config = await self.model.filter(
             id=config_id,
-            project_id=app_id_int,
+            project_id=project_id_int,
             env_id=env_row.id,
             config_name=config_name,
             database_name=db_name,
@@ -869,11 +876,11 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             }
 
         try:
-            await get_app_database_pool().connection(
-                app_id=str(app_id),
-                env=env,
+            await get_app_database_pool().create_pool(
+                project_id=str(project_id),
+                env_name=env_name,
                 config_name=config_name,
-                db_name=db_name,
+                database_name=db_name,
             )
             return {
                 "code": "000000",

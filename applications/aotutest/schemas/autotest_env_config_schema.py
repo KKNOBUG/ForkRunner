@@ -195,7 +195,7 @@ class TestDBConnectionRequest(BaseModel):
     """测试数据库连接入参。"""
 
     id: int = Field(..., description="配置主键ID")
-    app_id: str = Field(..., description="应用ID")
-    env: str = Field(..., description="环境")
+    project_id: str = Field(..., description="应用主键ID")
+    env_name: str = Field(..., description="环境名称")
     config_name: str = Field(..., description="配置名称")
     db_name: str = Field(..., description="数据库名称")

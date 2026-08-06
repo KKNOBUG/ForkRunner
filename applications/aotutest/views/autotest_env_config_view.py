@@ -422,13 +422,13 @@ async def test_db_connection(
 
     :param config_in: 连接测试入参
     :param services: 自动化测试CRUD依赖聚合
-    :return: {code, status, message, config_in}
+    :return: {code, status, message, data}
     """
     try:
         return await services.env_config_curd.test_db_connection(
             config_id=config_in.id,
-            app_id=config_in.app_id,
-            env=config_in.env,
+            project_id=config_in.project_id,
+            env_name=config_in.env_name,
             config_name=config_in.config_name,
             db_name=config_in.db_name,
         )
@@ -438,5 +438,5 @@ async def test_db_connection(
             "code": "999999",
             "status": "failure",
             "message": f"测试数据库连接失败：{e}",
-            "config_in": None,
+            "data": None,
         }
