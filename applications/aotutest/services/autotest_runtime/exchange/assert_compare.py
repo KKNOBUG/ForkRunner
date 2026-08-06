@@ -132,13 +132,13 @@ class AssertionCompare:
     @classmethod
     def _parse_set_literal(cls, text: str) -> List[Any]:
         """
-        解析集合字面量内部文本：按逗号分割，去掉可选首尾引号后做_normalize_value。
+        解析集合字面量内部文本：统一全角/半角逗号后分割，去掉可选首尾引号，再经_normalize_value转类型。
 
         :param text: 去掉外层[]或{}后的内容
         :return: 元素列表
         """
         elements: List[Any] = []
-        for part in text.split(","):
+        for part in text.replace("，", ",").split(","):
             token = part.strip()
             if not token:
                 continue
