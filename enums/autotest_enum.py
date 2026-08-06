@@ -68,6 +68,8 @@ class AutoTestAssertionOperation(StringEnum):
     LENGTH_EQUAL = "长度等于"
     CONTAINS = "包含"
     NOT_CONTAINS = "不包含"
+    IN_SET = "属于集合"
+    NOT_IN_SET = "不属于集合"
     STARTS_WITH = "以...开始"
     ENDS_WITH = "以...结束"
     NOT_EMPTY = "非空"
