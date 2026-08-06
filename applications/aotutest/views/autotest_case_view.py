@@ -368,23 +368,21 @@ async def search_cases(
         all_project_ids: Set[int] = set()
         all_tag_ids: Set[int] = set()
         all_case_ids: List[int] = []
-        is_private_script = False
         requested_types = set(case_in.case_type or [])
         script_case_types = {AutoTestCaseType.PUBLIC_SCRIPT.value, AutoTestCaseType.PRIVATE_SCRIPT.value}
+        is_script_query = requested_types == script_case_types
         is_public_api_query = AutoTestCaseType.PUBLIC_API.value in requested_types
 
         for instance in instances:
             all_case_ids.append(instance.id)
             all_project_ids.add(instance.case_project)
-            # 仅脚本类型才需要查询标签
-            if (requested_types == script_case_types) and instance.case_tags:
+            if instance.case_tags:
                 all_tag_ids.update(instance.case_tags)
-                is_private_script = True
 
         # 并发拉取项目、标签、步骤类型映射
         project_map, tag_map, case_step_type_map = await batch_fetch_related_data(
             project_ids=all_project_ids,
-            tag_ids=all_tag_ids if is_private_script else set(),
+            tag_ids=all_tag_ids,
             case_ids=all_case_ids,
             services=services
         )
@@ -402,10 +400,10 @@ async def search_cases(
             case_id = serialize["case_id"]
             project_id = serialize.pop("case_project", None)
             serialize["case_project"] = project_map.get(project_id, {})
-            if is_private_script:
-                tag_ids = serialize.pop("case_tags", [])
+            tag_ids = serialize.pop("case_tags", None) or []
+            serialize["case_tags"] = [tag_map.get(tid, {}) for tid in tag_ids]
+            if is_script_query:
                 serialize["step_type"] = case_step_type_map.get(case_id, None)
-                serialize["case_tags"] = [tag_map.get(tid, {}) for tid in tag_ids]
             # 公共接口仅一个 HTTP/TCP 步骤，补充协议字段供列表展示
             instance_type = (
                 instance.case_type.value
