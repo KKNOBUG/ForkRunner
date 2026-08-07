@@ -3,6 +3,7 @@ import traceback
 
 from fastapi import APIRouter, Body, Depends
 from fastapi.params import Query, Form
+from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
 from applications.base.dependencies import get_role_crud
@@ -15,8 +16,19 @@ from applications.base.schemas.role_schema import (
 from applications.base.services.role_crud import RoleCrud
 from applications.user.models.user_model import User
 from configure import LOGGER
-from core.exceptions import DataAlreadyExistsException, ParameterException, NotFoundException
-from core.responses import SuccessResponse, DataAlreadyExistsResponse, FailureResponse, ParameterResponse, NotFoundResponse
+from core.exceptions import (
+    DataAlreadyExistsException,
+    ParameterException,
+    NotFoundException,
+    DataBaseStorageException
+)
+from core.responses import (
+    SuccessResponse,
+    DataAlreadyExistsResponse,
+    FailureResponse,
+    ParameterResponse,
+    NotFoundResponse
+)
 from services import DependAuth
 
 role = APIRouter()
@@ -119,15 +131,19 @@ async def update_role(
         data: dict = await instance.to_dict()
         LOGGER.info(f"更新角色成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
+    except IntegrityError as e:
+        error_message: str = f"更新角色失败, 违反约束规则: {e}"
+        LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+        raise DataBaseStorageException(message=error_message) from e
     except Exception as e:
         LOGGER.error(f"更新角色失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新失败，异常描述: {e}")
+        return FailureResponse(message=f"更新角色失败，异常描述: {e}")
 
 
 @role.get("/get", summary="查看角色", description="根据角色id或code查看角色信息")
 async def get_role(
-        code: str = Form(default=None, description="角色名称"),
-        name: str = Form(default=None, description="角色代码"),
+        code: str = Form(default=None, description="角色代码"),
+        name: str = Form(default=None, description="角色名称"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
