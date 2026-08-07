@@ -124,15 +124,33 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         :param menu_ids: 菜单ID列表
         :param router_infos: 路由信息列表，每项含path、method
         :return: None
+        :raises ParameterException: role为空，或菜单/路由不存在
         """
+        if role is None:
+            error_message: str = "更新角色权限失败, 参数[role]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
         await role.menus.clear()
-        for menu_id in menu_ids:
+        for menu_id in menu_ids or []:
             menu_obj = await Menu.filter(id=menu_id).first()
+            if not menu_obj:
+                error_message: str = f"更新角色权限失败, 菜单[id={menu_id}]不存在"
+                LOGGER.error(error_message)
+                raise NotFoundException(message=error_message)
             await role.menus.add(menu_obj)
 
         await role.routers.clear()
-        for item in router_infos:
-            router_obj = await Router.filter(path=item.get("path"), method=item.get("method")).first()
+        for item in router_infos or []:
+            path = (item or {}).get("path")
+            method = (item or {}).get("method")
+            router_obj = await Router.filter(path=path, method=method).first()
+            if not router_obj:
+                error_message: str = (
+                    f"更新角色权限失败, 路由[path={path}, method={method}]不存在"
+                )
+                LOGGER.error(error_message)
+                raise NotFoundException(message=error_message)
             await role.routers.add(router_obj)
 
     async def delete_role(self, role_id: int, **kwargs) -> Role:

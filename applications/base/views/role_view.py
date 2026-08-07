@@ -2,9 +2,10 @@
 import traceback
 
 from fastapi import APIRouter, Body, Depends
-from fastapi.params import Query, Form
+from fastapi.params import Query
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
+from typing import Optional
 
 from applications.base.dependencies import get_role_crud
 from applications.base.schemas.role_schema import (
@@ -142,28 +143,36 @@ async def update_role(
 
 @role.get("/get", summary="查看角色", description="根据角色id或code查看角色信息")
 async def get_role(
-        code: str = Form(default=None, description="角色代码"),
-        name: str = Form(default=None, description="角色名称"),
+        role_id: Optional[int] = Query(default=None, ge=1, description="角色ID"),
+        code: Optional[str] = Query(default=None, description="角色代码"),
+        name: Optional[str] = Query(default=None, description="角色名称"),
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
     查看角色。
 
+    :param role_id: 角色主键ID，与code/name三选一
     :param code: 角色代码
     :param name: 角色名称
     :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
     try:
-        where: dict = {}
-        if code:
-            where[code] = code
-        if name:
-            where[name] = name
-        instances = await role_crud.get_by_conditions(only_one=True, **where)
-        data = [await obj.to_dict() for obj in instances]
-        LOGGER.info(f"查看角色成功, 结果数量: {len(data)}")
-        return SuccessResponse(message="查询成功", data=data, total=len(data))
+        if not role_id and not code and not name:
+            return ParameterResponse(message="查询角色信息失败, 参数[role_id]或[code]或[name]不允许为空")
+        if role_id:
+            instance = await role_crud.get_by_id(role_id=role_id, on_error=True)
+        elif code:
+            instance = await role_crud.get_by_code(role_code=code, on_error=True)
+        else:
+            instance = await role_crud.get_by_name(role_name=name, on_error=True)
+        data = await instance.to_dict()
+        LOGGER.info(f"查看角色成功, 结果明细: {data}")
+        return SuccessResponse(message="查询成功", data=data, total=1)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查看角色失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
@@ -237,10 +246,14 @@ async def update_role_authorized(
     :return: 统一HTTP响应
     """
     try:
-        role_obj = await role_crud.get_or_none(id=role_in.id)
+        role_obj = await role_crud.get_by_id(role_id=role_in.id, on_error=True)
         await role_crud.update_roles(role=role_obj, menu_ids=role_in.menu_ids, router_infos=role_in.router_infos)
         LOGGER.info(f"更新角色权限成功, role_id={role_in.id}")
         return SuccessResponse(message="更新成功")
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"更新角色权限失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
