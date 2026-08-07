@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-import traceback
+import traceback
 from datetime import datetime
 from typing import Optional, Dict, Any, Union, List, Tuple
 
@@ -168,7 +169,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
                 page=record_in.page,
                 page_size=record_in.page_size,
                 search=q,
-                order=record_in.order or ["-celery_start_time", "-id"],
+                order=record_in.order,
             )
             return total, list(instances)
         except FieldError as e:

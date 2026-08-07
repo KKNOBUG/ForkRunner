@@ -18,6 +18,7 @@ audit = APIRouter()
 async def list_audit(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
+        order: list = Query(default_factory=lambda: ["-created_time"], description="排序字段"),
         username: str = Query(default=None, description="用户名称"),
         request_tags: str = Query(default=None, description="请求模块"),
         request_summary: str = Query(default=None, description="请求接口"),
@@ -33,6 +34,7 @@ async def list_audit(
 
     :param page: 页码
     :param page_size: 每页条数
+    :param order: 排序字段
     :param username: 用户名称
     :param request_tags: 请求模块
     :param request_summary: 请求接口
@@ -65,7 +67,7 @@ async def list_audit(
         q &= Q(created_time__lte=end_time)
 
     try:
-        total, audit_log_objs = await audit_crud.list_audit(page=page, page_size=page_size, search=q)
+        total, audit_log_objs = await audit_crud.list_audit(page=page, page_size=page_size, order=order, search=q)
         data = [await audit_log.to_dict() for audit_log in audit_log_objs]
         LOGGER.info(f"查询审计日志列表成功, 数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)

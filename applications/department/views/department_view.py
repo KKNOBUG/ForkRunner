@@ -171,7 +171,7 @@ async def list_departments(
     """
     查询部门列表。
 
-    :param name: 部门名称（模糊）
+    :param name: 部门名称
     :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """

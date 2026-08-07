@@ -222,6 +222,15 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         case_code = data_dict.get("case_code")
         step_id = data_dict.get("step_id")
         step_code = data_dict.get("step_code")
+
+        # 模型非空字段兜底：cache_key/dataset/dataset_names
+        if not str(data_dict.get("cache_key") or "").strip():
+            data_dict["cache_key"] = make_cache_key(int(case_id), str(step_code or "").strip())
+        if data_dict.get("dataset") is None:
+            data_dict["dataset"] = {}
+        if data_dict.get("dataset_names") is None:
+            data_dict["dataset_names"] = []
+
         existing = await self.model.filter(case_id=case_id, case_code=case_code, step_id=step_id, step_code=step_code).first()
 
         if not existing:
