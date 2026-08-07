@@ -287,7 +287,7 @@ async def search_reports(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_report.post("/search_batches", summary="按批次查询任务执行历史", description="按task_code聚合batch_code，计算成功/部分成功/失败状态")
+@autotest_report.post("/search_batches", summary="查询任务执行历史", description="按task_code聚合batch_code，计算成功/部分成功/失败状态")
 async def search_report_batches(
         batch_in: AutoTestApiReportBatchSelect = Body(..., description="批次查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

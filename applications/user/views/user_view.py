@@ -160,7 +160,7 @@ async def get_user(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@user_secure.get("/byUsername", summary="查询用户信息", description="根据用户名查询用户信息")
+@user_secure.get("/byUsername", summary="查询用户信息", description="根据username查询用户信息")
 async def get_user_by_username(
         username: str = Query(..., description="用户名称"),
         user_crud: UserCrud = Depends(get_user_crud),
@@ -327,7 +327,7 @@ async def list_users(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@user_secure.post("/update_password", summary="修改密码", description="根据当前登录用户ID修改密码")
+@user_secure.post("/update_password", summary="更新用户密码(个人)", description="根据当前登录用户ID修改密码")
 async def update_user_password(
         req_in: UpdatePassword,
         user_crud: UserCrud = Depends(get_user_crud),
@@ -355,7 +355,7 @@ async def update_user_password(
         return FailureResponse(message=f"修改失败，异常描述: {e}")
 
 
-@user_secure.post("/reset_password", summary="重置密码")
+@user_secure.post("/reset_password", summary="更新用户密码(重置)")
 async def reset_password(
         user_id: int = Body(..., description="用户ID", embed=True),
         user_crud: UserCrud = Depends(get_user_crud),

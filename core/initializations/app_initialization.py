@@ -13,7 +13,7 @@ from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 from tortoise.contrib.fastapi import register_tortoise
-from tortoise.exceptions import DoesNotExist, OperationalError
+from tortoise.exceptions import DoesNotExist
 
 from configure import PROJECT_CONFIG, LOGGER
 from core.exceptions.http_exceptions import (
@@ -182,15 +182,16 @@ def register_routers(app: FastAPI) -> None:
     from applications.aotutest.views import autotest
 
     # 挂在路由蓝图
-    app.include_router(router=base_public, prefix="/yk/base", tags=["基础服务"])
-    app.include_router(router=base_secure, prefix="/yk/base", tags=["基础服务"], dependencies=[DependPermission])
-    app.include_router(router=router_secure, prefix="/yk/base", tags=["基础服务-路由模块"], dependencies=[DependPermission])
-    app.include_router(router=menu_secure, prefix="/yk/base", tags=["基础服务-菜单模块"], dependencies=[DependPermission])
-    app.include_router(router=role_secure, prefix="/yk/base", tags=["基础服务-角色模块"], dependencies=[DependPermission])
-    app.include_router(router=audit_secure, prefix="/yk/base", tags=["基础服务-审计模块"], dependencies=[DependPermission])
-    app.include_router(router=file_secure, prefix="/yk/base", tags=["基础服务-文件传输"], dependencies=[DependPermission])
-    app.include_router(router=user_public, prefix="/yk/user", tags=["用户服务"])
-    app.include_router(router=user_secure, prefix="/yk/user", tags=["用户服务"], dependencies=[DependPermission])
-    app.include_router(router=dept, prefix="/yk/dept", tags=["部门服务"], dependencies=[DependPermission])
-    app.include_router(router=toolbox, prefix="/yk/toolbox", tags=["工具箱服务"], dependencies=[DependPermission])
+    # tags 采用「一级目录:二级模块」，与侧边栏菜单对齐，便于角色权限按模块制定规则
+    app.include_router(router=base_public, prefix="/yk/base", tags=["系统管理:认证"])
+    app.include_router(router=base_secure, prefix="/yk/base", tags=["系统管理:认证"], dependencies=[DependPermission])
+    app.include_router(router=router_secure, prefix="/yk/base", tags=["系统管理:路由"], dependencies=[DependPermission])
+    app.include_router(router=menu_secure, prefix="/yk/base", tags=["系统管理:菜单"], dependencies=[DependPermission])
+    app.include_router(router=role_secure, prefix="/yk/base", tags=["系统管理:角色"], dependencies=[DependPermission])
+    app.include_router(router=audit_secure, prefix="/yk/base", tags=["系统管理:审计"], dependencies=[DependPermission])
+    app.include_router(router=file_secure, prefix="/yk/base", tags=["系统管理:文件"], dependencies=[DependPermission])
+    app.include_router(router=user_public, prefix="/yk/user", tags=["系统管理:用户"])
+    app.include_router(router=user_secure, prefix="/yk/user", tags=["系统管理:用户"], dependencies=[DependPermission])
+    app.include_router(router=dept, prefix="/yk/dept", tags=["系统管理:部门"], dependencies=[DependPermission])
+    app.include_router(router=toolbox, prefix="/yk/toolbox", tags=["便捷工具:工具箱"], dependencies=[DependPermission])
     app.include_router(router=autotest, prefix="/yk/autotest", dependencies=[DependPermission])

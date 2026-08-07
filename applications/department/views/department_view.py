@@ -86,7 +86,7 @@ async def delete_department(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@dept.post("/delete", summary="批量删除部门", description="根据id列表批量删除部门信息")
+@dept.post("/delete", summary="删除部门(批量)", description="根据id列表批量删除部门信息")
 async def batch_delete_departments(
         body_in: DepartmentBatchDelete = Body(..., description="批量删除参数"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),

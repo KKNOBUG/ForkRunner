@@ -496,7 +496,7 @@ async def export_case_datagram_sync(
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
-@autotest_case.post("/export_case_datagram_async", summary="异步导出公共接口报文", description="异步导出公共接口用例请求头与请求体为xlsx")
+@autotest_case.post("/export_case_datagram_async", summary="导出公共接口报文(异步)", description="异步导出公共接口用例请求头与请求体为xlsx")
 async def export_case_datagram_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -578,7 +578,7 @@ async def export_case_scripts_sync(
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
-@autotest_case.post("/export_case_scripts_async", summary="异步导出公共接口脚本", description="异步导出公共接口脚本为模板xlsx")
+@autotest_case.post("/export_case_scripts_async", summary="导出公共接口脚本(异步)", description="异步导出公共接口脚本为模板xlsx")
 async def export_case_scripts_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

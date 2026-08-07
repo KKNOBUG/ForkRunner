@@ -36,7 +36,7 @@ from services import DependAuth
 role = APIRouter()
 
 
-@role.post("/create", summary="创建角色")
+@role.post("/create", summary="新增角色")
 async def create_role(
         role_in: RoleCreate = Body(..., description="角色信息"),
         current_user: User = DependAuth,
@@ -88,7 +88,7 @@ async def delete_role(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@role.post("/deletes", summary="批量删除角色", description="根据角色id或code列表删除")
+@role.post("/deletes", summary="删除角色(批量)", description="根据角色id或code列表删除")
 async def batch_delete_roles(
         role_in: RoleBatchDelete = Body(..., description="id或code列表"),
         role_crud: RoleCrud = Depends(get_role_crud),
@@ -146,7 +146,7 @@ async def update_role(
         return FailureResponse(message=f"更新角色失败，异常描述: {e}")
 
 
-@role.get("/get", summary="查看角色", description="根据角色id或code查看角色信息")
+@role.get("/get", summary="查询角色", description="根据角色id或code查询角色信息")
 async def get_role(
         role_id: Optional[int] = Query(default=None, ge=1, description="角色ID"),
         code: Optional[str] = Query(default=None, description="角色代码"),
@@ -183,7 +183,7 @@ async def get_role(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@role.get("/list", summary="查看角色列表", description="根据角色id或code查看角色信息")
+@role.get("/list", summary="查询角色列表", description="根据角色id或code查询角色信息")
 async def search_roles(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
@@ -216,7 +216,7 @@ async def search_roles(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@role.get("/authorized", summary="查看角色权限", description="根据角色id查看角色权限")
+@role.get("/authorized", summary="查询角色权限", description="根据角色id查询角色权限")
 async def get_role_authorized(
         id: int = Query(..., description="角色id"),
         role_crud: RoleCrud = Depends(get_role_crud),

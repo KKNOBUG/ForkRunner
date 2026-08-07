@@ -229,7 +229,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         if instance.is_superuser:
             return ForbiddenResponse(message="不允许重置超级用户密码")
 
-        instance.password = get_password_hash(password="123456")
+        instance.password = get_password_hash(password="KFuser01@!")
         instance.token_version += 1  # 吊销用户所有Token
         await instance.save()
         data = await instance.to_dict(exclude_fields=["id", "password"])

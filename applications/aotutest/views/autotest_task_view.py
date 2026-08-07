@@ -251,7 +251,7 @@ async def search_tasks(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_task.post("/run", summary="立即执行任务")
+@autotest_task.post("/run", summary="执行任务")
 async def run_task(
         task_in: Dict[str, Any] = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

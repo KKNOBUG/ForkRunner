@@ -172,7 +172,7 @@ async def delete_data_source(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@autotest_data_source.post("/unbind_case", summary="解绑用例数据源", description="解绑用例下全部数据源")
+@autotest_data_source.post("/unbind_case", summary="更新数据源(解绑)", description="解绑用例下全部数据源")
 async def unbind_case_data_source(
         case_id: int = Body(..., description="用例ID", embed=True),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -239,7 +239,7 @@ async def update_data_source(
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
-@autotest_data_source.post("/save_or_update", summary="保存数据源", description="保存或更新数据源信息")
+@autotest_data_source.post("/save_or_update", summary="更新数据源(保存)", description="保存或更新数据源信息")
 async def save_or_update_data_source(
         data_source_in: AutoTestDataSourceSaveOrUpdate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -810,7 +810,7 @@ async def single_step_dataset_download(
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
-@autotest_data_source.post("/batch_step_dataset_upload", summary="批量上传步骤数据源")
+@autotest_data_source.post("/batch_step_dataset_upload", summary="上传步骤数据源")
 async def batch_step_dataset_upload(
         case_id: int = Form(..., description="用例ID"),
         file_desc: Optional[str] = Form(None, description="数据驱动文件场景描述"),
@@ -960,7 +960,7 @@ async def batch_step_dataset_upload(
     )
 
 
-@autotest_data_source.get("/batch_step_dataset_download", summary="汇总导出步骤数据源", description="根据用例汇总导出所有步骤数据源xlsx")
+@autotest_data_source.get("/batch_step_dataset_download", summary="导出步骤数据源汇总", description="根据用例汇总导出所有步骤数据源xlsx")
 async def batch_step_dataset_download(
         case_id: int = Query(..., description="用例ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

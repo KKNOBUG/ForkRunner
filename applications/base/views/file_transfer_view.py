@@ -84,7 +84,7 @@ async def download_file(path: Union[str, Path] = Form(..., description="文件�
     )
 
 
-@file_transfer.post("/read", summary="读取文件")
+@file_transfer.post("/read", summary="查询文件内容")
 async def read_file(path: Union[str, Path] = Form(..., description="文件读取路径")):
     """
     读取文件。
@@ -105,7 +105,7 @@ async def read_file(path: Union[str, Path] = Form(..., description="文件读取
         return FailureResponse(message=f"读取失败，异常描述: {e}", data={"error": str(e)})
 
 
-@file_transfer.post("/move", summary="移动文件")
+@file_transfer.post("/move", summary="更新文件位置")
 async def move_file(
         src_path: Union[str, Path] = Form(..., description="文件原始路径"),
         dst_path: Union[str, Path] = Form(..., description="文件目标路径"),

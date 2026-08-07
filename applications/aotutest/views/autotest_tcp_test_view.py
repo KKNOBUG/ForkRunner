@@ -493,7 +493,7 @@ async def get_tcp_test_server_status():
     return SuccessResponse(message="查询成功", data=status)
 
 
-@autotest_tcp_test.get("/sample/json", summary="获取JSON请求示例报文")
+@autotest_tcp_test.get("/sample/json", summary="查询JSON请求示例报文")
 async def get_json_sample():
     """
     获取 JSON 端口的请求报文示例（银行账户交易查询）。
@@ -528,7 +528,7 @@ async def get_json_sample():
     return SuccessResponse(message="查询成功", data=sample)
 
 
-@autotest_tcp_test.get("/sample/xml", summary="获取XML请求示例报文")
+@autotest_tcp_test.get("/sample/xml", summary="查询XML请求示例报文")
 async def get_xml_sample():
     """
     获取 XML 端口的请求报文示例（贷款申请）。
@@ -575,7 +575,7 @@ async def get_xml_sample():
     return SuccessResponse(message="查询成功", data=sample)
 
 
-@autotest_tcp_test.get("/sample/response/json", summary="预览JSON端口的XML响应")
+@autotest_tcp_test.get("/sample/response/json", summary="查询JSON端口的XML响应")
 async def get_json_response_preview():
     """预览 JSON 端口对示例请求返回的 XML 响应。"""
     sample = orjson.dumps({
@@ -586,7 +586,7 @@ async def get_json_response_preview():
     return SuccessResponse(message="查询成功", data=_tcp_test_server._build_json_response(sample))
 
 
-@autotest_tcp_test.get("/sample/response/xml", summary="预览XML端口的XML响应")
+@autotest_tcp_test.get("/sample/response/xml", summary="查询XML端口的XML响应")
 async def get_xml_response_preview():
     """预览 XML 端口对示例请求返回的 XML 响应。"""
     sample = """<?xml version="1.0" encoding="UTF-8"?>

@@ -315,7 +315,7 @@ async def list_env_configs(
         return FailureResponse(message=f"查询失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/app/update", summary="修改APP类型环境配置")
+@autotest_env_config.post("/app/update", summary="更新APP类型环境配置")
 async def update_app_config(
         config_in: APPEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -337,7 +337,7 @@ async def update_app_config(
         return FailureResponse(message=f"修改APP配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/file/update", summary="修改FILE类型环境配置")
+@autotest_env_config.post("/file/update", summary="更新FILE类型环境配置")
 async def update_file_config(
         config_in: FILEEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -359,7 +359,7 @@ async def update_file_config(
         return FailureResponse(message=f"修改FILE配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/database/update", summary="修改DB类型环境配置")
+@autotest_env_config.post("/database/update", summary="更新DB类型环境配置")
 async def update_db_config(
         config_in: DBEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -405,7 +405,7 @@ async def delete_env_config(
         return FailureResponse(message=f"删除配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/database/test_connection", summary="测试数据库连接并创建连接池")
+@autotest_env_config.post("/database/test_connection", summary="执行数据库连接测试")
 async def test_db_connection(
         config_in: TestDBConnectionRequest = Body(..., description="连接测试入参"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

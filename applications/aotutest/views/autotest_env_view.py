@@ -29,7 +29,7 @@ from services import get_current_username
 autotest_env = APIRouter()
 
 
-@autotest_env.post("/list", summary="获取环境列表", response_model=None)
+@autotest_env.post("/list", summary="查询环境列表")
 async def list_envs(
         env_in: EnvListQuery = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -51,7 +51,7 @@ async def list_envs(
         return FailureResponse(message=f"查询失败: {e}")
 
 
-@autotest_env.get("/page", summary="环境分页列表")
+@autotest_env.get("/page", summary="查询环境分页列表")
 async def search_envs(
         project_id: Optional[int] = Query(None, description="应用ID", ge=1),
         env_name: Optional[str] = Query(None, description="环境名称"),
@@ -109,7 +109,7 @@ async def create_env(
         return FailureResponse(message=f"新增环境失败, 错误描述: {e}")
 
 
-@autotest_env.post("/update", summary="编辑环境")
+@autotest_env.post("/update", summary="更新环境")
 async def update_env(
         env_in: EnvEditRequest = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -157,7 +157,7 @@ async def delete_env(
         return FailureResponse(message=f"删除环境失败, 错误描述: {e}")
 
 
-@autotest_env.get("/get_all_app", summary="获取全部应用")
+@autotest_env.get("/get_all_app", summary="查询全部应用")
 async def get_all_apps(
         page: int = Query(1, ge=1, description="页码"),
         page_size: int = Query(10000, ge=1, description="每页条数"),
@@ -177,7 +177,7 @@ async def get_all_apps(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_env.post("/query", summary="API自动化测试-按应用列表查询环境配置并分类")
+@autotest_env.post("/query", summary="查询环境配置并分类")
 async def classify_env_configs(
         env_config_in: AutoTestApiEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

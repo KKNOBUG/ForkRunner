@@ -66,7 +66,7 @@ def _filter_menu_tree(nodes: list, *, name_kw: str, type_kw: str) -> list:
     return out
 
 
-@menu.post("/list", summary="查看菜单列表", description="根据name或type查询菜单信息")
+@menu.post("/list", summary="查询菜单列表", description="根据name或type查询菜单信息")
 async def list_menu(
         name: str = Query(default="", description="菜单名称(子串匹配)"),
         menu_type: str = Query(default="", description="菜单类型：catalog/menu"),
@@ -112,7 +112,7 @@ async def list_menu(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@menu.get("/get", summary="查看菜单", description="根据id查询菜单信息")
+@menu.get("/get", summary="查询菜单", description="根据id查询菜单信息")
 async def get_menu(
         menu_id: int = Query(..., description="菜单id"),
         menu_crud: MenuCrud = Depends(get_menu_crud),
@@ -137,7 +137,7 @@ async def get_menu(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@menu.post("/create", summary="创建菜单")
+@menu.post("/create", summary="新增菜单")
 async def create_menu(
         menu_in: MenuCreate = Body(..., description="菜单信息"),
         menu_crud: MenuCrud = Depends(get_menu_crud),

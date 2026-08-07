@@ -200,7 +200,7 @@ _SAMPLE_REQUEST_XML = """<?xml version="1.0" encoding="UTF-8"?>
 </Request>"""
 
 
-@autotest_http_xml_test.post(path="/xml", summary="HTTP XML测试接口", description="保险理赔申请")
+@autotest_http_xml_test.post(path="/xml", summary="执行HTTP/XML测试", description="保险理赔申请")
 async def http_xml_test(
         request: Request,
 ):
@@ -228,7 +228,7 @@ async def http_xml_test(
     )
 
 
-@autotest_http_xml_test.get("/sample/request", summary="获取XML请求示例报文")
+@autotest_http_xml_test.get("/sample/request", summary="查询XML请求示例报文")
 async def get_http_xml_sample_request():
     """
     获取HTTP、XML测试接口的请求报文示例（保险理赔申请）。
@@ -239,7 +239,7 @@ async def get_http_xml_sample_request():
     return SuccessResponse(message="查询成功", data=_SAMPLE_REQUEST_XML)
 
 
-@autotest_http_xml_test.get("/sample/response", summary="预览XML响应报文")
+@autotest_http_xml_test.get("/sample/response", summary="查询XML响应报文")
 async def get_http_xml_sample_response():
     """预览 HTTP XML 测试接口对示例请求返回的 XML 响应。"""
     return SuccessResponse(message="查询成功", data=_build_claim_response(_SAMPLE_REQUEST_XML))
