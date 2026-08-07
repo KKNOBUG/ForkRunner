@@ -37,22 +37,22 @@ async def init_database_role():
     admin_role = await role_crud.create_role(
         RoleCreate(
             code="Administrators",
-            name="管理员",
-            description="拥有完整系统权限"
+            name="管理员组",
+            description="拥有平台全部权限，可执行所有操作"
         )
     )
     user_role = await role_crud.create_role(
         RoleCreate(
             code="Users",
-            name="标准用户",
-            description="不能随意修改系统设置"
+            name="标准用户组",
+            description="基础业务操作权限，禁止高危操作"
         )
     )
     guest_role = await role_crud.create_role(
         RoleCreate(
             code="Guests",
-            name="宾客用户",
-            description="权限极低，受限访问，默认禁用"
+            name="宾客用户组",
+            description="受限访问，无修改、删除权限"
         )
     )
     LOGGER.info(f"创建[超级用户]角色成功: {admin_role.name} (id: {admin_role.id}, code: {admin_role.code})")
