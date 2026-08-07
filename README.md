@@ -187,3 +187,18 @@ celery -A celery_scheduler.celery_worker beat --loglevel=info --scheduler=redbea
 
 5. **自检**：提交前确认 `summary` 能被上表某一行前缀匹配；若匹配不到，先改 summary，再合入。
 
+## 角色权限与刷新路由
+
+内置角色路由分配规则见 `applications/base/services/permission_rule.py`，与上表行为一致：
+
+- **管理员**（`Administrators`）：全部路由；`admin` 用户另有 `is_superuser` 旁路
+- **标准用户**（`Users`）：业务域全开；系统域仅「查询/导出/下载」；个人白名单可绑
+- **宾客用户**（`Guests`）：业务域仅「查询/导出/下载」与「新增」；系统域仅读；个人白名单可绑
+
+「刷新路由」在同步 `tbx_router` 后，会：
+1. 对 **summary 无法按规范分类** 的路由打告警日志；
+2. 按上述规则对三角色 **补绑缺失路由**（只追加）；
+3. 将库中全部菜单 **补绑到三角色**（只追加，系统菜单对标准/宾客可见，写操作仍由路由约束）。
+
+首次空库初始化顺序：`菜单 → 路由 → 角色 → 部门 → 用户 → 应用 → 标签`。
+

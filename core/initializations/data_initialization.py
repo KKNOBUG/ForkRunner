@@ -3,7 +3,6 @@
 from typing import List
 
 from fastapi import FastAPI
-from tortoise.expressions import Q
 
 from applications.aotutest.models.autotest_model import (
     AutoTestApiTagInfo,
@@ -13,12 +12,20 @@ from applications.aotutest.schemas.autotest_tag_schema import AutoTestApiTagCrea
 from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
 from applications.aotutest.services.autotest_tag_crud import AutoTestApiTagCrud
 from applications.base.models.menu_model import Menu
-from applications.base.models.router_model import Router
+from applications.base.models.role_model import Role
 from applications.base.schemas.menu_schema import MenuCreate
 from applications.base.schemas.role_schema import RoleCreate
 from applications.base.services.menu_crud import MenuCrud
+from applications.base.services.permission_rule import (
+    ROLE_CODE_ADMIN,
+    ROLE_CODE_GUEST,
+    ROLE_CODE_USER,
+    filter_routers_for_role,
+    warn_unclassified_routers,
+)
 from applications.base.services.role_crud import RoleCrud
 from applications.base.services.router_crud import RouterCrud
+from applications.department.models.dept_model import Department
 from applications.department.schemas.department_schema import DepartmentCreate
 from applications.department.services.department_crud import DepartmentCrud
 from applications.user.schemas.user_schema import UserCreate
@@ -29,181 +36,157 @@ from enums import MenuType
 
 async def init_database_role():
     role_crud = RoleCrud()
-    role_table = await role_crud.model.exists()
-    if role_table:
-        LOGGER.info("[角色]数据表已存在，跳过初始化")
+    if await role_crud.model.exists():
+        LOGGER.info("[角色]已有数据，跳过初始化")
         return
+
+    from applications.base.models.router_model import Router
 
     admin_role = await role_crud.create_role(
         RoleCreate(
-            code="Administrators",
+            code=ROLE_CODE_ADMIN,
             name="管理员",
-            description="拥有平台全部权限，可执行所有操作"
+            description="平台超管，拥有全部菜单与接口权限",
         )
     )
     user_role = await role_crud.create_role(
         RoleCreate(
-            code="Users",
+            code=ROLE_CODE_USER,
             name="标准用户",
-            description="基础业务操作权限，禁止高危操作"
+            description="系统域只读，业务域增删改查全开；不可操作系统写操作与角色权限变更",
         )
     )
     guest_role = await role_crud.create_role(
         RoleCreate(
-            code="Guests",
+            code=ROLE_CODE_GUEST,
             name="宾客用户",
-            description="受限访问，无修改、删除权限"
+            description="系统域只读，业务域仅查询与新增；禁止一切修改与删除",
         )
     )
-    LOGGER.info(f"创建[超级用户]角色成功: {admin_role.name} (id: {admin_role.id}, code: {admin_role.code})")
-    LOGGER.info(f"创建[普通用户]角色成功: {user_role.name} (id: {user_role.id}, code: {user_role.code})")
-    LOGGER.info(f"创建[普通用户]角色成功: {guest_role.name} (id: {guest_role.id}, code: {guest_role.code})")
+    LOGGER.info(f"创建角色成功: {admin_role.name} (id: {admin_role.id}, code: {admin_role.code})")
+    LOGGER.info(f"创建角色成功: {user_role.name} (id: {user_role.id}, code: {user_role.code})")
+    LOGGER.info(f"创建角色成功: {guest_role.name} (id: {guest_role.id}, code: {guest_role.code})")
 
-    # 为超级用户角色分配所有的路由
-    all_routers = await Router.all()
-    await admin_role.routers.add(*all_routers)
-    LOGGER.info(f"角色[超级用户]绑定路由成功, 共计{len(all_routers)}个")
-
-    # 为普通用户分配基本路由
-    # Router.tags 来自 FastAPI include_router 的 tags（如“基础服务”“用户服务”），
-    # 因此这里使用模糊匹配“基础”，避免精确字符串不一致导致普通用户无法访问。
-    basic_routers = await Router.filter(Q(method__in=["GET"]) | Q(tags__icontains="基础"))
-    await user_role.routers.add(*basic_routers)
-    LOGGER.info(f"角色[超级用户]绑定路由成功, 共计{len(basic_routers)}个")
-
-    # 为超级用户角色和普通用户角色分配所有的菜单
     all_menus = await Menu.all()
-    await admin_role.menus.add(*all_menus)
-    await user_role.menus.add(*all_menus)
-    LOGGER.info(f"角色[超级用户]绑定菜单成功, 共计{len(all_menus)}个")
-    LOGGER.info(f"角色[普通用户]绑定菜单成功, 共计{len(all_menus)}个")
+    if all_menus:
+        await admin_role.menus.add(*all_menus)
+        await user_role.menus.add(*all_menus)
+        await guest_role.menus.add(*all_menus)
+        LOGGER.info(f"三角色绑定菜单成功, 共计{len(all_menus)}个")
+
+    all_routers = await Router.all()
+    warn_unclassified_routers(all_routers)
+    admin_routers = filter_routers_for_role(ROLE_CODE_ADMIN, all_routers)
+    user_routers = filter_routers_for_role(ROLE_CODE_USER, all_routers)
+    guest_routers = filter_routers_for_role(ROLE_CODE_GUEST, all_routers)
+    if admin_routers:
+        await admin_role.routers.add(*admin_routers)
+    if user_routers:
+        await user_role.routers.add(*user_routers)
+    if guest_routers:
+        await guest_role.routers.add(*guest_routers)
+    LOGGER.info(f"角色[{admin_role.name}]绑定路由成功, 共计{len(admin_routers)}个")
+    LOGGER.info(f"角色[{user_role.name}]绑定路由成功, 共计{len(user_routers)}个")
+    LOGGER.info(f"角色[{guest_role.name}]绑定路由成功, 共计{len(guest_routers)}个")
 
 
 async def init_database_dept():
     dept_crud = DepartmentCrud()
-    dept_table = await dept_crud.model.exists()
-    if dept_table:
-        LOGGER.info("[部门]数据表已存在，跳过初始化")
+    if await dept_crud.model.exists():
+        LOGGER.info("[部门]已有数据，跳过初始化")
         return
 
     dept_data: List[DepartmentCreate] = [
         DepartmentCreate(
-            code="DEPT-9999",
-            name="默认部门",
-            description="系统默认配置，无具体部门，仅作初始部门使用",
+            code="DEFAULT_SYSTEM_DEPARTMENT",
+            name="系统默认部门",
+            description="系统默认配置，无具体业务归属，仅作初始部门使用",
             order=0,
-            parent_id=0
+            parent_id=0,
         ),
         DepartmentCreate(
-            code="DEPT-KF",
-            name="研发部(技术中心)",
-            description="软件开发部门，包含前端开发、后端开发、功能测试、自动化测试等",
-            order=0,
-            parent_id=0
-        ),
-        DepartmentCreate(
-            code="DEPT-KF01",
-            name="开发一部",
-            description="软件开发部门，开发一部",
+            code="DEFAULT_AUTOTEST_DEPARTMENT",
+            name="技术测试团队",
+            description="技术测试与冒烟验证相关人员所属部门",
             order=1,
-            parent_id=2
+            parent_id=0,
         ),
-        DepartmentCreate(
-            code="DEPT-KF02",
-            name="开发二部",
-            description="软件开发部门，开发二部",
-            order=1,
-            parent_id=2
-        ),
-        DepartmentCreate(
-            code="DEPT-CS",
-            name="测试部门",
-            description="软件测试部门",
-            order=0,
-            parent_id=0
-        ),
-        DepartmentCreate(
-            code="DEPT-CS01",
-            name="测试一部",
-            description="软件测试部门，测试一部",
-            order=1,
-            parent_id=5
-        ),
-        DepartmentCreate(
-            code="DEPT-CS02",
-            name="测试二部",
-            description="软件测试部门，测试二部",
-            order=1,
-            parent_id=5
-        )
     ]
 
     for dept_in in dept_data:
         try:
             dept = await dept_crud.create_department(department_in=dept_in)
-            LOGGER.info(f"创建部门成功: {dept.name} (id: {dept.id}, username: {dept.code})")
+            LOGGER.info(f"创建部门成功: {dept.name} (id: {dept.id}, code: {dept.code})")
         except Exception as e:
-            LOGGER.error(f"创建部门失败: {dept_in['alias']}, username: {dept_in['username']}: {e}")
+            LOGGER.error(f"创建部门失败: {dept_in.name}, code: {dept_in.code}: {e}")
 
 
 async def init_database_user():
     user_crud = UserCrud()
-    user_table = await user_crud.model.exists()
-    if user_table:
-        LOGGER.info("[用户]数据表已存在，跳过初始化")
+    if await user_crud.model.exists():
+        LOGGER.info("[用户]已有数据，跳过初始化")
+        return
+
+    default_dept = await Department.get_or_none(code="DEFAULT_SYSTEM_DEPARTMENT")
+    test_dept = await Department.get_or_none(code="DEFAULT_AUTOTEST_DEPARTMENT")
+    admin_role = await Role.get_or_none(code=ROLE_CODE_ADMIN)
+    user_role = await Role.get_or_none(code=ROLE_CODE_USER)
+    guest_role = await Role.get_or_none(code=ROLE_CODE_GUEST)
+
+    if not all([default_dept, test_dept, admin_role, user_role, guest_role]):
+        LOGGER.error("[用户]初始化失败: 部门或角色尚未就绪，请检查初始化顺序")
         return
 
     user_data: List[UserCreate] = [
         UserCreate(
             username="admin",
-            password="123456",
+            password="KFuser01@!",
             alias="系统管理员",
             email="admin@test.com",
             phone="18888888888",
             avatar="/static/avatar/default/20250101010101.png",
-            dept_id=1,
+            dept_id=default_dept.id,
             is_active=True,
             is_superuser=True,
-            role_ids=[1],
-        ),
-        UserCreate(
-            username="guest",
-            password="123456",
-            alias="访客用户",
-            email="guest@test.com",
-            phone="18888888888",
-            avatar="/static/avatar/default/20250101010101.png",
-            dept_id=6,
-            is_active=True,
-            is_superuser=False,
-            role_ids=[2],
+            role_ids=[admin_role.id],
         ),
         UserCreate(
             username="tester",
-            password="123456",
-            alias="测试用户",
+            password="KFuser01@!",
+            alias="标准用户",
             email="tester@test.com",
             phone="18888888888",
             avatar="/static/avatar/default/20250101010101.png",
-            dept_id=7,
+            dept_id=test_dept.id,
             is_active=True,
             is_superuser=False,
-            role_ids=[2],
-        )
+            role_ids=[user_role.id],
+        ),
+        UserCreate(
+            username="guest",
+            password="KFuser01@!",
+            alias="宾客用户",
+            email="guest@test.com",
+            phone="18888888888",
+            avatar="/static/avatar/default/20250101010101.png",
+            dept_id=test_dept.id,
+            is_active=True,
+            is_superuser=False,
+            role_ids=[guest_role.id],
+        ),
     ]
     for user_in in user_data:
         try:
             user = await user_crud.create_user(user_in=user_in)
             LOGGER.info(f"创建用户成功: {user.alias} (id: {user.id}, username: {user.username})")
         except Exception as e:
-            LOGGER.error(f"创建用户失败: {user_in['alias']}, username: {user_in['username']}: {e}")
+            LOGGER.error(f"创建用户失败: {user_in.alias}, username: {user_in.username}: {e}")
 
 
 async def init_database_menu():
     menu_crud = MenuCrud()
-    menu_table = await menu_crud.model.exists()
-    if menu_table:
-        LOGGER.info("[菜单]数据表已存在，跳过初始化")
+    if await menu_crud.model.exists():
+        LOGGER.info("[菜单]已有数据，跳过初始化")
         return
     # 系统设置菜单配置
     system_parent_menu = await menu_crud.create_menu(
@@ -346,7 +329,6 @@ async def init_database_menu():
             path="environment",
             order=2,
             parent_id=program_parent_menu.id,
-            # icon="fluent:apps-add-in-28-regular",
             icon="eos-icons:env",
             is_hidden=False,
             component="/program/environment",
@@ -609,100 +591,75 @@ async def init_database_menu():
 
 async def init_database_router(app: FastAPI):
     router_crud = RouterCrud()
-    router_table = await router_crud.model.exists()
-    if router_table:
-        LOGGER.info("[路由]数据表已存在，跳过初始化")
+    if await router_crud.model.exists():
+        LOGGER.info("[路由]已有数据，跳过初始化")
         return
 
-    await router_crud.refresh_router(app)
+    # 首次灌路由时角色可能尚未创建，关闭自动补绑；角色初始化阶段再完整绑定
+    await router_crud.refresh_router(app, sync_role_bindings=False)
 
 
 async def init_database_project():
     project_crud = AutoTestApiProjectCrud()
-    project_table = await project_crud.model.exists()
-    if project_table:
-        LOGGER.info("[应用]数据表已存在，跳过初始化")
+    if await project_crud.model.exists():
+        LOGGER.info("[应用]已有数据，跳过初始化")
         return
 
     await project_crud.create_project(
         AutoTestApiProjectCreate(
-            project_name="KRUN",
-            project_desc="KRUN测管平台",
+            project_name="ToolBox工具箱",
+            project_desc="平台默认应用：ToolBox工具箱",
             project_state="开发中",
-            project_dev_owners=["张三丰", "秦始皇"],
-            project_developers=["张余", "苏钰", "赵思明", "叶无云", "沈牧云"],
-            project_test_owners=["黄思妙", "吴婕妤"],
-            project_testers=["谢霆锋", "赵思明", "杨浩亮"],
+            project_dev_owners=["admin"],
+            project_developers=["admin"],
+            project_test_owners=["tester"],
+            project_testers=["tester", "guest"],
             created_user="admin",
             project_phase=None,
             project_current_month_env=None,
         )
     )
-    LOGGER.info(f"创建[应用]成功")
+    LOGGER.info("创建[应用]成功: ToolBox工具箱")
 
 
 async def init_database_tag():
     tag_crud = AutoTestApiTagCrud()
-    tag_table = await tag_crud.model.exists()
-    if tag_table:
-        LOGGER.info("[标签]数据表已存在，跳过初始化")
+    if await tag_crud.model.exists():
+        LOGGER.info("[标签]已有数据，跳过初始化")
+        return
+
+    project_crud = AutoTestApiProjectCrud()
+    project = await project_crud.model.filter(project_name="ToolBox工具箱").first()
+    if not project:
+        LOGGER.error("[标签]初始化失败: 未找到应用 ToolBox工具箱")
         return
 
     tag_data: List[AutoTestApiTagCreate] = [
         AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="技术研发部",
-            tag_name="后端开发工程师",
-            tag_desc=None,
-        ),
-        AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="技术研发部",
-            tag_name="前端开发工程师",
-            tag_desc=None,
-        ),
-        AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="技术研发部",
+            tag_project=project.id,
+            tag_mode="技术测试团队",
             tag_name="测试工程师",
             tag_desc=None,
         ),
         AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="技术研发部",
-            tag_name="运维工程师",
-            tag_desc=None,
-        ),
-        AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="市场营销部",
-            tag_name="新媒体运营",
-            tag_desc=None,
-        ),
-        AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="市场营销部",
-            tag_name="短视频运营",
-            tag_desc=None,
-        ),
-        AutoTestApiTagCreate(
-            tag_project=1,
-            tag_mode="市场营销部",
-            tag_name="活动策划",
+            tag_project=project.id,
+            tag_mode="技术测试团队",
+            tag_name="开发工程师",
             tag_desc=None,
         ),
     ]
     await tag_crud.model.bulk_create(
         [AutoTestApiTagInfo(**tag.model_dump()) for tag in tag_data]
     )
-    LOGGER.info(f"创建[标签]成功")
+    LOGGER.info("创建[标签]成功")
 
 
 async def init_database_table(app: FastAPI):
+    # 菜单/路由须先于角色，角色/部门须先于用户
+    await init_database_menu()
+    await init_database_router(app)
     await init_database_role()
     await init_database_dept()
     await init_database_user()
-    await init_database_menu()
-    await init_database_router(app)
     await init_database_project()
     await init_database_tag()

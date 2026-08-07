@@ -47,7 +47,8 @@ class PermissionControl:
     async def has_permission(cls, request: Request, current_user: User = Depends(AuthControl.is_authed)) -> None:
         if current_user.is_superuser:
             return
-        method = str(HTTPMethod(request.method))
+        # 使用枚举value，避免 str(HTTPMethod.POST)=="HTTPMethod.POST" 与库内 "POST" 匹配失败
+        method = HTTPMethod(request.method).value
         # 对结尾‘/’符号进行统一化，使白名单/路径匹配稳定。
         path = request.url.path
         if path != "/" and path.endswith("/"):
@@ -57,8 +58,15 @@ class PermissionControl:
             raise HTTPException(status_code=403, detail="请求服务不被接受, 暂无任何角色策略")
         # role.routers 保存了该角色可访问的接口（method + path）
         routers = [await role.routers for role in roles]
-        permission_apis = list(set((str(router.method), router.path) for router in sum(routers, [])))
-        # method = "GET"
+        permission_apis = list(
+            set(
+                (
+                    (router.method.value if hasattr(router.method, "value") else str(router.method)),
+                    router.path,
+                )
+                for router in sum(routers, [])
+            )
+        )
         if (method, path) not in permission_apis:
             raise HTTPException(status_code=403, detail=f"请求服务不被接受, Method:{method} Path:{path}")
 
