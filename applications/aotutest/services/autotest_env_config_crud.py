@@ -289,12 +289,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 raise ParameterException(message=f"类型不匹配，记录类型为{expected_type}，请求类型为{env_type}")
             env_row = await AutoTestApiEnvEnumInfo.filter(id=existing.env_id).first()
             env_name = env_row.env_name if env_row else ""
-            from services.ctx import get_current_username
-            # soft_delete显式入参优先于CTX：有登录上下文时不传，保证以当前用户为准
-            instance = await self.soft_delete(
-                id=record_id,
-                updated_user=None if get_current_username() else config_in.updated_user,
-            )
+            instance = await self.soft_delete(id=record_id, updated_user=config_in.updated_user)
             return self._serialize_typed_config(instance, env_name, env_type)
         except (ParameterException, NotFoundException):
             raise

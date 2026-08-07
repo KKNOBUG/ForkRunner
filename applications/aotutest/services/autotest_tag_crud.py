@@ -221,9 +221,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
-        instance.state = 1
-        await instance.save()
-        return instance
+        return await self.soft_delete(id=instance.id)
 
     async def delete_tags(self, tag_in: AutoTestApiTagDelete) -> int:
         """

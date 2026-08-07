@@ -265,9 +265,7 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
             LOGGER.error(msg)
             raise DataBaseStorageException(message=msg)
 
-        instance.state = 1
-        await instance.save()
-        return instance
+        return await self.soft_delete(id=instance.id)
 
     async def delete_projects(self, project_in: AutoTestApiProjectDelete) -> int:
         """

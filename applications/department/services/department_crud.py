@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from tortoise.expressions import Q
 
@@ -121,7 +121,10 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         :raises NotFoundException: 部门不存在
         """
         instance = await self.get_by_id(department_id)
-        instance.is_deleted = 1
+        fields: Dict[str, Any] = {"is_deleted": True}
+        self._fill_updated_user(fields)
+        for key, value in fields.items():
+            setattr(instance, key, value)
         await instance.save()
         # 删除关系
         await DeptStruct.filter(descendant=department_id).delete()

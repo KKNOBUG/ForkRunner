@@ -299,9 +299,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         else:
             instance = await self.get_by_code(env_code=env_code, on_error=True, state__not=1)
 
-        instance.state = 1
-        await instance.save()
-        return instance
+        return await self.soft_delete(id=instance.id)
 
     async def delete_envs(self, env_in: AutoTestApiEnvDelete) -> int:
         """
@@ -494,12 +492,11 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
-    async def create_automation_env(self, data: EnvCreate, user: str = "system") -> Dict[str, Any]:
+    async def create_automation_env(self, data: EnvCreate) -> Dict[str, Any]:
         """
         新增环境主表记录（应用+名称+类型唯一）。
 
         :param data: 环境创建入参
-        :param user: 操作人
         :return: 与历史接口一致的环境响应字典
         """
         try:
@@ -518,17 +515,17 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
                     raise DataAlreadyExistsException(
                         message=f"应用：{data.project_id}+环境{env_name}+类型{data.env_type}已存在，不能重复新增"
                     )
-                existing_env.state = 0
-                existing_env.updated_user = user
-                await existing_env.save()
-                env_instance = existing_env
+                restore_dict: Dict[str, Any] = {"state": 0}
+                if data.created_user:
+                    restore_dict["updated_user"] = data.created_user
+                env_instance = await self.update(id=existing_env.id, obj_in=restore_dict)
             else:
                 env_instance = await self.create_env(
                     AutoTestApiEnvCreate(
                         env_name=env_name,
                         project_id=data.project_id,
                         env_type=data.env_type,
-                        created_user=user,
+                        created_user=data.created_user,
                     )
                 )
 
@@ -548,12 +545,11 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
-    async def update_automation_env(self, data: EnvEditRequest, user: str = "system") -> Dict[str, Any]:
+    async def update_automation_env(self, data: EnvEditRequest) -> Dict[str, Any]:
         """
         更新环境主表字段，并级联同类型配置的 env_id / project_id。
 
         :param data: 环境编辑入参
-        :param user: 操作人
         :return: 环境响应字典
         """
         try:
@@ -578,11 +574,14 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
                     message=f"应用：{data.project_id}+环境：{new_env_name}+类型：{data.env_type}已经存在，不能重复"
                 )
 
-            existing.project_id = data.project_id
-            existing.env_name = new_env_name
-            existing.env_type = data.env_type
-            existing.updated_user = user
-            await existing.save()
+            update_dict: Dict[str, Any] = {
+                "project_id": data.project_id,
+                "env_name": new_env_name,
+                "env_type": data.env_type,
+            }
+            if data.updated_user:
+                update_dict["updated_user"] = data.updated_user
+            existing = await self.update(id=data.id, obj_in=update_dict)
 
             config_qs = AutoTestApiEnvConfigInfo.filter(
                 env_id=data.id,
@@ -590,11 +589,16 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
                 state=0,
             )
             if old_project_id != data.project_id or old_env_name != new_env_name or old_env_type != data.env_type:
-                await config_qs.update(
-                    project_id=data.project_id,
-                    config_type=config_type,
-                    updated_user=user,
-                )
+                from applications.aotutest.services.autotest_env_config_crud import AutoTestApiEnvConfigCrud
+                config_crud = AutoTestApiEnvConfigCrud()
+                config_update: Dict[str, Any] = {
+                    "project_id": data.project_id,
+                    "config_type": config_type,
+                }
+                if data.updated_user:
+                    config_update["updated_user"] = data.updated_user
+                config_crud._fill_updated_user(config_update)
+                await config_qs.update(**config_update)
 
             return {
                 "id": existing.id,
@@ -611,13 +615,12 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
-    async def delete_automation_env(self, env_id: int, env_type: int, user: str = "system") -> Dict[str, Any]:
+    async def delete_automation_env(self, env_id: int, env_type: int) -> Dict[str, Any]:
         """
         软删环境主表记录，并软删其下对应类型的配置。
 
         :param env_id: 环境主键ID
         :param env_type: 节点类型（校验与主表一致）
-        :param user: 操作人
         :return: 环境响应字典
         """
         try:
@@ -628,15 +631,15 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
                     message=f"环境ID:{env_id}的节点类型为{existing.env_type}，与请求类型{env_type}不一致"
                 )
 
+            from applications.aotutest.services.autotest_env_config_crud import AutoTestApiEnvConfigCrud
+            config_crud = AutoTestApiEnvConfigCrud()
             await AutoTestApiEnvConfigInfo.filter(
                 env_id=env_id,
                 config_type=config_type,
                 state=0,
-            ).update(state=1, updated_user=user)
+            ).update(**config_crud.soft_delete_values())
 
-            existing.state = 1
-            existing.updated_user = user
-            await existing.save()
+            existing = await self.soft_delete(id=env_id)
 
             return {
                 "id": existing.id,

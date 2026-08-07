@@ -375,9 +375,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        instance.state = 1
-        await instance.save()
-        return instance
+        return await self.soft_delete(id=instance.id)
 
     async def unbind_case_data_sources(self, case_id: int) -> Dict[str, int]:
         """
@@ -392,12 +390,16 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        deleted_count: int = await self.model.filter(case_id=case_id, state=0).update(state=1)
-        cleared_count: int = await AutoTestApiStepInfo.filter(case_id=case_id, state=0).update(
-            data_source_id=None,
-            data_source_name=None,
-            data_source_desc=None,
-        )
+        deleted_count: int = await self.model.filter(case_id=case_id, state=0).update(**self.soft_delete_values())
+        from applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+        step_crud = AutoTestApiStepCrud()
+        step_vals: Dict[str, Any] = {
+            "data_source_id": None,
+            "data_source_name": None,
+            "data_source_desc": None,
+        }
+        step_crud._fill_updated_user(step_vals)
+        cleared_count: int = await AutoTestApiStepInfo.filter(case_id=case_id, state=0).update(**step_vals)
         return {"data_source": deleted_count, "step": cleared_count}
 
     async def select_data_sources(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiDataSourceInfo]]:
@@ -751,9 +753,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
             raise ParameterException(message=error_message)
 
         instance = await self.get_by_code(create_code=create_code, on_error=True, state__not=1)
-        instance.state = 1
-        await instance.save()
-        return instance
+        return await self.soft_delete(id=instance.id)
 
     async def select_data_source(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiDataCreateInfo]]:
         """
@@ -784,8 +784,8 @@ async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
     """
     data_source_crud = AutoTestDataSourceCrud()
     data_create_crud = AutoTestApiDataCreateCrud()
-    await data_source_crud.model.filter(step_code__in=step_code_list).update(state=1)
-    await data_create_crud.model.filter(step_code__in=step_code_list, state__not=1).update(state=1)
+    await data_source_crud.model.filter(step_code__in=step_code_list).update(**data_source_crud.soft_delete_values())
+    await data_create_crud.model.filter(step_code__in=step_code_list, state__not=1).update(**data_create_crud.soft_delete_values())
     instance_list = await data_source_crud.model.filter(step_code__in=step_code_list).all()
     for instance in instance_list:
         if instance.file_hash and not instance.file_hash.endswith("X"):

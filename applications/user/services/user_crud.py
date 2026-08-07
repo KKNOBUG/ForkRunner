@@ -163,10 +163,12 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :raises NotFoundException: 用户不存在
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True, **kwargs)
-        instance.state = 1
+        values = self.soft_delete_values()
+        for key, value in values.items():
+            setattr(instance, key, value)
         instance.is_active = 0
         instance.token_version += 1  # 吊销用户所有Token
-        await instance.save()
+        await instance.save(update_fields=[*values.keys(), "is_active", "token_version"])
         return instance
 
     async def delete_users(self, user_in: UserBatchDelete) -> List[int]:
@@ -180,7 +182,10 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         if user_ids:
             deleted_ids = await self.model.filter(id__in=user_ids).exclude(state=1).values_list("id", flat=True)
             if deleted_ids:
-                await self.model.filter(id__in=deleted_ids).update(state=1, token_version=F('token_version') + 1)
+                update_fields = self.soft_delete_values()
+                update_fields["is_active"] = 0
+                update_fields["token_version"] = F('token_version') + 1
+                await self.model.filter(id__in=deleted_ids).update(**update_fields)
         else:
             deleted_ids = []
         return deleted_ids

@@ -153,12 +153,13 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         async with in_transaction():
             report_code = instance.report_code
             from applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
-            count = await AutoTestApiDetailCrud().model.filter(report_code=report_code, state__not=1).update(state=1)
+            detail_crud = AutoTestApiDetailCrud()
+            count = await detail_crud.model.filter(report_code=report_code, state__not=1).update(
+                **detail_crud.soft_delete_values()
+            )
             LOGGER.warning(f"成功删除报告[report_code={report_code}]关联的{count}条明细信息")
 
-        instance.state = 1
-        await instance.save()
-        return instance
+        return await self.soft_delete(id=instance.id)
 
     async def select_reports(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiReportInfo]]:
         """

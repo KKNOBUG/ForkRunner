@@ -178,11 +178,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
 
         return instance
 
-    async def refresh_router(
-            self,
-            app: FastAPI,
-            sync_role_bindings: bool = True,
-    ) -> List[Router]:
+    async def refresh_router(self, app: FastAPI, sync_role_bindings: bool = True) -> List[Router]:
         """
         根据FastAPI应用当前路由同步数据库：删除废弃项，新增或更新现有项（同步完成后可按规则为内置角色补绑路由）。
 
@@ -190,10 +186,6 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         :param sync_role_bindings: 是否按权限规则补绑角色路由与菜单，并对无法分类的 summary 告警
         :return: 同步后的全部路由列表
         """
-        from services.ctx import get_current_username
-
-        fill_user = get_current_username()
-
         # 获取全部路由数据
         all_router_list = []
         for route in app.routes:
@@ -206,7 +198,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
             if (router.method, router.path) not in all_router_list:
                 await self.model.filter(method=router.method, path=router.path).delete()
 
-        # 更新路由数据
+        # 更新路由数据（走 Scaffold create/update，统一 _fill_* 规则）
         for route in app.routes:
             if isinstance(route, APIRoute) and route.methods not in ("OPTIONS",) and route.path_format not in ('/',):
                 data = {
@@ -218,11 +210,9 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
                 }
                 instance = await self.model.filter(method=data["method"], path=data["path"]).first()
                 if instance:
-                    await instance.update_from_dict(data).save()
+                    await self.update(id=instance.id, obj_in=data)
                 else:
-                    if fill_user:
-                        data["created_user"] = fill_user
-                    await self.model.create(**data)
+                    await self.create(data)
 
         routers = await self.model.all()
         if sync_role_bindings:

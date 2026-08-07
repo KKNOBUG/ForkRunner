@@ -121,11 +121,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
             if username:
                 update_dict["updated_user"] = username.upper()[:16]
 
-        for key, value in update_dict.items():
-            setattr(record, key, value)
-        if update_dict:
-            await record.save(update_fields=list(update_dict.keys()))
-        return record
+        return await self.update(id=record.id, obj_in=update_dict)
 
     async def update_record_by_celery_id(
             self,

@@ -570,9 +570,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
-        # 软删除
-        instance.state = 1
-        await instance.save()
+        instance = await self.soft_delete(id=instance.id)
         # 同步软删除该步骤关联的数据源与数据生成记录（延迟导入避免循环依赖）
         from applications.aotutest.services.autotest_data_source_crud import delete_step_create
         await delete_step_create(case_id=instance.case_id, step_code_list=[instance.step_code])
@@ -611,8 +609,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                 deleted += await delete_step_and_children(step_instance=child)
             # 然后删除当前步骤（软删除）
             if (step_instance.id, step_instance.step_code) not in exclude_step:
-                step_instance.state = 1
-                await step_instance.save()
+                await self.soft_delete(id=step_instance.id)
                 deleted += 1
                 deleted_by_case.setdefault(step_instance.case_id, []).append(step_instance.step_code)
                 LOGGER.warning(
@@ -1116,10 +1113,11 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                             if getattr(child, "step_id", None):
                                 retained_child_ids.add(child.step_id)
                     stale_children_qs = self.model.filter(parent_step_id=step_id, state__not=1)
+                    stale_values = self.soft_delete_values()
                     if retained_child_ids:
-                        await stale_children_qs.exclude(id__in=retained_child_ids).update(state=1)
+                        await stale_children_qs.exclude(id__in=retained_child_ids).update(**stale_values)
                     else:
-                        await stale_children_qs.update(state=1)
+                        await stale_children_qs.update(**stale_values)
                     for bi, branch in enumerate(step_data.branch_items):
                         if branch.branch_children:
                             child_result = await self.batch_update_or_create_steps(

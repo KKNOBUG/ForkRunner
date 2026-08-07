@@ -279,9 +279,9 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         else:
             instance = await self.get_by_code(task_code=task_code, on_error=True, state__not=1)
 
-        instance.state = 1
+        instance = await self.soft_delete(id=instance.id)
         instance.task_enabled = False
-        await instance.save()
+        await instance.save(update_fields=["task_enabled"])
         return instance
 
     async def set_task_enabled(self, task_id: int, enabled: bool = True) -> AutoTestApiTaskInfo:

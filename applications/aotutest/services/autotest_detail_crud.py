@@ -208,9 +208,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
                 step_code=step_code,
                 state__not=1,
             )
-        instance.state = 1
-        await instance.save()
-        return instance
+        return await self.soft_delete(id=instance.id)
 
     async def select_details(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiDetailInfo]]:
         """

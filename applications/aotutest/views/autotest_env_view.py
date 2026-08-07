@@ -24,8 +24,6 @@ from core.responses import (
     NotFoundResponse,
     DataAlreadyExistsResponse,
 )
-from services import get_current_username
-
 autotest_env = APIRouter()
 
 
@@ -96,7 +94,7 @@ async def create_env(
     :return: 统一HTTP响应
     """
     try:
-        env_info = await services.env_enum_curd.create_automation_env(env_in, get_current_username() or "system")
+        env_info = await services.env_enum_curd.create_automation_env(env_in)
         return SuccessResponse(message="新增环境成功", data=env_info, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -120,7 +118,7 @@ async def update_env(
     :return: 统一HTTP响应
     """
     try:
-        env_info = await services.env_enum_curd.update_automation_env(env_in, get_current_username() or "system")
+        env_info = await services.env_enum_curd.update_automation_env(env_in)
         return SuccessResponse(message="更新环境成功", data=env_info, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -144,9 +142,7 @@ async def delete_env(
     :return: 统一HTTP响应
     """
     try:
-        result = await services.env_enum_curd.delete_automation_env(
-            env_in.id, env_in.env_type, get_current_username() or "system"
-        )
+        result = await services.env_enum_curd.delete_automation_env(env_in.id, env_in.env_type)
         return SuccessResponse(message="删除环境成功", data=result, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
