@@ -1,17 +1,91 @@
 # -*- coding: utf-8 -*-
 import traceback
+from datetime import datetime, timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
 from applications.base.dependencies import get_audit_crud
 from applications.base.schemas.audit_schema import AuditBatchDelete, AuditSelect
-from applications.base.services.audit_crud import AuditCrud
-from configure import LOGGER
+from applications.base.services.audit_crud import (
+    AUDIT_LIST_EXCLUDE_FIELDS,
+    AuditCrud,
+)
+from configure import GLOBAL_CONFIG, LOGGER
 from core.exceptions import NotFoundException
 from core.responses import FailureResponse, NotFoundResponse, SuccessResponse
 
 audit = APIRouter()
+
+
+def _build_audit_search_q(
+        *,
+        username: Optional[str] = None,
+        request_tags: Optional[str] = None,
+        request_summary: Optional[str] = None,
+        request_method: Optional[str] = None,
+        request_router: Optional[str] = None,
+        response_code: Optional[str] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        apply_default_time_window: bool = True,
+) -> Q:
+    """
+    组装审计列表查询条件（偏向索引友好）：
+    - method / response_code：等值匹配（可用单列或组合索引）
+    - username / router：前缀匹配（可用 BTREE 最左前缀）
+    - tags / summary：仍为包含匹配（无法很好走索引，建议配合时间范围）
+    - 时间：优先使用区间；默认最近7天, 需要全量历史时显式传入足够大的start_time/end_time。
+    """
+    q = Q()
+
+    username = (username or "").strip()
+    request_tags = (request_tags or "").strip()
+    request_summary = (request_summary or "").strip()
+    request_method = (request_method or "").strip().upper()
+    request_router = (request_router or "").strip()
+    response_code = (response_code or "").strip()
+    start_time = (start_time or "").strip() or None
+    end_time = (end_time or "").strip() or None
+
+    if username:
+        # 前缀匹配可利用 username 索引；全模糊改为 startswith
+        q &= Q(username__startswith=username)
+    if request_tags:
+        q &= Q(request_tags__contains=request_tags)
+    if request_summary:
+        q &= Q(request_summary__contains=request_summary)
+    if request_method:
+        q &= Q(request_method=request_method)
+    if request_router:
+        q &= Q(request_router__startswith=request_router)
+    if response_code:
+        q &= Q(response_code=response_code)
+
+    if start_time and end_time:
+        q &= Q(created_time__range=[start_time, end_time])
+    elif start_time:
+        q &= Q(created_time__gte=start_time)
+    elif end_time:
+        q &= Q(created_time__lte=end_time)
+    elif apply_default_time_window:
+        # 未传时间范围时默认只查最近N天，缩小扫描范围以命中created_time相关索引；
+        # 需要全量历史时显式传入足够大的start_time/end_time。
+        default_start = (datetime.now() - timedelta(days=7)).strftime(
+            GLOBAL_CONFIG.DATETIME_FORMAT2
+        )
+        q &= Q(created_time__gte=default_start)
+
+    return q
+
+
+async def _serialize_audit_list(audit_log_objs) -> list:
+    """列表序列化：显式排除大字段，避免 only() 后触发惰性补查。"""
+    return [
+        await audit_log.to_dict(exclude_fields=AUDIT_LIST_EXCLUDE_FIELDS)
+        for audit_log in audit_log_objs
+    ]
 
 
 @audit.get("/list", summary="查询日志列表", description="根据条件分页查询日志信息(Query)")
@@ -19,12 +93,12 @@ async def list_audit(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
         order: list = Query(default_factory=lambda: ["-created_time"], description="排序字段"),
-        username: str = Query(default=None, description="用户名称"),
+        username: str = Query(default=None, description="用户名称(前缀匹配)"),
         request_tags: str = Query(default=None, description="请求模块"),
         request_summary: str = Query(default=None, description="请求接口"),
-        request_method: str = Query(default=None, description="请求方式"),
-        request_router: str = Query(default=None, description="请求路由"),
-        response_code: str = Query(default=None, description="响应代码"),
+        request_method: str = Query(default=None, description="请求方式(精确匹配，如 GET)"),
+        request_router: str = Query(default=None, description="请求路由(前缀匹配)"),
+        response_code: str = Query(default=None, description="响应代码(精确匹配)"),
         start_time: str = Query(default=None, description="开始时间"),
         end_time: str = Query(default=None, description="结束时间"),
         audit_crud: AuditCrud = Depends(get_audit_crud),
@@ -46,29 +120,20 @@ async def list_audit(
     :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
-    q = Q()
-    if username:
-        q &= Q(username__icontains=username)
-    if request_tags:
-        q &= Q(request_tags__icontains=request_tags)
-    if request_summary:
-        q &= Q(request_summary__icontains=request_summary)
-    if request_method:
-        q &= Q(request_method__icontains=request_method)
-    if request_router:
-        q &= Q(request_router__icontains=request_router)
-    if response_code:
-        q &= Q(response_code__icontains=response_code)
-    if start_time and end_time:
-        q &= Q(created_time__range=[start_time, end_time])
-    elif start_time:
-        q &= Q(created_time__gte=start_time)
-    elif end_time:
-        q &= Q(created_time__lte=end_time)
+    q = _build_audit_search_q(
+        username=username,
+        request_tags=request_tags,
+        request_summary=request_summary,
+        request_method=request_method,
+        request_router=request_router,
+        response_code=response_code,
+        start_time=start_time,
+        end_time=end_time,
+    )
 
     try:
         total, audit_log_objs = await audit_crud.list_audit(page=page, page_size=page_size, order=order, search=q)
-        data = [await audit_log.to_dict() for audit_log in audit_log_objs]
+        data = await _serialize_audit_list(audit_log_objs)
         LOGGER.info(f"查询审计日志列表成功, 数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
@@ -88,31 +153,23 @@ async def search_audit(
     :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
-    q = Q()
-    if audit_in.username:
-        q &= Q(username__icontains=audit_in.username)
-    if audit_in.request_tags:
-        q &= Q(request_tags__icontains=audit_in.request_tags)
-    if audit_in.request_summary:
-        q &= Q(request_summary__icontains=audit_in.request_summary)
-    if audit_in.request_method:
-        q &= Q(request_method__icontains=audit_in.request_method)
-    if audit_in.request_router:
-        q &= Q(request_router__icontains=audit_in.request_router)
-    if audit_in.response_code:
-        q &= Q(response_code__icontains=audit_in.response_code)
-    if audit_in.start_time and audit_in.end_time:
-        q &= Q(created_time__range=[audit_in.start_time, audit_in.end_time])
-    elif audit_in.start_time:
-        q &= Q(created_time__gte=audit_in.start_time)
-    elif audit_in.end_time:
-        q &= Q(created_time__lte=audit_in.end_time)
+    method_value = audit_in.request_method.value if hasattr(audit_in.request_method, "value") else audit_in.request_method
+    q = _build_audit_search_q(
+        username=audit_in.username,
+        request_tags=audit_in.request_tags,
+        request_summary=audit_in.request_summary,
+        request_method=method_value,
+        request_router=audit_in.request_router,
+        response_code=audit_in.response_code,
+        start_time=audit_in.start_time,
+        end_time=audit_in.end_time,
+    )
 
     try:
         total, audit_log_objs = await audit_crud.list_audit(
             page=audit_in.page, page_size=audit_in.page_size, search=q, order=audit_in.order
         )
-        data = [await audit_log.to_dict() for audit_log in audit_log_objs]
+        data = await _serialize_audit_list(audit_log_objs)
         LOGGER.info(f"查询审计日志列表成功, 数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
@@ -150,24 +207,32 @@ async def get_audit_by_user(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
         order: list = Query(default_factory=lambda: ["-created_time"], description="排序字段"),
+        start_time: str = Query(default=None, description="开始时间"),
+        end_time: str = Query(default=None, description="结束时间"),
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    获取指定用户的所有审计日志。
+    获取指定用户的审计日志（默认最近若干天，可按时间范围扩大）。
 
     :param user_id: 用户ID
     :param page: 页码
     :param page_size: 每页条数
     :param order: 排序字段
+    :param start_time: 开始时间
+    :param end_time: 结束时间
     :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     try:
-        q = Q(user_id=user_id)
+        q = Q(user_id=user_id) & _build_audit_search_q(
+            start_time=start_time,
+            end_time=end_time,
+            apply_default_time_window=True,
+        )
         total, audit_log_objs = await audit_crud.list_audit(
             page=page, page_size=page_size, search=q, order=order
         )
-        data = [await audit_log.to_dict() for audit_log in audit_log_objs]
+        data = await _serialize_audit_list(audit_log_objs)
         LOGGER.info(f"查询用户审计日志成功, user_id: {user_id}, 数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
@@ -191,7 +256,7 @@ async def get_recent_audits(
     """
     try:
         audit_logs = await audit_crud.get_recent_audits(limit=limit, user_id=user_id)
-        data = [await audit_log.to_dict() for audit_log in audit_logs]
+        data = await _serialize_audit_list(audit_logs)
         LOGGER.info(f"查询最近审计日志成功, 数量: {len(data)}")
         return SuccessResponse(message="查询成功", data=data, total=len(data))
     except Exception as e:
