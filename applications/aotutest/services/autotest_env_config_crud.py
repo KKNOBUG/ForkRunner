@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import traceback
 from datetime import datetime
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List, Tuple, Union
 
-from tortoise.exceptions import IntegrityError, FieldError, DoesNotExist
+from tortoise.exceptions import FieldError
 from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 
@@ -12,6 +12,13 @@ from applications.aotutest.schemas.autotest_env_config_schema import (
     AutoTestApiConfigCreate,
     AutoTestApiConfigUpdate,
     AutoTestApiConfigDelete,
+    APPEnvConfigCreate,
+    FILEEnvConfigCreate,
+    DBEnvConfigCreate,
+    APPEnvConfigUpdate,
+    FILEEnvConfigUpdate,
+    DBEnvConfigUpdate,
+    EnvConfigDelete,
 )
 from applications.aotutest.schemas.autotest_env_schema import AutoTestApiEnvCreate
 from applications.aotutest.services.autotest_env_crud import (
@@ -28,7 +35,6 @@ from configure import LOGGER
 from core.exceptions import (
     NotFoundException,
     ParameterException,
-    DataBaseStorageException,
     DataAlreadyExistsException,
 )
 from enums import AutoTestConfigNodeType, AutoTestDataBaseType
@@ -123,140 +129,185 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_config(self, config_in: AutoTestApiConfigCreate) -> AutoTestApiEnvConfigInfo:
+    async def create_config(self, config_in: Union[APPEnvConfigCreate, FILEEnvConfigCreate, DBEnvConfigCreate]) -> Dict[str, Any]:
         """
-        创建环境配置；同应用/环境/类型/名称已存在则覆盖更新。
+        按节点类型新增环境配置（APP/FILE/DB）。
 
-        :param config_in: 配置创建schema
-        :return: 创建或覆盖更新后的配置实例
-        :raises ParameterException: 配置类型或必填字段非法
-        :raises NotFoundException: 环境或应用不存在
-        :raises DataBaseStorageException: 违反数据库约束
+        :param config_in: 创建APP/FILE/DB入参
+        :return: 配置响应字典
         """
-        env_id: int = config_in.env_id
-        project_id: int = config_in.project_id
-        config_name: str = config_in.config_name
-        config_type: AutoTestConfigNodeType = config_in.config_type
-        config_dict: Dict[str, Any] = config_in.model_dump(exclude_none=True, exclude_unset=True)
-        await AutoTestApiEnvEnumCrud().get_by_id(env_id=env_id, on_error=True, state__not=1)
-        await AutoTestApiProjectCrud().get_by_id(project_id=project_id, on_error=True, state__not=1)
-        self._validate_config_required_fields(config_type, config_in)
-        existing_config = await self.get_by_conditions(
-            only_one=True,
-            on_error=False,
-            state__not=1,
-            env_id=env_id,
-            project_id=project_id,
-            config_type=config_type.value,
-            config_name=config_name,
-        )
-        if not existing_config:
-            try:
-                instance: AutoTestApiEnvConfigInfo = await self.create(config_dict)
-                return instance
-            except IntegrityError as e:
-                error_message: str = f"新增配置信息失败, 违反约束规则: {e}"
-                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-                raise DataBaseStorageException(message=error_message) from e
-
         try:
-            instance = await self.update(id=existing_config.id, obj_in=config_dict)
-            return instance
-        except IntegrityError as e:
-            error_message: str = f"更新配置信息失败, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise DataBaseStorageException(message=error_message) from e
+            env_type = self._env_type_from_schema(config_in)
+            config_type = resolve_config_type(env_type)
+            data_dict = config_in.model_dump()
+            project_id = int(data_dict["env_info_id"])
+            config_name = data_dict["config_name"]
+            env_name = (data_dict.get("env") or "").upper()
+            operator = self._resolve_operator(config_in)
+            payload = {**data_dict, "env": env_name, "maintainer": data_dict.get("maintainer") or operator}
 
-    async def update_config(self, config_in: AutoTestApiConfigUpdate) -> AutoTestApiEnvConfigInfo:
-        """
-        更新环境配置，根据config_id或config_code定位。
-
-        :param config_in: 配置更新schema
-        :return: 更新后的配置实例
-        :raises ParameterException: 配置类型或必填字段非法
-        :raises NotFoundException: 配置不存在
-        :raises DataAlreadyExistsException: 同应用/环境下配置名重复
-        :raises DataBaseStorageException: 违反数据库约束
-        """
-        config_id: Optional[int] = config_in.config_id
-        config_code: Optional[str] = config_in.config_code
-        config_type: AutoTestConfigNodeType = config_in.config_type
-
-        if not config_id and not config_code:
-            error_message: str = "更新配置信息失败, 参数[config_id]或[config_code]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-        if config_id:
-            instance = await self.get_by_id(config_id=config_id, on_error=True, state__not=1)
-            config_code = instance.config_code
-        else:
-            instance = await self.get_by_code(config_code=config_code, on_error=True, state__not=1)
-            config_id = instance.id
-        update_dict = config_in.model_dump(
-            exclude_none=True,
-            exclude_unset=True,
-            exclude={"config_id", "config_code"}
-        )
-
-        if "env_id" in update_dict or "project_id" in update_dict or "config_name" in update_dict:
-            env_id = update_dict.get("env_id", instance.env_id)
-            project_id = update_dict.get("project_id", instance.project_id)
-            config_name = update_dict.get("config_name", instance.config_name)
-            existing_config = await self.model.filter(
-                env_id=env_id,
+            await AutoTestApiProjectCrud().get_by_id(project_id=project_id, on_error=True, state__not=1)
+            env_enum = await self._get_or_create_env_enum(
                 project_id=project_id,
+                env_name=env_name,
+                env_type=env_type,
+                user=operator,
+            )
+            mapped = self._map_typed_config_fields(env_type, payload)
+
+            existing = await self.model.filter(
+                project_id=project_id,
+                env_id=env_enum.id,
                 config_name=config_name,
-                state__not=1
-            ).exclude(id=config_id).first()
-            if existing_config:
-                error_message: str = (
-                    f"相同应用及环境下配置名称不允许重复, "
-                    f"查询条件: [env_id={env_id}, project_id={project_id}, config_name={config_name}]"
-                )
-                LOGGER.error(error_message)
-                raise DataAlreadyExistsException(message=error_message)
+                config_type=config_type,
+            ).first()
+            if existing:
+                if existing.state == 0:
+                    raise DataAlreadyExistsException(
+                        message=f"配置:{config_name}已存在，当前应用+环境下配置名称唯一，不能重复新增"
+                    )
+                update_dict = {**mapped, "state": 0, "config_type": config_type}
+                instance = await self.update(id=existing.id, obj_in=update_dict)
+                return self._serialize_typed_config(instance, env_name, env_type)
 
-        self._validate_config_required_fields(config_type, config_in)
+            await self._assert_host_unique(
+                project_id=project_id,
+                env_id=env_enum.id,
+                config_type=config_type,
+                env_type=env_type,
+                mapped=mapped,
+            )
+            instance = await self.create(
+                {
+                    "project_id": project_id,
+                    "env_id": env_enum.id,
+                    "config_type": config_type,
+                    "state": 0,
+                    **mapped,
+                }
+            )
+            return self._serialize_typed_config(instance, env_name, env_type)
+        except (DataAlreadyExistsException, ParameterException, NotFoundException):
+            raise
+        except Exception as e:
+            error_message = f"新增环境配置失败, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
+
+    async def update_config(self, config_in: Union[APPEnvConfigUpdate, FILEEnvConfigUpdate, DBEnvConfigUpdate]) -> Dict[str, Any]:
+        """
+        按节点类型修改环境配置（APP/FILE/DB）。
+
+        :param config_in: 更新APP/FILE/DB入参
+        :return: 配置响应字典
+        """
         try:
-            instance = await self.update(id=config_id, obj_in=update_dict)
-            return instance
-        except DoesNotExist as e:
-            error_message: str = f"更新配置信息失败, 记录[id={config_id}]或[code={config_code}]不存在, 错误描述: {e}"
+            env_type = self._env_type_from_schema(config_in)
+            config_type = resolve_config_type(env_type)
+            data_dict = config_in.model_dump()
+            record_id = data_dict.get("id")
+            if not record_id:
+                raise ParameterException(message="缺少主键ID参数")
+            frontend_project_id = data_dict.get("project_id")
+            if frontend_project_id is None or frontend_project_id == "":
+                raise ParameterException(message="缺少应用ID参数")
+
+            existing = await self.model.filter(id=record_id).first()
+            if not existing:
+                raise NotFoundException(message=f"未找到ID为：{record_id}的配置记录")
+            if existing.state == 1:
+                raise ParameterException(message=f"该ID：{record_id}配置已被删除，无法修改")
+            if str(frontend_project_id) != str(existing.project_id):
+                raise ParameterException(message="应用ID不匹配，请检查")
+
+            expected_type = enum_field_value(existing.config_type)
+            if expected_type != config_type:
+                raise ParameterException(
+                    message=f"类型不匹配，记录类型为{expected_type}，请求类型为{config_type}"
+                )
+
+            operator = self._resolve_operator(config_in)
+            env_name = (data_dict.get("env") or "").upper()
+            env_enum = await self._get_or_create_env_enum(
+                project_id=int(existing.project_id),
+                env_name=env_name,
+                env_type=env_type,
+                user=operator,
+            )
+            mapped = self._map_typed_config_fields(
+                env_type,
+                {**data_dict, "env": env_name, "maintainer": data_dict.get("maintainer") or operator},
+            )
+            # 更新不改写创建人
+            mapped.pop("created_user", None)
+
+            name_dup = await self.model.filter(
+                project_id=existing.project_id,
+                env_id=env_enum.id,
+                config_name=mapped["config_name"],
+                config_type=config_type,
+                state=0,
+            ).exclude(id=record_id).first()
+            if name_dup:
+                raise DataAlreadyExistsException(message="当前应用+环境下已经存在相同的配置名称，不能重复新增")
+
+            await self._assert_host_unique(
+                project_id=existing.project_id,
+                env_id=env_enum.id,
+                config_type=config_type,
+                env_type=env_type,
+                mapped=mapped,
+                exclude_id=record_id,
+            )
+
+            update_dict = {**mapped, "env_id": env_enum.id}
+            instance = await self.update(id=record_id, obj_in=update_dict)
+            return self._serialize_typed_config(instance, env_name, env_type)
+        except (DataAlreadyExistsException, ParameterException, NotFoundException):
+            raise
+        except Exception as e:
+            error_message = f"修改环境配置失败, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise NotFoundException(message=error_message) from e
-        except IntegrityError as e:
-            error_message: str = f"更新配置信息异常, 违反约束规则: {e}"
+            raise ParameterException(message=error_message) from e
+
+    async def delete_config(self, config_in: EnvConfigDelete) -> Dict[str, Any]:
+        """
+        按节点类型软删除环境配置。
+
+        :param config_in: 删除APP/FILE/DB入参（id + env_type）
+        :return: 配置响应字典
+        """
+        try:
+            record_id = config_in.id
+            env_type = config_in.env_type
+            config_type = resolve_config_type(env_type)
+            existing = await self.model.filter(id=record_id).first()
+            if not existing:
+                raise NotFoundException(message=f"未找到ID为{record_id}的配置记录")
+            expected_type = enum_field_value(existing.config_type)
+            if expected_type != config_type:
+                raise ParameterException(message=f"类型不匹配，记录类型为{expected_type}，请求类型为{env_type}")
+            env_row = await AutoTestApiEnvEnumInfo.filter(id=existing.env_id).first()
+            env_name = env_row.env_name if env_row else ""
+            from services.ctx import get_current_username
+            # soft_delete显式入参优先于CTX：有登录上下文时不传，保证以当前用户为准
+            instance = await self.soft_delete(
+                id=record_id,
+                updated_user=None if get_current_username() else config_in.updated_user,
+            )
+            return self._serialize_typed_config(instance, env_name, env_type)
+        except (ParameterException, NotFoundException):
+            raise
+        except Exception as e:
+            error_message = f"删除环境配置失败, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise DataBaseStorageException(message=error_message) from e
-
-    async def delete_config(self, config_id: Optional[int] = None, config_code: Optional[str] = None) -> AutoTestApiEnvConfigInfo:
-        """
-        软删除环境配置。
-
-        :param config_id: 配置主键，与config_code二选一
-        :param config_code: 配置标识代码，与config_id二选一
-        :return: 软删除后的配置实例
-        :raises ParameterException: config_id与config_code均未传
-        :raises NotFoundException: 配置不存在
-        """
-        if not config_id and not config_code:
-            error_message: str = "删除配置信息失败, 参数[config_id]或[config_code]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-        if config_id:
-            instance = await self.get_by_id(config_id=config_id, on_error=True, state__not=1)
-        else:
-            instance = await self.get_by_code(config_code=config_code, on_error=True, state__not=1)
-
-        instance.state = 1
-        await instance.save()
-        return instance
+            raise ParameterException(message=error_message) from e
 
     async def delete_configs(self, config_in: AutoTestApiConfigDelete) -> int:
         """
-        根据ID或code列表批量软删除环境配置；逐条复用单删校验。
+        根据ID或code列表批量软删除环境配置。
 
-        :param config_in: 环境配置删除schema
+        :param config_in: 环境配置批量删除schema
         :return: 更新条数
         :raises ParameterException: config_ids与config_codes均未传
         :raises NotFoundException: 配置不存在
@@ -277,7 +328,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 targets.append(await self.get_by_code(config_code=ccode, on_error=True, state__not=1))
 
         for instance in targets:
-            await self.delete_config(config_id=instance.id)
+            await self.soft_delete(id=instance.id)
 
         return len(targets)
 
@@ -392,6 +443,44 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         names = await stmt.values_list("config_name", flat=True)
         return sorted(set(names))
 
+    def _env_type_from_schema(
+            self,
+            config_in: Union[
+                APPEnvConfigCreate, FILEEnvConfigCreate, DBEnvConfigCreate,
+                APPEnvConfigUpdate, FILEEnvConfigUpdate, DBEnvConfigUpdate,
+            ],
+    ) -> int:
+        """
+        根据 typed schema 推断节点类型。
+
+        :param config_in: APP/FILE/DB 创建或更新入参
+        :return: 1=APP, 2=FILE, 3=DB
+        """
+        if isinstance(config_in, (APPEnvConfigCreate, APPEnvConfigUpdate)):
+            return 1
+        if isinstance(config_in, (FILEEnvConfigCreate, FILEEnvConfigUpdate)):
+            return 2
+        if isinstance(config_in, (DBEnvConfigCreate, DBEnvConfigUpdate)):
+            return 3
+        raise ParameterException(message="不支持的环境配置入参类型")
+
+    def _resolve_operator(self, config_in: Any) -> str:
+        """
+        解析操作人：登录上下文优先，其次 schema 的 created/updated_user/maintainer。
+
+        :param config_in: 入参对象
+        :return: 大写用户名（最多16位）
+        """
+        from services.ctx import get_current_username
+        username = get_current_username()
+        if username:
+            return username
+        for attr in ("created_user", "updated_user", "maintainer"):
+            val = getattr(config_in, attr, None)
+            if isinstance(val, str) and val.strip():
+                return val.strip().upper()[:16]
+        return "ADMIN"
+
     def _map_typed_config_fields(self, env_type: int, data_dict: dict) -> Dict[str, Any]:
         """
         将按节点类型拆分的入参映射为 EnvConfig 落库字段。
@@ -403,8 +492,8 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         fields: Dict[str, Any] = {
             "config_name": data_dict["config_name"],
             "config_desc": data_dict.get("remark"),
-            "created_user": data_dict.get("maintainer"),
-            "updated_user": data_dict.get("maintainer"),
+            "created_user": data_dict.get("created_user") or data_dict.get("maintainer"),
+            "updated_user": data_dict.get("updated_user") or data_dict.get("maintainer"),
         }
         if env_type == 1:
             fields["config_host"] = data_dict["env_host"]
@@ -539,185 +628,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                     message="当前应用+环境下，数据库名称+IP+端口重复，不能重复新增"
                 )
             raise DataAlreadyExistsException(message="当前应用+环境下，IP+端口重复，不能重复新增")
-
-    async def create_config_by_env_type(
-            self,
-            env_type: int,
-            data_dict: dict,
-            user: str = "admin",
-    ) -> Dict[str, Any]:
-        """
-        按节点类型新增环境配置。
-
-        :param env_type: 1=APP, 2=FILE, 3=DB
-        :param data_dict: 对应类型创建入参字典
-        :param user: 操作人
-        :return: 配置响应字典
-        """
-        try:
-            config_type = resolve_config_type(env_type)
-            project_id = int(data_dict["env_info_id"])
-            config_name = data_dict["config_name"]
-            env_name = (data_dict.get("env") or "").upper()
-            payload = {**data_dict, "env": env_name, "maintainer": data_dict.get("maintainer") or user}
-
-            await AutoTestApiProjectCrud().get_by_id(project_id=project_id, on_error=True, state__not=1)
-            env_enum = await self._get_or_create_env_enum(
-                project_id=project_id,
-                env_name=env_name,
-                env_type=env_type,
-                user=user,
-            )
-            mapped = self._map_typed_config_fields(env_type, payload)
-
-            existing = await self.model.filter(
-                project_id=project_id,
-                env_id=env_enum.id,
-                config_name=config_name,
-                config_type=config_type,
-            ).first()
-            if existing:
-                if existing.state == 0:
-                    raise DataAlreadyExistsException(
-                        message=f"配置:{config_name}已存在，当前应用+环境下配置名称唯一，不能重复新增"
-                    )
-                for key, value in mapped.items():
-                    setattr(existing, key, value)
-                existing.state = 0
-                existing.config_type = config_type
-                existing.updated_user = user
-                await existing.save()
-                return self._serialize_typed_config(existing, env_name, env_type)
-
-            await self._assert_host_unique(
-                project_id=project_id,
-                env_id=env_enum.id,
-                config_type=config_type,
-                env_type=env_type,
-                mapped=mapped,
-            )
-            instance = await self.model.create(
-                project_id=project_id,
-                env_id=env_enum.id,
-                config_type=config_type,
-                state=0,
-                **mapped,
-            )
-            return self._serialize_typed_config(instance, env_name, env_type)
-        except (DataAlreadyExistsException, ParameterException, NotFoundException):
-            raise
-        except Exception as e:
-            error_message = f"新增环境配置失败, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-
-    async def update_config_by_env_type(self, env_type: int, data_dict: dict, user: str = "admin") -> Dict[str, Any]:
-        """
-        按节点类型修改环境配置。
-
-        :param env_type: 1=APP, 2=FILE, 3=DB
-        :param data_dict: 对应类型更新入参字典
-        :param user: 操作人
-        :return: 配置响应字典
-        """
-        try:
-            config_type = resolve_config_type(env_type)
-            record_id = data_dict.get("id")
-            if not record_id:
-                raise ParameterException(message="缺少主键ID参数")
-            frontend_project_id = data_dict.get("project_id")
-            if frontend_project_id is None or frontend_project_id == "":
-                raise ParameterException(message="缺少应用ID参数")
-
-            existing = await self.model.filter(id=record_id).first()
-            if not existing:
-                raise NotFoundException(message=f"未找到ID为：{record_id}的配置记录")
-            if existing.state == 1:
-                raise ParameterException(message=f"该ID：{record_id}配置已被删除，无法修改")
-            if str(frontend_project_id) != str(existing.project_id):
-                raise ParameterException(message="应用ID不匹配，请检查")
-
-            expected_type = enum_field_value(existing.config_type)
-            if expected_type != config_type:
-                raise ParameterException(
-                    message=f"类型不匹配，记录类型为{expected_type}，请求类型为{config_type}"
-                )
-
-            env_name = (data_dict.get("env") or "").upper()
-            env_enum = await self._get_or_create_env_enum(
-                project_id=int(existing.project_id),
-                env_name=env_name,
-                env_type=env_type,
-                user=user,
-            )
-            mapped = self._map_typed_config_fields(
-                env_type,
-                {**data_dict, "env": env_name, "maintainer": data_dict.get("maintainer") or user},
-            )
-
-            name_dup = await self.model.filter(
-                project_id=existing.project_id,
-                env_id=env_enum.id,
-                config_name=mapped["config_name"],
-                config_type=config_type,
-                state=0,
-            ).exclude(id=record_id).first()
-            if name_dup:
-                raise DataAlreadyExistsException(message="当前应用+环境下已经存在相同的配置名称，不能重复新增")
-
-            await self._assert_host_unique(
-                project_id=existing.project_id,
-                env_id=env_enum.id,
-                config_type=config_type,
-                env_type=env_type,
-                mapped=mapped,
-                exclude_id=record_id,
-            )
-
-            existing.env_id = env_enum.id
-            for key, value in mapped.items():
-                setattr(existing, key, value)
-            existing.updated_user = user
-            await existing.save()
-            return self._serialize_typed_config(existing, env_name, env_type)
-        except (DataAlreadyExistsException, ParameterException, NotFoundException):
-            raise
-        except Exception as e:
-            error_message = f"修改环境配置失败, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
-
-    async def delete_config_by_env_type(self, record_id: int, env_type: int, user: str = "admin") -> Dict[str, Any]:
-        """
-        按节点类型软删除环境配置。
-
-        :param record_id: 配置主键
-        :param env_type: 节点类型
-        :param user: 操作人
-        :return: 配置响应字典
-        """
-        try:
-            config_type = resolve_config_type(env_type)
-            existing = await self.model.filter(id=record_id).first()
-            if not existing:
-                raise NotFoundException(message=f"未找到ID为{record_id}的配置记录")
-            expected_type = enum_field_value(existing.config_type)
-            if expected_type != config_type:
-                raise ParameterException(
-                    message=f"类型不匹配，记录类型为{expected_type}，请求类型为{env_type}"
-                )
-            env_row = await AutoTestApiEnvEnumInfo.filter(id=existing.env_id).first()
-            env_name = env_row.env_name if env_row else ""
-            existing.state = 1
-            existing.updated_user = user
-            await existing.save()
-            return self._serialize_typed_config(existing, env_name, env_type)
-        except (ParameterException, NotFoundException):
-            raise
-        except Exception as e:
-            error_message = f"删除环境配置失败, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message) from e
 
     async def get_config_list(
             self,

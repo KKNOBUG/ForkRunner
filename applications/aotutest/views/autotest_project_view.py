@@ -253,9 +253,9 @@ async def search_projects(
             for test_owner in project_in.project_test_owners:
                 q |= Q(project_test_owners__contains=[test_owner])
         if project_in.created_user:
-            q &= Q(created_user__contains=project_in.created_user)
+            q &= Q(created_user=project_in.created_user)
         if project_in.updated_user:
-            q &= Q(updated_user__contains=project_in.updated_user)
+            q &= Q(updated_user=project_in.updated_user)
         q &= Q(state=project_in.state)
         total, instances = await services.project_curd.select_projects(
             search=q,

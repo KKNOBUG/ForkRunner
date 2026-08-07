@@ -99,7 +99,7 @@ class StepVariablesBase(BaseModel):
     desc: Optional[str] = Field(None, max_length=2048, description="会话变量(描述)")
 
 
-# yangkai 前端固定传 APP/FILE/DB；归一为本项目枚举 api/file/database。REDIS 为本项目扩展。
+# 前端固定传 APP/FILE/DB；归一为本项目枚举 api/file/database。REDIS 为本项目扩展。
 _STEPS_EXECUTE_CONFIG_TYPE_ALIASES: Dict[str, str] = {
     "APP": AutoTestConfigNodeType.API.value,
     "FILE": AutoTestConfigNodeType.FILE.value,

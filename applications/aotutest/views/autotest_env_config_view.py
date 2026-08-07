@@ -33,7 +33,6 @@ from core.responses import (
     DataAlreadyExistsResponse
 )
 from enums import AutoTestConfigNodeType
-from services import get_current_username
 
 autotest_env_config = APIRouter()
 
@@ -106,9 +105,9 @@ async def search_env_configs(
         if config_in.database_type:
             q &= Q(database_type=config_in.database_type.value)
         if config_in.created_user:
-            q &= Q(created_user__iexact=config_in.created_user)
+            q &= Q(created_user=config_in.created_user)
         if config_in.updated_user:
-            q &= Q(updated_user__iexact=config_in.updated_user)
+            q &= Q(updated_user=config_in.updated_user)
         q &= Q(state=config_in.state)
         total, instances = await services.env_config_curd.select_config(
             search=q,
@@ -230,9 +229,7 @@ async def create_app_config(
 ):
     """新增 APP 类型环境配置。"""
     try:
-        result = await services.env_config_curd.create_config_by_env_type(
-            env_type=1, data_dict=config_in.model_dump(), user=get_current_username()
-        )
+        result = await services.env_config_curd.create_config(config_in)
         return SuccessResponse(message="新增APP配置成功", data=result, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -252,9 +249,7 @@ async def create_file_config(
 ):
     """新增 FILE 类型环境配置。"""
     try:
-        result = await services.env_config_curd.create_config_by_env_type(
-            env_type=2, data_dict=config_in.model_dump(), user=get_current_username()
-        )
+        result = await services.env_config_curd.create_config(config_in)
         return SuccessResponse(message="新增FILE配置成功", data=result, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -274,9 +269,7 @@ async def create_db_config(
 ):
     """新增 DB 类型环境配置。"""
     try:
-        result = await services.env_config_curd.create_config_by_env_type(
-            env_type=3, data_dict=config_in.model_dump(), user=get_current_username()
-        )
+        result = await services.env_config_curd.create_config(config_in)
         return SuccessResponse(message="新增DB配置成功", data=result, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -322,9 +315,7 @@ async def update_app_config(
 ):
     """修改 APP 类型环境配置。"""
     try:
-        result = await services.env_config_curd.update_config_by_env_type(
-            env_type=1, data_dict=config_in.model_dump(), user=get_current_username()
-        )
+        result = await services.env_config_curd.update_config(config_in)
         return SuccessResponse(message="修改APP配置成功", data=result, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -344,9 +335,7 @@ async def update_file_config(
 ):
     """修改 FILE 类型环境配置。"""
     try:
-        result = await services.env_config_curd.update_config_by_env_type(
-            env_type=2, data_dict=config_in.model_dump(), user=get_current_username()
-        )
+        result = await services.env_config_curd.update_config(config_in)
         return SuccessResponse(message="修改FILE配置成功", data=result, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -366,9 +355,7 @@ async def update_db_config(
 ):
     """修改 DB 类型环境配置。"""
     try:
-        result = await services.env_config_curd.update_config_by_env_type(
-            env_type=3, data_dict=config_in.model_dump(), user=get_current_username()
-        )
+        result = await services.env_config_curd.update_config(config_in)
         return SuccessResponse(message="修改DB配置成功", data=result, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -392,9 +379,7 @@ async def delete_env_config(
     路径使用 /config/delete，避免与现有批量 POST /delete 冲突。
     """
     try:
-        result = await services.env_config_curd.delete_config_by_env_type(
-            record_id=config_in.id, env_type=config_in.env_type, user=get_current_username()
-        )
+        result = await services.env_config_curd.delete_config(config_in)
         return SuccessResponse(message="删除配置成功", data=result, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))

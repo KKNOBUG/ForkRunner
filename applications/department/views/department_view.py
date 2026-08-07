@@ -34,21 +34,20 @@ dept = APIRouter()
 @dept.post("/create", summary="新增部门信息")
 async def create_department(
         department_in: DepartmentCreate = Body(..., description="部门信息"),
-        current_user: User = DependAuth,
+        _current_user: User = DependAuth,
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
     新增部门信息。
 
     :param department_in: 部门入参
-    :param current_user: 当前登录用户
+    :param _current_user: 当前登录用户（写入请求上下文供自动填充创建人）
     :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
     try:
         instance = await dept_crud.create_department(
             department_in=department_in,
-            created_user=current_user.username,
         )
         data = await instance.to_dict()
         LOGGER.info(f"新增部门成功, 结果明细: {data}")
@@ -110,21 +109,20 @@ async def batch_delete_departments(
 @dept.post("/update", summary="更新部门信息", description="根据id更新部门信息")
 async def update_department(
         department_in: DepartmentUpdate = Body(..., description="部门信息"),
-        current_user: User = DependAuth,
+        _current_user: User = DependAuth,
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
     更新部门信息。
 
     :param department_in: 部门入参
-    :param current_user: 当前登录用户
+    :param _current_user: 当前登录用户（写入请求上下文供自动填充更新人）
     :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
     try:
         instance = await dept_crud.update_department(
             department_in=department_in,
-            updated_user=current_user.username,
         )
         data = await instance.to_dict()
         LOGGER.info(f"更新部门成功, 结果明细: {data}")
@@ -216,9 +214,9 @@ async def search_departments(
         else:
             q &= Q(is_deleted=False)
         if created_user:
-            q &= Q(created_user__contains=created_user)
+            q &= Q(created_user=created_user)
         if updated_user:
-            q &= Q(updated_user__contains=updated_user)
+            q &= Q(updated_user=updated_user)
 
         total, instances = await dept_crud.list(
             page=page, page_size=page_size, search=q, order=order

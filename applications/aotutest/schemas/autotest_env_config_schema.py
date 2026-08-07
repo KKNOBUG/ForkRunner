@@ -8,7 +8,7 @@ from enums import AutoTestDataBaseType, AutoTestConfigNodeType
 
 
 class AutoTestApiConfigBase(BaseModel):
-    """环境配置公共字段（创建/更新/查询共用）。"""
+    """环境配置公共字段。"""
 
     env_id: Optional[int] = Field(None, ge=1, description="环境ID")
     project_id: Optional[int] = Field(None, ge=1, description="应用ID")
@@ -93,6 +93,7 @@ class APPEnvConfigCreate(BaseModel):
     maintainer: str = Field(..., description="维护人", max_length=128)
     remark: Optional[str] = Field(None, description="备注", max_length=256)
     operation: int = Field(1, description="操作类型：1-新增")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class FILEEnvConfigCreate(BaseModel):
@@ -109,6 +110,7 @@ class FILEEnvConfigCreate(BaseModel):
     maintainer: str = Field(..., description="维护人", max_length=128)
     remark: Optional[str] = Field(None, description="备注", max_length=256)
     operation: int = Field(1, description="操作类型：1-新增")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class DBEnvConfigCreate(BaseModel):
@@ -126,6 +128,7 @@ class DBEnvConfigCreate(BaseModel):
     maintainer: str = Field(..., description="维护人", max_length=128)
     remark: Optional[str] = Field(None, description="备注", max_length=256)
     operation: int = Field(1, description="操作类型：1-新增")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class APPEnvConfigUpdate(BaseModel):
@@ -140,6 +143,7 @@ class APPEnvConfigUpdate(BaseModel):
     maintainer: str = Field(..., description="维护人", max_length=128)
     remark: Optional[str] = Field(None, description="备注", max_length=256)
     operation: int = Field(2, description="操作类型：2-修改")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class FILEEnvConfigUpdate(BaseModel):
@@ -157,6 +161,7 @@ class FILEEnvConfigUpdate(BaseModel):
     maintainer: str = Field(..., description="维护人", max_length=128)
     remark: Optional[str] = Field(None, description="备注", max_length=256)
     operation: int = Field(2, description="操作类型：2-修改")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class DBEnvConfigUpdate(BaseModel):
@@ -175,6 +180,7 @@ class DBEnvConfigUpdate(BaseModel):
     maintainer: str = Field(..., description="维护人", max_length=128)
     remark: Optional[str] = Field(None, description="备注", max_length=256)
     operation: int = Field(2, description="操作类型：2-修改")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class EnvConfigDelete(BaseModel):
@@ -182,6 +188,7 @@ class EnvConfigDelete(BaseModel):
 
     id: int = Field(..., description="配置主键ID")
     env_type: int = Field(..., description="节点类型")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class TestDBConnectionRequest(BaseModel):

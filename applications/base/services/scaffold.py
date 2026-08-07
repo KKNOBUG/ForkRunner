@@ -853,9 +853,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         async with in_transaction() as connection:
             # 创建主记录
             if isinstance(obj_in, Dict):
-                obj_dict = obj_in
+                obj_dict = dict(obj_in)
             else:
                 obj_dict = obj_in.model_dump(warnings=False)
+            self._fill_created_user(obj_dict)
             obj = self.model(**obj_dict)
             await obj.save(using_db=connection)
 
@@ -863,11 +864,24 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             if related_data:
                 for field_name, items in related_data.items():
                     related_manager = getattr(obj, field_name)
+                    related_model = (
+                        getattr(related_manager, "remote_model", None)
+                        or getattr(related_manager, "model", None)
+                    )
                     for item in items:
                         if isinstance(item, Dict):
-                            await related_manager.create(**item, using_db=connection)
+                            item_dict = dict(item)
                         else:
-                            await related_manager.create(**item.model_dump(warnings=False), using_db=connection)
+                            item_dict = item.model_dump(warnings=False)
+                        # 关联模型若含维护字段，同样按当前用户补齐
+                        if related_model is None or hasattr(related_model, "created_user"):
+                            from services.ctx import get_current_username
+                            username = get_current_username()
+                            if username and not item_dict.get("created_user"):
+                                item_dict["created_user"] = username
+                            elif isinstance(item_dict.get("created_user"), str) and item_dict["created_user"].strip():
+                                item_dict["created_user"] = item_dict["created_user"].strip().upper()
+                        await related_manager.create(**item_dict, using_db=connection)
 
             LOGGER.info(f"事务创建成功: {self.model.__name__}(id={obj.id})")
             return obj
@@ -891,9 +905,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             # 更新主记录
             obj = await self.get_or_error(id=id)
             if isinstance(obj_in, Dict):
-                obj_dict = obj_in
+                obj_dict = dict(obj_in)
             else:
                 obj_dict = obj_in.model_dump(exclude_unset=True, exclude={"id"})
+            self._fill_updated_user(obj_dict)
             obj = obj.update_from_dict(obj_dict)
             await obj.save(using_db=connection)
 
@@ -901,10 +916,21 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             if related_updates:
                 for field_name, items in related_updates.items():
                     related_manager = getattr(obj, field_name)
+                    related_model = (
+                        getattr(related_manager, "remote_model", None)
+                        or getattr(related_manager, "model", None)
+                    )
                     for item in items:
                         item_id = item.get("id")
-                        item_data = item.get("data", {})
+                        item_data = dict(item.get("data", {}) or {})
                         if item_id:
+                            if related_model is None or hasattr(related_model, "updated_user"):
+                                from services.ctx import get_current_username
+                                username = get_current_username()
+                                if username:
+                                    item_data["updated_user"] = username
+                                elif isinstance(item_data.get("updated_user"), str) and item_data["updated_user"].strip():
+                                    item_data["updated_user"] = item_data["updated_user"].strip().upper()
                             await related_manager.filter(id=item_id).update(**item_data, using_db=connection)
 
             LOGGER.info(f"事务更新成功: {self.model.__name__}(id={id})")

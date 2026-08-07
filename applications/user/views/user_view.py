@@ -84,7 +84,7 @@ async def delete_user(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@user_secure.post("/deletes", summary="批量删除用户", description="根据id列表批量删除用户信息")
+@user_secure.post("/deletes", summary="删除用户(批量)", description="根据id列表批量删除用户信息")
 async def batch_delete_users(
         user_in: UserBatchDelete = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),

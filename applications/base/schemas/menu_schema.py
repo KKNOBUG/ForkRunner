@@ -3,6 +3,7 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
+from applications.base.services.scaffold import UpperStr
 from enums import MenuType
 
 
@@ -37,6 +38,7 @@ class MenuCreate(BaseModel):
     component: str = Field(default="Layout", max_length=128, description="组件")
     keepalive: Optional[bool] = Field(default=True, description="存活")
     redirect: Optional[str] = Field(default=None, max_length=128, description="重定向")
+    created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
 
 
 class MenuUpdate(BaseModel):
@@ -53,3 +55,4 @@ class MenuUpdate(BaseModel):
     component: Optional[str] = Field(default=None, max_length=128, description="组件")
     keepalive: Optional[bool] = Field(default=None, description="存活")
     redirect: Optional[str] = Field(default=None, max_length=128, description="重定向")
+    updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")

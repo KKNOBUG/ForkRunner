@@ -15,6 +15,7 @@ class DepartmentCreate(BaseModel):
     description: Optional[str] = Field(default=None, description="部门描述")
     order: int = Field(default=0, description="排序")
     parent_id: int = Field(default=0, description="父部门ID")
+    created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
 
     def create_dict(self):
         """

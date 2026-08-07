@@ -211,9 +211,9 @@ async def search_tasks(
         if task_in.task_project:
             q &= Q(task_project=task_in.task_project)
         if task_in.created_user:
-            q &= Q(created_user__iexact=task_in.created_user)
+            q &= Q(created_user=task_in.created_user)
         if task_in.updated_user:
-            q &= Q(updated_user__iexact=task_in.updated_user)
+            q &= Q(updated_user=task_in.updated_user)
         if task_in.env_id:
             q &= Q(related_cases_env_id__contains=[task_in.env_id])
         if task_in.date_from:

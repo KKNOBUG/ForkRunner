@@ -232,9 +232,9 @@ async def search_tags(
         if tag_in.tag_name:
             q &= Q(tag_name__contains=tag_in.tag_name)
         if tag_in.created_user:
-            q &= Q(created_user__iexact=tag_in.created_user)
+            q &= Q(created_user=tag_in.created_user)
         if tag_in.updated_user:
-            q &= Q(updated_user__iexact=tag_in.updated_user)
+            q &= Q(updated_user=tag_in.updated_user)
         q &= Q(state=tag_in.state)
         total, instances = await services.tag_curd.select_tags(
             search=q,

@@ -220,9 +220,9 @@ async def search_step_details(
         if detail_in.detail_id:
             q &= Q(id=detail_in.detail_id)
         if detail_in.created_user:
-            q &= Q(created_user__iexact=detail_in.created_user)
+            q &= Q(created_user=detail_in.created_user)
         if detail_in.updated_user:
-            q &= Q(updated_user__iexact=detail_in.updated_user)
+            q &= Q(updated_user=detail_in.updated_user)
         q &= Q(state=detail_in.state)
         total, instances = await services.detail_curd.select_details(
             search=q,

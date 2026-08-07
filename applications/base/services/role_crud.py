@@ -93,12 +93,11 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         """
         return await self.model.filter(name=name, **kwargs).exists()
 
-    async def create_role(self, role_in: RoleCreate, created_user: Optional[str] = None) -> Role:
+    async def create_role(self, role_in: RoleCreate) -> Role:
         """
-        创建角色：校验code/name唯一性后落库，可选写入创建人。
+        创建角色：校验code/name唯一性后落库。
 
         :param role_in: 新增角色入参
-        :param created_user: 创建人；非None时覆盖写入created_user
         :return: 新建的角色实例
         :raises DataAlreadyExistsException: code或name已存在
         """
@@ -111,9 +110,38 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
             raise DataAlreadyExistsException(message=error_message)
 
         instance = await self.create(role_in)
-        if created_user is not None:
-            instance.created_user = created_user
-            await instance.save(update_fields=["created_user"])
+        return instance
+
+    async def update_role(self, role_in: RoleUpdate) -> Role:
+        """
+        根据角色ID更新角色基础字段（不含菜单/路由绑定）。
+
+        :param role_in: 更新入参（含可选 updated_user；有登录上下文时由服务端覆盖）
+        :return: 更新后的角色实例
+        :raises NotFoundException: 角色不存在
+        :raises DataAlreadyExistsException: code或name与其它角色冲突
+        """
+        role_id = role_in.id
+        await self.get_by_id(role_id=role_id, on_error=True)
+
+        update_dict = role_in.update_dict()
+        code = update_dict.get("code")
+        name = update_dict.get("name")
+        if code and await self.model.filter(code=code).exclude(id=role_id).exists():
+            error_message: str = f"更新角色信息失败, 记录[code={code}]已存在"
+            LOGGER.error(error_message)
+            raise DataAlreadyExistsException(message=error_message)
+        if name and await self.model.filter(name=name).exclude(id=role_id).exists():
+            error_message: str = f"更新角色信息失败, 记录[name={name}]已存在"
+            LOGGER.error(error_message)
+            raise DataAlreadyExistsException(message=error_message)
+
+        try:
+            instance = await self.update(id=role_id, obj_in=role_in)
+        except DoesNotExist as e:
+            error_message: str = f"更新角色信息失败, 记录[id={role_id}]不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message) from e
         return instance
 
     async def update_roles(self, role: Role, menu_ids: List[int], router_infos: List[dict]) -> None:
@@ -146,9 +174,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
             method = (item or {}).get("method")
             router_obj = await Router.filter(path=path, method=method).first()
             if not router_obj:
-                error_message: str = (
-                    f"更新角色权限失败, 路由[path={path}, method={method}]不存在"
-                )
+                error_message: str = f"更新角色权限失败, 路由[path={path}, method={method}]不存在"
                 LOGGER.error(error_message)
                 raise NotFoundException(message=error_message)
             await role.routers.add(router_obj)

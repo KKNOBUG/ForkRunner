@@ -64,6 +64,7 @@ class EnvCreate(BaseModel):
     project_id: int = Field(..., description="应用ID", ge=1)
     env_name: str = Field(..., description="环境名称", max_length=64)
     env_type: int = Field(..., description="节点类型：1:APP,2:FILE,3:DB")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class EnvEditRequest(BaseModel):
@@ -73,6 +74,7 @@ class EnvEditRequest(BaseModel):
     project_id: int = Field(..., description="应用ID")
     env_name: str = Field(..., description="环境名称")
     env_type: int = Field(..., description="节点类型")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class EnvDeleteRequest(BaseModel):

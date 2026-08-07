@@ -12,10 +12,7 @@ class AutoTestApiTaskCreate(BaseModel):
 
     task_name: str = Field(..., max_length=255, description="任务名称")
     task_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
-    task_type: Optional[AutoTestTaskType] = Field(
-        AutoTestTaskType.AUTOTEST_API,
-        description="任务业务类型",
-    )
+    task_type: Optional[AutoTestTaskType] = Field(AutoTestTaskType.AUTOTEST_API, description="任务业务类型")
     task_project: int = Field(default=1, ge=1, description="任务所属应用")
     task_kwargs: Optional[Dict[str, Any]] = Field(None, description="轻量扩展参数")
     cases_execute_config: Optional[Dict[str, Any]] = Field(None, description="根据用例ID的执行配置")

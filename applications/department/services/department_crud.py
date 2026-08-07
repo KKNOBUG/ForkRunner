@@ -2,7 +2,6 @@
 import datetime
 from typing import Optional, List
 
-from tortoise.exceptions import DoesNotExist
 from tortoise.expressions import Q
 
 from applications.base.services.scaffold import ScaffoldCrud
@@ -73,7 +72,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
     async def _validate_parent_id(self, parent_id: int, *, department_id: Optional[int] = None) -> None:
         """
-        部门最多两级：parent_id只能为 0 或顶级部门id。
+        部门最多两级：parent_id只能为0或顶级部门id。
         """
         if parent_id == 0:
             return
@@ -91,12 +90,11 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-    async def create_department(self, department_in: DepartmentCreate, created_user: Optional[str] = None) -> Department:
+    async def create_department(self, department_in: DepartmentCreate) -> Department:
         """
         创建部门：校验父级与唯一性，落库并写入闭包表。
 
         :param department_in: 新增部门入参
-        :param created_user: 可选，覆盖created_user字段
         :return: 新建的部门实例
         :raises ParameterException: 父级不合法
         :raises DataAlreadyExistsException: code或name已存在
@@ -111,9 +109,6 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             raise DataAlreadyExistsException(message=error_message)
 
         instance = await self.create(department_in)
-        if created_user is not None:
-            instance.created_user = created_user
-            await instance.save(update_fields=["created_user"])
         await self.update_dept_closure(instance)
         return instance
 
@@ -132,52 +127,45 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         await DeptStruct.filter(descendant=department_id).delete()
         return instance
 
-    async def update_department(self, department_in: DepartmentUpdate, updated_user: Optional[str] = None) -> Department:
+    async def update_department(self, department_in: DepartmentUpdate) -> Department:
         """
         更新部门：可变更父级(重建闭包表)及基础字段。
 
-        :param department_in: 更新入参
-        :param updated_user: 可选，写入updated_user
+        :param department_in: 更新部门入参
         :return: 更新后的部门实例
         :raises NotFoundException: 部门不存在
         :raises ParameterException: 父级变更不合法或含子部门的顶级部门不能降为子部门
         """
         department_id: int = department_in.id
-        try:
-            instance = await self.get_by_id(department_id=department_id)
-            new_parent_id = (
-                department_in.parent_id
-                if department_in.parent_id is not None
-                else instance.parent_id
-            )
-            await self._validate_parent_id(new_parent_id, department_id=department_id)
-            if new_parent_id != instance.parent_id:
-                child_count = await self.model.filter(
-                    parent_id=department_id, is_deleted=False
-                ).count()
-                if child_count > 0 and new_parent_id != 0:
-                    error_message: str = "更新部门信息失败, 含有子部门的顶级部门不能设置为子部门"
-                    LOGGER.error(error_message)
-                    raise ParameterException(message=error_message)
-                await DeptStruct.filter(ancestor=instance.id).delete()
-                await DeptStruct.filter(descendant=instance.id).delete()
-                instance.parent_id = new_parent_id
-                await self.update_dept_closure(instance)
-            # 更新部门信息
-            update_dict = department_in.model_dump(exclude_unset=True, exclude={"id"})
-            if updated_user is not None:
-                update_dict["updated_user"] = updated_user
-            await instance.update_from_dict(update_dict)
-            await instance.save()
-            return instance
-        except DoesNotExist as e:
-            error_message: str = f"更新部门信息失败, 记录[id={department_id}]不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
+        instance = await self.get_by_id(department_id=department_id)
+        new_parent_id = (
+            department_in.parent_id
+            if department_in.parent_id is not None
+            else instance.parent_id
+        )
+        await self._validate_parent_id(new_parent_id, department_id=department_id)
+
+        parent_changed = new_parent_id != instance.parent_id
+        if parent_changed:
+            child_count = await self.model.filter(
+                parent_id=department_id, is_deleted=False
+            ).count()
+            if child_count > 0 and new_parent_id != 0:
+                error_message: str = "更新部门信息失败, 含有子部门的顶级部门不能设置为子部门"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
+            # 先清旧闭包，字段更新后再按新parent_id重建
+            await DeptStruct.filter(ancestor=instance.id).delete()
+            await DeptStruct.filter(descendant=instance.id).delete()
+
+        instance = await self.update(id=department_id, obj_in=department_in)
+        if parent_changed:
+            await self.update_dept_closure(instance)
+        return instance
 
     async def get_dept_tree(self, name: Optional[str] = None) -> List[dict]:
         """
-        构建未删除部门的树形结构(从parent_id=0 递归)。
+        构建未删除部门的树形结构(从parent_id=0递归)。
 
         :param name: 可选，根据名称模糊过滤后再建树
         :return: 顶级部门节点列表，每节点含children
@@ -240,7 +228,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
     async def delete_departments(self, department_ids: Optional[List[int]]) -> int:
         """
-        根据ID列表软删除部门(与单笔delete_department行为一致)。
+        根据ID列表软删除部门。
 
         :param department_ids: 部门ID列表
         :return: 实际删除成功的条数

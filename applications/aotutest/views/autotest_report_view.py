@@ -220,9 +220,9 @@ async def search_reports(
         if report_in.case_state is not None:
             q &= Q(case_state=report_in.case_state)
         if report_in.created_user:
-            q &= Q(created_user__iexact=report_in.created_user)
+            q &= Q(created_user=report_in.created_user)
         if report_in.updated_user:
-            q &= Q(updated_user__iexact=report_in.updated_user)
+            q &= Q(updated_user=report_in.updated_user)
         if report_in.step_pass_ratio:
             q &= Q(step_pass_ratio__gte=report_in.step_pass_ratio)
         # 执行时间范围：根据case_st_time筛选，仅日期时补全为当天起止

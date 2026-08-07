@@ -1715,7 +1715,7 @@ async def execute_step_tree(
         steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = exec_in.steps_execute_config
         selected_dataset_names: Optional[List[str]] = exec_in.selected_dataset_names
 
-        # 与 yangkai 一致：无 steps → 运行模式；有 steps → 调试模式
+        # 无 steps → 运行模式；有 steps → 调试模式
         is_run_mode = case_id is not None and (steps is None or len(steps) == 0)
         is_debug_mode = case_id is not None and steps is not None and len(steps) > 0
         if not is_run_mode and not is_debug_mode:
@@ -1767,7 +1767,7 @@ async def execute_step_tree(
                         total=1,
                     )
 
-                # 参数化驱动：本项目按数据集同步循环执行（非 yangkai Celery 下发）
+                # 参数化驱动：本项目按数据集同步循环执行
                 details: List[Dict[str, Any]] = []
                 batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
                 for dataset_name in selected_dataset_names:
@@ -1893,7 +1893,6 @@ async def execute_step_tree(
         success_steps: int = statistics.get("success_steps", 0)
         failed_steps: int = statistics.get("failed_steps", 0)
         passed_ratio: float = statistics.get("passed_ratio", 0.0)
-        # 出参字段与 yangkai 调试响应对齐；batch_code/report_code 为本项目扩展
         result_data = {
             "total_steps": total_steps,
             "failed_steps": failed_steps,

@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import traceback
+from typing import Optional
 
 from fastapi import APIRouter, Body, Depends
 from fastapi.params import Query
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
-from typing import Optional
 
 from applications.base.dependencies import get_role_crud
 from applications.base.schemas.role_schema import (
@@ -39,19 +39,19 @@ role = APIRouter()
 @role.post("/create", summary="新增角色")
 async def create_role(
         role_in: RoleCreate = Body(..., description="角色信息"),
-        current_user: User = DependAuth,
+        _current_user: User = DependAuth,
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
     创建角色。
 
     :param role_in: 角色入参
-    :param current_user: 当前登录用户
+    :param _current_user: 当前登录用户（写入请求上下文供自动填充创建人）
     :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
     try:
-        instance = await role_crud.create_role(role_in=role_in, created_user=current_user.username)
+        instance = await role_crud.create_role(role_in=role_in)
         data: dict = await instance.to_dict()
         LOGGER.info(f"创建角色成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
@@ -115,24 +115,24 @@ async def batch_delete_roles(
 @role.post("/update", summary="更新角色", description="根据id更新角色信息")
 async def update_role(
         role_in: RoleUpdate = Body(..., description="角色信息"),
-        current_user: User = DependAuth,
+        _current_user: User = DependAuth,
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
     更新角色。
 
     :param role_in: 角色入参
-    :param current_user: 当前登录用户
+    :param _current_user: 当前登录用户（写入请求上下文供自动填充更新人）
     :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
     try:
-        update_dict = role_in.model_dump(exclude_unset=True, exclude={"id"})
-        update_dict["updated_user"] = current_user.username
-        instance = await role_crud.update(id=role_in.id, obj_in=update_dict)
+        instance = await role_crud.update_role(role_in=role_in)
         data: dict = await instance.to_dict()
         LOGGER.info(f"更新角色成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
     except IntegrityError as e:
         error_message: str = f"更新角色失败, 违反约束规则: {e}"
         LOGGER.error(f"{error_message}\n{traceback.format_exc()}")

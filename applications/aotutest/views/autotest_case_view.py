@@ -340,9 +340,9 @@ async def search_cases(
         if case_in.case_attr:
             q &= Q(case_attr=case_in.case_attr.value)
         if case_in.created_user:
-            q &= Q(created_user__iexact=case_in.created_user)
+            q &= Q(created_user=case_in.created_user)
         if case_in.updated_user:
-            q &= Q(updated_user__iexact=case_in.updated_user)
+            q &= Q(updated_user=case_in.updated_user)
         q &= Q(state=case_in.state)
         if case_in.step_type is not None or case_in.request_args_type is not None:
             matched_case_ids: Optional[List[int]] = await services.case_curd.get_case_ids_by_request_step(

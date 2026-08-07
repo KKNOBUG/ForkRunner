@@ -8,7 +8,7 @@ from enums import HTTPMethod
 
 
 class AuditBase(BaseModel):
-    """审计日志公共字段（创建/查询共用）。"""
+    """审计日志公共字段。"""
 
     user_id: Optional[int] = Field(default=None, description="用户ID")
     username: Optional[str] = Field(default=None, max_length=32, description="用户名称")

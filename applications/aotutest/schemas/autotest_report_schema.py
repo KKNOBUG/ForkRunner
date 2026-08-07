@@ -8,7 +8,7 @@ from enums import AutoTestReportType, AutoTestTaskStatus
 
 
 class AutoTestApiReportBase(BaseModel):
-    """测试报告公共字段（创建/更新共用）。"""
+    """测试报告公共字段。"""
 
     case_st_time: Optional[str] = Field(None, max_length=32, description="用例执行开始时间")
     case_ed_time: Optional[str] = Field(None, max_length=32, description="用例执行结束时间")

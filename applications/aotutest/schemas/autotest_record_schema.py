@@ -14,7 +14,7 @@ from enums import (
 
 
 class AutoTestApiRecordBase(BaseModel):
-    """任务执行观测记录公共字段（创建/更新共用）。"""
+    """任务执行观测记录公共字段。"""
 
     model_config = ConfigDict(extra="ignore")
 
