@@ -33,6 +33,14 @@ from applications.user.services.user_crud import UserCrud
 from configure import LOGGER
 from enums import MenuType
 
+# 初始化种子数据的创建人（管理员账号，大写）
+INIT_CREATED_USER = "ADMIN"
+
+
+async def _stamp_init_created_user(model) -> None:
+    """为本次初始化中尚未写入创建人的记录补齐 created_user=ADMIN。"""
+    await model.filter(created_user__isnull=True).update(created_user=INIT_CREATED_USER)
+
 
 async def init_database_role():
     role_crud = RoleCrud()
@@ -63,6 +71,7 @@ async def init_database_role():
             description="系统域只读，业务域仅查询与新增；禁止一切修改与删除",
         )
     )
+    await _stamp_init_created_user(Role)
     LOGGER.info(f"创建角色成功: {admin_role.name} (id: {admin_role.id}, code: {admin_role.code})")
     LOGGER.info(f"创建角色成功: {user_role.name} (id: {user_role.id}, code: {user_role.code})")
     LOGGER.info(f"创建角色成功: {guest_role.name} (id: {guest_role.id}, code: {guest_role.code})")
@@ -119,6 +128,7 @@ async def init_database_dept():
             LOGGER.info(f"创建部门成功: {dept.name} (id: {dept.id}, code: {dept.code})")
         except Exception as e:
             LOGGER.error(f"创建部门失败: {dept_in.name}, code: {dept_in.code}: {e}")
+    await _stamp_init_created_user(Department)
 
 
 async def init_database_user():
@@ -181,6 +191,8 @@ async def init_database_user():
             LOGGER.info(f"创建用户成功: {user.alias} (id: {user.id}, username: {user.username})")
         except Exception as e:
             LOGGER.error(f"创建用户失败: {user_in.alias}, username: {user_in.username}: {e}")
+    from applications.user.models.user_model import User
+    await _stamp_init_created_user(User)
 
 
 async def init_database_menu():
@@ -587,6 +599,7 @@ async def init_database_menu():
             redirect=""
         )
     )
+    await _stamp_init_created_user(Menu)
 
 
 async def init_database_router(app: FastAPI):
@@ -597,6 +610,8 @@ async def init_database_router(app: FastAPI):
 
     # 首次灌路由时角色可能尚未创建，关闭自动补绑；角色初始化阶段再完整绑定
     await router_crud.refresh_router(app, sync_role_bindings=False)
+    from applications.base.models.router_model import Router
+    await _stamp_init_created_user(Router)
 
 
 async def init_database_project():
@@ -614,7 +629,7 @@ async def init_database_project():
             project_developers=["admin"],
             project_test_owners=["tester"],
             project_testers=["tester", "guest"],
-            created_user="admin",
+            created_user=INIT_CREATED_USER,
             project_phase=None,
             project_current_month_env=None,
         )
@@ -649,8 +664,12 @@ async def init_database_tag():
         ),
     ]
     await tag_crud.model.bulk_create(
-        [AutoTestApiTagInfo(**tag.model_dump()) for tag in tag_data]
+        [
+            AutoTestApiTagInfo(**tag.model_dump(), created_user=INIT_CREATED_USER)
+            for tag in tag_data
+        ]
     )
+    await _stamp_init_created_user(AutoTestApiTagInfo)
     LOGGER.info("创建[标签]成功")
 
 

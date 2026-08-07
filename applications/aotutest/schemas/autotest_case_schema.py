@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -51,14 +51,14 @@ class AutoTestApiCaseCreate(AutoTestApiCaseBase):
     case_type: Optional[AutoTestCaseType] = Field(default=AutoTestCaseType.PRIVATE_SCRIPT, description="用例所属类型")
     case_attr: Optional[AutoTestCaseAttr] = Field(default=None, description="用例所属属性")
     case_project: int = Field(default=1, ge=1, description="用例所属应用")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestApiCaseUpdate(AutoTestApiCaseMeta, AutoTestApiCaseBase):
     """更新用例入参。"""
 
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiCaseSelect(AutoTestApiCaseMeta, AutoTestApiCaseBase):
@@ -70,6 +70,6 @@ class AutoTestApiCaseSelect(AutoTestApiCaseMeta, AutoTestApiCaseBase):
 
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
     request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(0, description="状态(0:启用, 1:禁用)")

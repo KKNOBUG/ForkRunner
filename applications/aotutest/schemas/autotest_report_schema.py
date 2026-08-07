@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Optional, List, Union, Any, Dict
+from typing import Optional, List, Any, Dict
 
 from pydantic import BaseModel, Field
 
@@ -43,7 +43,7 @@ class AutoTestApiReportCreate(AutoTestApiReportBase):
         max_length=64,
         description="报告标识代码；执行引擎落库时传入与明细一致的预生成code，未传时由ORM默认生成",
     )
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestApiReportUpdate(AutoTestApiReportBase):
@@ -51,7 +51,7 @@ class AutoTestApiReportUpdate(AutoTestApiReportBase):
 
     report_id: Optional[int] = Field(None, description="报告ID")
     report_code: Optional[str] = Field(None, max_length=64, description="报告标识代码")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiReportSelect(BaseModel):
@@ -75,8 +75,8 @@ class AutoTestApiReportSelect(BaseModel):
     exclude_task_code: Optional[bool] = Field(None, description="是否排除带任务标识的报告")
 
     case_state: Optional[bool] = Field(None, description="用例执行状态(True:成功, False:失败)")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     step_pass_ratio: Optional[float] = Field(None, ge=0, description="用例步骤成功率(含所有子级步骤)")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
@@ -102,7 +102,7 @@ class AutoTestApiReportBatchItem(BaseModel):
     pass_rate: Optional[float] = Field(None, description="通过率(0-100)，成功报告数/总报告数")
     pass_count: int = Field(default=0, description="成功报告数")
     report_count: int = Field(default=0, description="本批次报告总数")
-    created_user: Optional[str] = Field(None, description="执行人员（取首个非空）")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="执行人员")
     execute_time: Optional[str] = Field(None, description="执行时间（本批次最早 case_st_time）")
     elapsed_seconds: float = Field(default=0.0, description="本批次耗时合计（秒）")
     reports: List[Dict[str, Any]] = Field(default_factory=list, description="本批次报告明细（含 case_name）")

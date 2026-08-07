@@ -4,6 +4,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from applications.base.services.scaffold import UpperStr
+
 
 class DepartmentCreate(BaseModel):
     """新增部门入参。"""
@@ -32,7 +34,7 @@ class DepartmentUpdate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=255, description="部门描述")
     order: Optional[int] = Field(default=None, ge=0, description="排序")
     parent_id: Optional[int] = Field(default=None, ge=0, description="父部门ID")
-    updated_user: Optional[str] = Field(default=None, max_length=16, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")
 
     def update_dict(self):
         """
@@ -52,8 +54,8 @@ class DepartmentSelect(BaseModel):
     code: Optional[str] = Field(default=None, description="部门代码")
     name: Optional[str] = Field(default=None, description="部门名称")
     is_deleted: Optional[bool] = Field(default=None, description="是否已删除；不传则仅查未删除")
-    created_user: Optional[str] = Field(default=None, max_length=16, description="创建人员")
-    updated_user: Optional[str] = Field(default=None, max_length=16, description="更新人员")
+    created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
+    updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")
     created_time: Optional[datetime] = Field(default=None, description="创建时间")
     updated_time: Optional[datetime] = Field(default=None, description="更新时间")
 

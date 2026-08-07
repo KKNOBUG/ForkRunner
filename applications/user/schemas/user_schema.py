@@ -3,6 +3,8 @@ from typing import Optional, List
 
 from pydantic import BaseModel, EmailStr, Field
 
+from applications.base.services.scaffold import UpperStr
+
 
 class UserBase(BaseModel):
     """用户公共字段（创建/更新/查询共用）。"""
@@ -53,7 +55,7 @@ class UserUpdate(UserBase):
     """更新用户入参。"""
 
     user_id: int = Field(..., ge=1, description="用户ID")
-    updated_user: Optional[str] = Field(default=None, max_length=16, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class UserBatchDelete(BaseModel):

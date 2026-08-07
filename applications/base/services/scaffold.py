@@ -253,15 +253,32 @@ class TimestampMixin:
     updated_time = fields.DatetimeField(auto_now=True, description="更新时间")
 
 
+class UpperCharField(fields.CharField):
+    """
+    大写字符串字段，写入/读出时自动转大写（与 UpperStr 行为一致）。
+    """
+
+    def to_db_value(self, value: Any, instance) -> Optional[str]:
+        if isinstance(value, str):
+            value = value.upper()
+        return super().to_db_value(value, instance)
+
+    def to_python_value(self, value: Any) -> Optional[str]:
+        value = super().to_python_value(value)
+        if isinstance(value, str):
+            return value.upper()
+        return value
+
+
 class MaintainMixin:
     """
     维护信息Mixin，记录数据的创建人和最后更新人。
 
-    - created_user: 记录数据的创建者
-    - updated_user: 记录数据的修改者
+    - created_user: 记录数据的创建者（自动转大写）
+    - updated_user: 记录数据的修改者（自动转大写）
     """
-    created_user = fields.CharField(max_length=16, default=None, null=True, description="创建人员")
-    updated_user = fields.CharField(max_length=16, default=None, null=True, description="更新人员")
+    created_user = UpperCharField(max_length=16, default=None, null=True, description="创建人员")
+    updated_user = UpperCharField(max_length=16, default=None, null=True, description="更新人员")
 
 
 class ReserveFields:
@@ -325,30 +342,40 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     def _fill_created_user(self, obj_dict: Dict[str, Any]) -> None:
         """
-        创建时自动写入created_user(已有值则不覆盖)。
+        创建时自动写入created_user。
+
+        有登录上下文时以服务端当前用户为准（覆盖入参）；
+        无上下文时保留显式传入值（如初始化/Celery）。
         """
         if not hasattr(self.model, "created_user"):
-            return
-        if obj_dict.get("created_user"):
             return
         # 惰性导入，避免 scaffold ↔ services.dependency 循环依赖
         from services.ctx import get_current_username
         username = get_current_username()
         if username:
             obj_dict["created_user"] = username
+            return
+        existing = obj_dict.get("created_user")
+        if isinstance(existing, str) and existing.strip():
+            obj_dict["created_user"] = existing.strip().upper()
 
     def _fill_updated_user(self, obj_dict: Dict[str, Any]) -> None:
         """
-        更新时自动写入updated_user(已有值则不覆盖)。
+        更新时自动写入updated_user。
+
+        有登录上下文时以服务端当前用户为准（覆盖入参）；
+        无上下文时保留显式传入值（如初始化/Celery）。
         """
         if not hasattr(self.model, "updated_user"):
-            return
-        if obj_dict.get("updated_user"):
             return
         from services.ctx import get_current_username
         username = get_current_username()
         if username:
             obj_dict["updated_user"] = username
+            return
+        existing = obj_dict.get("updated_user")
+        if isinstance(existing, str) and existing.strip():
+            obj_dict["updated_user"] = existing.strip().upper()
 
     async def get_or_error(self, id: int, **kwargs) -> ModelType:
         """
@@ -564,7 +591,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             if not update_dict:
                 continue
 
-            if current_username and hasattr(self.model, "updated_user") and not update_dict.get("updated_user"):
+            if current_username and hasattr(self.model, "updated_user"):
                 update_dict["updated_user"] = current_username
 
             # 执行更新
@@ -812,12 +839,21 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             LOGGER.info(f"事务更新成功: {self.model.__name__}(id={id})")
             return obj
 
+    def _resolve_updated_user(self, updated_user: Optional[str] = None) -> Optional[str]:
+        """
+        解析更新人：显式入参优先，否则取当前登录用户（大写）。
+        """
+        if updated_user is not None and str(updated_user).strip():
+            return str(updated_user).strip().upper()[:16]
+        from services.ctx import get_current_username
+        return get_current_username()
+
     async def soft_delete(self, id: int, updated_user: Optional[str] = None) -> ModelType:
         """
         软删除：将记录标记为已删除。
 
         :param id: 要软删除的记录ID
-        :param updated_user: 执行操作的用户标识
+        :param updated_user: 执行操作的用户标识；为空时自动取当前登录用户
         :return: 更新后的数据库对象
         :raises DoesNotExist: 记录不存在时抛出
         :raises ParameterException: 模型未继承StateModel时抛出
@@ -828,9 +864,9 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 如果模型有 updated_user 字段，记录删除人
-        if updated_user is not None and hasattr(obj, 'updated_user'):
-            obj.updated_user = updated_user
+        resolved_user = self._resolve_updated_user(updated_user)
+        if resolved_user is not None and hasattr(obj, 'updated_user'):
+            obj.updated_user = resolved_user
 
         # 保存更新
         obj.state = 1
@@ -843,7 +879,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         恢复软删除的记录。
 
         :param id: 要恢复的记录ID
-        :param updated_user: 执行操作的用户标识
+        :param updated_user: 执行操作的用户标识；为空时自动取当前登录用户
         :return: 恢复后的数据库对象
         :raises DoesNotExist: 记录不存在时抛出
         :raises ParameterException: 模型未继承StateModel时抛出
@@ -855,9 +891,9 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 如果模型有 updated_user 字段，记录更新人
-        if updated_user is not None and hasattr(obj, 'updated_user'):
-            obj.updated_user = updated_user
+        resolved_user = self._resolve_updated_user(updated_user)
+        if resolved_user is not None and hasattr(obj, 'updated_user'):
+            obj.updated_user = resolved_user
 
         obj.state = 0
         await obj.save(update_fields=["state", "updated_user"] if hasattr(obj, 'updated_user') else ["state"])
@@ -895,7 +931,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         批量软删除。
 
         :param ids: 要软删除的记录ID列表
-        :param updated_user: 执行操作的用户标识
+        :param updated_user: 执行操作的用户标识；为空时自动取当前登录用户
         :return: 实际更新的记录数
         :raises ParameterException: 模型未继承StateModel时抛出
         """
@@ -908,8 +944,9 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return 0
 
         update_fields: Dict[str, Any] = {"state": 1}
-        if hasattr(self.model, 'updated_user') and updated_user is not None:
-            update_fields["updated_user"] = updated_user
+        resolved_user = self._resolve_updated_user(updated_user)
+        if hasattr(self.model, 'updated_user') and resolved_user is not None:
+            update_fields["updated_user"] = resolved_user
 
         count = await self.model.filter(id__in=ids, state__not=1).update(**update_fields)
         LOGGER.info(f"批量软删除成功: {self.model.__name__}, 数量={count}, ids={ids}")
@@ -920,7 +957,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         批量恢复软删除的记录。
 
         :param ids: 要恢复的记录ID列表
-        :param updated_user: 执行操作的用户标识
+        :param updated_user: 执行操作的用户标识；为空时自动取当前登录用户
         :return: 实际恢复的记录数
         :raises ParameterException: 模型未继承StateModel时抛出
         """
@@ -933,8 +970,9 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return 0
 
         update_fields: Dict[str, Any] = {"state": 0}
-        if hasattr(self.model, 'updated_user') and updated_user is not None:
-            update_fields["updated_user"] = updated_user
+        resolved_user = self._resolve_updated_user(updated_user)
+        if hasattr(self.model, 'updated_user') and resolved_user is not None:
+            update_fields["updated_user"] = resolved_user
 
         count = await self.model.filter(id__in=ids, state=1).update(**update_fields)
         LOGGER.info(f"批量恢复成功: {self.model.__name__}, 数量={count}, ids={ids}")

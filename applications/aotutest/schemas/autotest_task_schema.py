@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any
 
 from pydantic import BaseModel, Field
 
@@ -24,7 +24,7 @@ class AutoTestApiTaskCreate(BaseModel):
     task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈")
     task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员")
     task_enabled: Optional[bool] = Field(False, description="是否启动调度(True/False)")
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
 class AutoTestApiTaskUpdate(BaseModel):
@@ -45,7 +45,7 @@ class AutoTestApiTaskUpdate(BaseModel):
     task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈")
     task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员")
     task_enabled: Optional[bool] = Field(None, description="是否启动调度(True/False)")
-    updated_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="更新人员")
+    updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
 class AutoTestApiTaskSelect(AutoTestApiTaskUpdate):
@@ -55,7 +55,7 @@ class AutoTestApiTaskSelect(AutoTestApiTaskUpdate):
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-last_execute_time"], description="排序字段")
 
-    created_user: Optional[Union[UpperStr, str]] = Field(None, max_length=16, description="创建人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     task_enabled: Optional[bool] = Field(None, description="是否启动调度(True/False)")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
     date_from: Optional[str] = Field(None, description="最后执行时间-起")
