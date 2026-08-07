@@ -26,7 +26,7 @@ from core.exceptions.http_exceptions import (
 from core.middlewares.app_middleware import logging_middleware
 from core.middlewares.auth_middleware import auth_middleware
 from core.middlewares.request_context_middleware import request_context_middleware
-from services import DependPermission
+from services import DependPermission, DependOptionalAuth
 
 
 async def register_database(app: FastAPI) -> None:
@@ -190,7 +190,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(router=role_secure, prefix="/yk/base", tags=["系统管理:角色"], dependencies=[DependPermission])
     app.include_router(router=audit_secure, prefix="/yk/base", tags=["系统管理:审计"], dependencies=[DependPermission])
     app.include_router(router=file_secure, prefix="/yk/base", tags=["系统管理:文件"], dependencies=[DependPermission])
-    app.include_router(router=user_public, prefix="/yk/user", tags=["系统管理:用户"])
+    app.include_router(router=user_public, prefix="/yk/user", tags=["系统管理:用户"], dependencies=[DependOptionalAuth])
     app.include_router(router=user_secure, prefix="/yk/user", tags=["系统管理:用户"], dependencies=[DependPermission])
     app.include_router(router=dept, prefix="/yk/dept", tags=["系统管理:部门"], dependencies=[DependPermission])
     app.include_router(router=toolbox, prefix="/yk/toolbox", tags=["便捷工具:工具箱"], dependencies=[DependPermission])

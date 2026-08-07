@@ -40,7 +40,7 @@ async def create_user(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
-    新增用户。
+    新增用户，不强制token；若请求携带有效token，则写入登录上下文，created_user以当前登录用户为准。
 
     :param user_in: 用户入参
     :param user_crud: 用户CRUD服务

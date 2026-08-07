@@ -41,6 +41,13 @@ class AuthControl:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"{repr(e)}")
 
+    @classmethod
+    async def is_authed_optional(cls, token: Optional[str] = Header(None, description="token验证(可选)")) -> Optional["User"]:
+        """无token时放行且不写CTX；有token时校验并写入CTX_USERNAME，用于注册是公开接口：默认匿名可访问，管理员代建用户时可带token自动填充创建人。"""
+        if token is None or not str(token).strip():
+            return None
+        return await cls.is_authed(token=str(token).strip())
+
 
 class PermissionControl:
     @classmethod
@@ -72,4 +79,5 @@ class PermissionControl:
 
 
 DependAuth = Depends(AuthControl.is_authed)
+DependOptionalAuth = Depends(AuthControl.is_authed_optional)
 DependPermission = Depends(PermissionControl.has_permission)

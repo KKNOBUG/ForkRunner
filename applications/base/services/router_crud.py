@@ -198,7 +198,7 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
             if (router.method, router.path) not in all_router_list:
                 await self.model.filter(method=router.method, path=router.path).delete()
 
-        # 更新路由数据（走 Scaffold create/update，统一 _fill_* 规则）
+        # 更新路由数据
         for route in app.routes:
             if isinstance(route, APIRoute) and route.methods not in ("OPTIONS",) and route.path_format not in ('/',):
                 data = {

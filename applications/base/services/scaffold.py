@@ -259,9 +259,7 @@ class ScaffoldModel(models.Model):
 
 
 class UpperCharField(fields.CharField):
-    """
-    大写字符串字段，写入/读出时自动转大写（与UpperStr行为一致）。
-    """
+    """大写字符串字段，写入/读出时自动转大写（与UpperStr行为一致）。"""
 
     def to_db_value(self, value: Any, instance) -> Optional[str]:
         if isinstance(value, str):

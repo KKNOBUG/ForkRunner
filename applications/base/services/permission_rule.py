@@ -158,9 +158,7 @@ async def _append_missing_relations(role: Role, relation_name: str, candidates: 
         LOGGER.info(f"[权限规则]角色[{role.name}]无需补绑{label}")
         return
     await relation.add(*to_add)
-    LOGGER.info(
-        f"[权限规则]角色[{role.name}]补绑{label}成功, 新增{len(to_add)}个, 候选共{len(candidates)}个"
-    )
+    LOGGER.info(f"[权限规则]角色[{role.name}]补绑{label}成功, 新增{len(to_add)}个, 候选共{len(candidates)}个")
 
 
 async def sync_role_permission_bindings(routers: Optional[Sequence[Router]] = None, menus: Optional[Sequence[Menu]] = None) -> None:

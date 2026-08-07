@@ -12,7 +12,6 @@ from applications.department.schemas.department_schema import (
     DepartmentBatchDelete,
 )
 from applications.department.services.department_crud import DepartmentCrud
-from applications.user.models.user_model import User
 from configure import LOGGER
 from core.exceptions import (
     DataAlreadyExistsException,
@@ -26,7 +25,6 @@ from core.responses import (
     NotFoundResponse,
     ParameterResponse,
 )
-from services import DependAuth
 
 dept = APIRouter()
 
@@ -34,14 +32,12 @@ dept = APIRouter()
 @dept.post("/create", summary="新增部门信息")
 async def create_department(
         department_in: DepartmentCreate = Body(..., description="部门信息"),
-        _current_user: User = DependAuth,
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
     新增部门信息。
 
     :param department_in: 部门入参
-    :param _current_user: 当前登录用户（写入请求上下文供自动填充创建人）
     :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
@@ -109,14 +105,12 @@ async def batch_delete_departments(
 @dept.post("/update", summary="更新部门信息", description="根据id更新部门信息")
 async def update_department(
         department_in: DepartmentUpdate = Body(..., description="部门信息"),
-        _current_user: User = DependAuth,
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
     更新部门信息。
 
     :param department_in: 部门入参
-    :param _current_user: 当前登录用户（写入请求上下文供自动填充更新人）
     :param dept_crud: 部门CRUD服务
     :return: 统一HTTP响应
     """
@@ -218,12 +212,8 @@ async def search_departments(
         if updated_user:
             q &= Q(updated_user=updated_user)
 
-        total, instances = await dept_crud.list(
-            page=page, page_size=page_size, search=q, order=order
-        )
-        data = [
-            await obj.to_dict() for obj in instances
-        ]
+        total, instances = await dept_crud.list(page=page, page_size=page_size, search=q, order=order)
+        data = [await obj.to_dict() for obj in instances]
         LOGGER.info(f"查询部门列表成功, 数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
