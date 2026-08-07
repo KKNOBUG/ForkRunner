@@ -119,8 +119,12 @@ async def batch_delete_tags(
         count = await services.tag_curd.delete_tags(tag_in=tag_in)
         LOGGER.info(f"根据id或code列表删除标签成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code列表删除标签失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")

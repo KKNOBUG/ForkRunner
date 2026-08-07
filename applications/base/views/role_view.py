@@ -26,6 +26,7 @@ from core.exceptions import (
 from core.responses import (
     SuccessResponse,
     DataAlreadyExistsResponse,
+    DataBaseStorageResponse,
     FailureResponse,
     ParameterResponse,
     NotFoundResponse
@@ -135,7 +136,11 @@ async def update_role(
     except IntegrityError as e:
         error_message: str = f"更新角色失败, 违反约束规则: {e}"
         LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-        raise DataBaseStorageException(message=error_message) from e
+        return DataBaseStorageResponse(message=error_message)
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"更新角色失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新角色失败，异常描述: {e}")
