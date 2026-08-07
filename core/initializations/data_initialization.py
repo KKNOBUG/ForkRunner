@@ -37,21 +37,21 @@ async def init_database_role():
     admin_role = await role_crud.create_role(
         RoleCreate(
             code="Administrators",
-            name="管理员组",
+            name="管理员",
             description="拥有平台全部权限，可执行所有操作"
         )
     )
     user_role = await role_crud.create_role(
         RoleCreate(
             code="Users",
-            name="标准用户组",
+            name="标准用户",
             description="基础业务操作权限，禁止高危操作"
         )
     )
     guest_role = await role_crud.create_role(
         RoleCreate(
             code="Guests",
-            name="宾客用户组",
+            name="宾客用户",
             description="受限访问，无修改、删除权限"
         )
     )
