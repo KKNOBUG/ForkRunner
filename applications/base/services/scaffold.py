@@ -30,6 +30,60 @@ def unique_identify() -> str:
     return f"{timestamp}-{uuid4_str}"
 
 
+class UpperStr(str):
+    """
+    大写字符串类型，用于Pydantic模型验证。
+    """
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+            cls,
+            source_type: Any,
+            handler: GetCoreSchemaHandler,
+    ) -> core_schema.CoreSchema:
+        return core_schema.with_info_after_validator_function(
+            cls._validate,
+            handler(str),
+            serialization=core_schema.to_string_ser_schema(),
+        )
+
+    @classmethod
+    def _validate(cls, v: Optional[str], info: Any) -> 'UpperStr':
+        """
+        验证并转换为大写字符串。
+        """
+        if not isinstance(v, str):
+            raise ValueError("必须是字符串类型")
+        return cls(v.upper())
+
+
+class LowerStr(str):
+    """
+    小写字符串类型，用于Pydantic模型验证。
+    """
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+            cls,
+            source_type: Any,
+            handler: GetCoreSchemaHandler,
+    ) -> core_schema.CoreSchema:
+        return core_schema.with_info_after_validator_function(
+            cls._validate,
+            handler(str),
+            serialization=core_schema.to_string_ser_schema(),
+        )
+
+    @classmethod
+    def _validate(cls, v: Optional[str], info: Any) -> 'LowerStr':
+        """
+        验证并转换为小写字符串。
+        """
+        if not isinstance(v, str):
+            raise ValueError("必须是字符串类型")
+        return cls(v.lower())
+
+
 class ScaffoldModel(models.Model):
     """
     脚手架模型基类，提供通用的模型序列化能力。
@@ -204,6 +258,40 @@ class ScaffoldModel(models.Model):
         default_connection = "default"  # 默认数据库连接
 
 
+class UpperCharField(fields.CharField):
+    """
+    大写字符串字段，写入/读出时自动转大写（与UpperStr行为一致）。
+    """
+
+    def to_db_value(self, value: Any, instance) -> Optional[str]:
+        if isinstance(value, str):
+            value = value.upper()
+        return super().to_db_value(value, instance)
+
+    def to_python_value(self, value: Any) -> Optional[str]:
+        value = super().to_python_value(value)
+        if isinstance(value, str):
+            return value.upper()
+        return value
+
+
+class LowerCharField(fields.CharField):
+    """
+    小写字符串字段，写入/读出时自动转小写（与LowerStr行为一致）。
+    """
+
+    def to_db_value(self, value: Any, instance) -> Optional[str]:
+        if isinstance(value, str):
+            value = value.lower()
+        return super().to_db_value(value, instance)
+
+    def to_python_value(self, value: Any) -> Optional[str]:
+        value = super().to_python_value(value)
+        if isinstance(value, str):
+            return value.lower()
+        return value
+
+
 class UUIDModel:
     """
     UUID唯一标识Mixin，为模型添加uid字段。
@@ -251,23 +339,6 @@ class TimestampMixin:
     """
     created_time = fields.DatetimeField(auto_now_add=True, description="创建时间")
     updated_time = fields.DatetimeField(auto_now=True, description="更新时间")
-
-
-class UpperCharField(fields.CharField):
-    """
-    大写字符串字段，写入/读出时自动转大写（与 UpperStr 行为一致）。
-    """
-
-    def to_db_value(self, value: Any, instance) -> Optional[str]:
-        if isinstance(value, str):
-            value = value.upper()
-        return super().to_db_value(value, instance)
-
-    def to_python_value(self, value: Any) -> Optional[str]:
-        value = super().to_python_value(value)
-        if isinstance(value, str):
-            return value.upper()
-        return value
 
 
 class MaintainMixin:
@@ -1141,57 +1212,3 @@ class QueryBuilder(Generic[ModelType]):
         检查是否存在。
         """
         return await self._build_query().exists()
-
-
-class UpperStr(str):
-    """
-    大写字符串类型，用于Pydantic模型验证。
-    """
-
-    @classmethod
-    def __get_pydantic_core_schema__(
-            cls,
-            source_type: Any,
-            handler: GetCoreSchemaHandler,
-    ) -> core_schema.CoreSchema:
-        return core_schema.with_info_after_validator_function(
-            cls._validate,
-            handler(str),
-            serialization=core_schema.to_string_ser_schema(),
-        )
-
-    @classmethod
-    def _validate(cls, v: Optional[str], info: Any) -> 'UpperStr':
-        """
-        验证并转换为大写字符串。
-        """
-        if not isinstance(v, str):
-            raise ValueError("必须是字符串类型")
-        return cls(v.upper())
-
-
-class LowerStr(str):
-    """
-    小写字符串类型，用于Pydantic模型验证。
-    """
-
-    @classmethod
-    def __get_pydantic_core_schema__(
-            cls,
-            source_type: Any,
-            handler: GetCoreSchemaHandler,
-    ) -> core_schema.CoreSchema:
-        return core_schema.with_info_after_validator_function(
-            cls._validate,
-            handler(str),
-            serialization=core_schema.to_string_ser_schema(),
-        )
-
-    @classmethod
-    def _validate(cls, v: Optional[str], info: Any) -> 'LowerStr':
-        """
-        验证并转换为小写字符串。
-        """
-        if not isinstance(v, str):
-            raise ValueError("必须是字符串类型")
-        return cls(v.lower())
