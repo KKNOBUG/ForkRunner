@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-import traceback
+import traceback
 from typing import Optional, List, Tuple
 
 from tortoise.exceptions import IntegrityError, FieldError

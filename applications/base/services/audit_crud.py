@@ -79,7 +79,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :param page: 页码，从1开始
         :param page_size: 每页记录数
         :param search: 搜索条件(Q对象)
-        :param order: 排序字段列表；为空时使用 ["-created_time"]
+        :param order: 排序字段列表；
         :return: (总记录数, 当前页审计日志列表)
         """
         return await self.list(page=page, page_size=page_size, search=search, order=order)

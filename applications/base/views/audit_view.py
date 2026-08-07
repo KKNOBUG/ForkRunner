@@ -149,6 +149,7 @@ async def get_audit_by_user(
         user_id: int = Query(..., description="用户ID"),
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
+        order: list = Query(default_factory=lambda: ["-created_time"], description="排序字段"),
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
@@ -157,12 +158,15 @@ async def get_audit_by_user(
     :param user_id: 用户ID
     :param page: 页码
     :param page_size: 每页条数
+    :param order: 排序字段
     :param audit_crud: 审计日志CRUD服务
     :return: 统一HTTP响应
     """
     try:
         q = Q(user_id=user_id)
-        total, audit_log_objs = await audit_crud.list_audit(page=page, page_size=page_size, search=q)
+        total, audit_log_objs = await audit_crud.list_audit(
+            page=page, page_size=page_size, search=q, order=order
+        )
         data = [await audit_log.to_dict() for audit_log in audit_log_objs]
         LOGGER.info(f"查询用户审计日志成功, user_id: {user_id}, 数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
