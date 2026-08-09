@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from tortoise import fields
 
-from applications.base.services.scaffold import ScaffoldModel, TimestampMixin, MaintainMixin, StateModel
+from applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
 
 
-class User(ScaffoldModel, StateModel, TimestampMixin, MaintainMixin):
+class User(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
     """系统用户模型。"""
 
     username = fields.CharField(max_length=32, unique=True, description="用户账号")
