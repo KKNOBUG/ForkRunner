@@ -571,7 +571,7 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
             raise DataAlreadyExistsException(message=error_message)
 
         instance = await self.soft_delete(id=instance.id)
-        # 同步软删除该步骤关联的数据源与数据生成记录（延迟导入避免循环依赖）
+        # 同步硬删除该步骤关联的数据源与数据生成记录（延迟导入避免循环依赖）
         from applications.aotutest.services.autotest_data_source_crud import delete_step_create
         await delete_step_create(case_id=instance.case_id, step_code_list=[instance.step_code])
         return instance
@@ -1112,11 +1112,12 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                         for child in (branch.branch_children or []):
                             if getattr(child, "step_id", None):
                                 retained_child_ids.add(child.step_id)
-                    stale_children_qs = self.model.filter(parent_step_id=step_id, state__not=1)
+                    stale_children_qs = self.model.filter(parent_step_id=step_id)
                     if retained_child_ids:
                         stale_children_qs = stale_children_qs.exclude(id__in=retained_child_ids)
                     stale_ids = await stale_children_qs.values_list("id", flat=True)
-                    await self.soft_delete_batch(ids=list(stale_ids))
+                    if stale_ids:
+                        await self.model.filter(id__in=list(stale_ids)).delete()
                     for bi, branch in enumerate(step_data.branch_items):
                         if branch.branch_children:
                             child_result = await self.batch_update_or_create_steps(

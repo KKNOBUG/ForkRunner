@@ -777,7 +777,7 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
 async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
     """
-    软删除指定步骤的数据源与生成记录，并清理关联本地文件。
+    硬删除指定步骤的数据源与生成记录，并清理关联本地文件。
 
     :param case_id: 用例主键(用于定位上传目录)
     :param step_code_list: 待清理的步骤标识列表
@@ -785,21 +785,15 @@ async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
     """
     data_source_crud = AutoTestDataSourceCrud()
     data_create_crud = AutoTestApiDataCreateCrud()
-    source_ids = await data_source_crud.model.filter(
-        step_code__in=step_code_list, state__not=1
-    ).values_list("id", flat=True)
-    create_ids = await data_create_crud.model.filter(
-        step_code__in=step_code_list, state__not=1
-    ).values_list("id", flat=True)
-    await data_source_crud.soft_delete_batch(ids=list(source_ids))
-    await data_create_crud.soft_delete_batch(ids=list(create_ids))
     instance_list = await data_source_crud.model.filter(step_code__in=step_code_list).all()
+    steps_info = await data_create_crud.model.filter(step_code__in=step_code_list).all()
+    await data_source_crud.model.filter(step_code__in=step_code_list).delete()
+    await data_create_crud.model.filter(step_code__in=step_code_list).delete()
     for instance in instance_list:
         if instance.file_hash and not instance.file_hash.endswith("X"):
             if await aos.path.exists(instance.file_hash):
                 await aos.remove(instance.file_hash)
-    LOGGER.warning(f"删除更新后多余步骤: [case_id={case_id}, step_code__in={list(step_code_list)}]已被清理")
-    steps_info = await data_create_crud.model.filter(step_code__in=step_code_list).all()
+    LOGGER.warning(f"删除更新后多余步骤: [case_id={case_id}, step_code__in={list(step_code_list)}]关联数据已被清理")
     for step_info in steps_info:
         if step_info and step_info.file_name:
             file_path = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id), step_info.file_name)

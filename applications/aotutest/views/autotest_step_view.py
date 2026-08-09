@@ -449,31 +449,40 @@ async def batch_update_steps_tree(
                 updated_step_count: int = step_result['updated_count']
                 process_step_count: Dict[str, Set[str]] = step_result['process_detail']
                 success_step_detail: List[Dict[str, Any]] = step_result['success_detail']
-                # 2.3 删除多余步骤
+                # 2.3 删除多余步骤（硬删除步骤表记录，并清理关联数据源/生成记录）
                 if process_step_count:
                     for case_id, step_codes in process_step_count.items():
                         actual_step_codes = await services.step_curd.model.filter(
-                            case_id=case_id, state__not=1
+                            case_id=case_id
                         ).values_list("step_code", flat=True)
                         missing_step_codes: Set[str] = set(actual_step_codes) - step_codes
                         if missing_step_codes:
                             deleted_step_count += len(missing_step_codes)
                             LOGGER.warning(
                                 f"删除更新后多余步骤: "
-                                f"步骤(case_id={case_id}, step_code__in={list(missing_step_codes)})已被清理"
+                                f"步骤(case_id={case_id}, step_code__in={list(missing_step_codes)})已被硬删除"
                             )
                             await services.step_curd.model.filter(step_code__in=missing_step_codes).delete()
-                            # 同步清理被删步骤关联的数据源与数据生成记录
+                            # 同步硬删除被删步骤关联的数据源与数据生成记录
                             await delete_step_create(case_id=case_id, step_code_list=list(missing_step_codes))
-                # 2.4 步骤全部删除：当 steps 为空且用例已存在时，软删除该用例下所有步骤
+                # 2.4 步骤全部删除：当 steps 为空且用例已存在时，硬删除该用例下所有步骤
                 elif success_case_detail and len(success_case_detail) > 0:
                     successful_case_id: Optional[int] = success_case_detail[0].get("case_id")
                     if successful_case_id:
-                        deleted_step_count = await services.step_curd.delete_steps_recursive(
+                        step_codes = await services.step_curd.model.filter(
                             case_id=successful_case_id
-                        )
+                        ).values_list("step_code", flat=True)
+                        deleted_step_count = len(step_codes)
                         if deleted_step_count > 0:
-                            LOGGER.warning(f"步骤已全部删除: 用例(case_id={successful_case_id})下 {deleted_step_count} 个步骤已被软删除")
+                            await services.step_curd.model.filter(case_id=successful_case_id).delete()
+                            await delete_step_create(
+                                case_id=successful_case_id,
+                                step_code_list=list(step_codes),
+                            )
+                            LOGGER.warning(
+                                f"步骤已全部删除: 用例(case_id={successful_case_id})下 "
+                                f"{deleted_step_count} 个步骤已被硬删除"
+                            )
                 LOGGER.info(
                     f"步骤处理完成："
                     f"新增步骤: {created_step_count}个, "
