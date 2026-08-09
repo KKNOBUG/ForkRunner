@@ -180,10 +180,10 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
 
     async def refresh_router(self, app: FastAPI, sync_role_bindings: bool = True) -> List[Router]:
         """
-        根据FastAPI应用当前路由同步数据库：删除废弃项，新增或更新现有项（同步完成后可按规则为内置角色补绑路由）。
+        根据FastAPI应用当前路由同步数据库：删除废弃项，新增或更新现有项，同步完成后可按规则为内置角色补绑路由。
 
         :param app: FastAPI应用实例
-        :param sync_role_bindings: 是否按权限规则补绑角色路由与菜单，并对无法分类的 summary 告警
+        :param sync_role_bindings: 是否按权限规则补绑角色路由与菜单，并对无法分类的summary告警
         :return: 同步后的全部路由列表
         """
         # 获取全部路由数据
