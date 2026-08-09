@@ -11,7 +11,7 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple
-from urllib.parse import quote, unquote
+from urllib.parse import unquote
 
 import httpx
 import orjson
@@ -39,6 +39,17 @@ from applications.aotutest.services.autotest_runtime.sandbox import (
     USER_CODE_ALLOWED_IMPORT_ROOTS,
     USER_CODE_EXTRA_BUILTINS,
     safe_user_code_import,
+)
+from applications.aotutest.services.autotest_runtime.protocol_http import (
+    assemble_http_body_payloads,
+    build_httpx_request_kwargs,
+)
+from applications.aotutest.services.autotest_runtime.protocol_tcp import (
+    parse_tcp_response,
+    parse_tcp_timeouts,
+    resolve_tcp_request_extract_sources,
+    select_tcp_payload,
+    tcp_body_source_for_assert,
 )
 from applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from applications.base.services.scaffold import unique_identify
@@ -420,28 +431,17 @@ class StepExecutionContext:
         """
         try:
             client = self.http_client
-            kwargs: Dict[str, Any] = {
-                "headers": headers,
-                "params": params,
-                "data": data,
-                "json": json_data,
-                "content": content,
-                "files": files,
-            }
-            if timeout is not None:
-                kwargs["timeout"] = timeout
-            kwargs: Dict[str, Any] = {key: value for key, value in kwargs.items() if value}
-            raw_headers: Dict[str, Any] = kwargs.get("headers") or {}
+            kwargs = build_httpx_request_kwargs(
+                headers=headers,
+                params=params,
+                data=data,
+                json_data=json_data,
+                content=content,
+                files=files,
+                timeout=timeout,
+                encode_headers=True,
+            )
             try:
-                if raw_headers:
-                    # 对请求头中的中文进行UTF-8百分号编码
-                    encoded_headers: Dict[str, Any] = {
-                        key: quote(value, encoding="utf-8", safe=':/?#[]@!$&\'()*+,;=-._~%')
-                        if isinstance(value, str) else value for key, value in raw_headers.items()
-                    }
-                    if encoded_headers:
-                        # 把编码后的headers放回kwargs
-                        kwargs["headers"] = encoded_headers
                 response = await client.request(method, url, **kwargs)
                 self.log(
                     f"【HTTP请求】请求成功: \n\t"
@@ -2466,16 +2466,9 @@ class TcpStepExecutor(BaseStepExecutor):
                 )
 
             request_args_type_raw = self.step.request_args_type
-            if request_args_type_raw is None:
-                payload = request_text if request_text not in (None, "") else request_body
-            elif request_args_type_raw == AutoTestReqArgsType.RAW:
-                payload = request_text
-            elif request_args_type_raw == AutoTestReqArgsType.JSON:
-                payload = request_body
-            elif request_args_type_raw == AutoTestReqArgsType.XML:
-                payload = request_text
-            else:
-                payload = request_text if request_text not in (None, "") else request_body
+            payload = select_tcp_payload(
+                request_args_type_raw, request_text=request_text, request_body=request_body
+            )
 
             # 写入result.request，便于落库与排障
             result.request = {
@@ -2499,23 +2492,11 @@ class TcpStepExecutor(BaseStepExecutor):
 
             length_field_size = self.step.tcp_length_field_size or 8
             encoding = self.step.tcp_encoding or "utf-8"
-            connect_timeout = self.step.tcp_connect_timeout
-            read_timeout = self.step.tcp_read_timeout
             max_response_bytes = self.step.tcp_max_response_bytes or (10 * 1024 * 1024)
             response_type = (self.step.tcp_response_type or "text").strip().lower()
-
-            connect_td: Optional[timedelta] = None
-            if connect_timeout not in (None, ""):
-                try:
-                    connect_td = timedelta(seconds=float(connect_timeout))
-                except Exception:
-                    connect_td = None
-            read_td: Optional[timedelta] = None
-            if read_timeout not in (None, ""):
-                try:
-                    read_td = timedelta(seconds=float(read_timeout))
-                except Exception:
-                    read_td = None
+            connect_td, read_td = parse_tcp_timeouts(
+                self.step.tcp_connect_timeout, self.step.tcp_read_timeout
+            )
 
             start = time.perf_counter()
             async with AioTcpClient(
@@ -2535,38 +2516,9 @@ class TcpStepExecutor(BaseStepExecutor):
                 )
                 # 只请求一次：获取原始字节后本地解析，避免解析失败时重发TCP请求
                 resp_bytes = await utils.bytes_resp()
-                try:
-                    resp_text = resp_bytes.decode(encoding, errors="ignore")
-                except Exception:
-                    resp_text = ""
-                response_json: Optional[Any] = None
-
-                if response_type == "json":
-                    try:
-                        body_any = orjson.loads(resp_bytes) if resp_bytes else None
-                        response_json = body_any if isinstance(body_any, (dict, list)) else None
-                        if body_any is not None:
-                            resp_text = orjson.dumps(body_any).decode("UTF-8")
-                    except Exception:
-                        response_json = None
-                elif response_type == "xml":
-                    # 与xml_resp行为一致：lxml格式化
-                    try:
-                        if resp_bytes and resp_bytes.strip():
-                            from lxml import etree
-                            parser = etree.XMLParser(recover=False, remove_blank_text=True, encoding=encoding)
-                            root = etree.fromstring(resp_bytes, parser=parser)
-                            resp_text = etree.tostring(root, encoding=str, pretty_print=True, xml_declaration=False).strip()
-                    except Exception:
-                        pass  # 格式化失败，保留decode后的文本
-                    response_json = None
-                elif response_type == "bytes":
-                    response_json = None
-                else:  # text
-                    try:
-                        response_json = orjson.loads(resp_text) if resp_text and resp_text.strip().startswith(("{", "[")) else None
-                    except Exception:
-                        response_json = None
+                parsed = parse_tcp_response(resp_bytes, encoding=encoding, response_type=response_type)
+                resp_text = parsed.response_text
+                response_json = parsed.response_json
 
             elapsed = round(time.perf_counter() - start, 6)
             result.response = {
@@ -2575,26 +2527,9 @@ class TcpStepExecutor(BaseStepExecutor):
                 "response_bytes": len(resp_bytes) if isinstance(resp_bytes, (bytes, bytearray)) else None,
             }
 
-            request_json_for_extract = request_body if isinstance(request_body, (dict, list)) else None
-            if request_json_for_extract is None and isinstance(request_text, str) and request_text.strip().startswith(("{", "[")):
-                try:
-                    parsed_request = orjson.loads(request_text)
-                    if isinstance(parsed_request, (dict, list)):
-                        request_json_for_extract = parsed_request
-                except Exception:
-                    request_json_for_extract = None
-            request_text_for_extract = request_text if request_text not in (None, "") else (
-                payload if isinstance(payload, str) else None
+            request_json_for_extract, request_text_for_extract = resolve_tcp_request_extract_sources(
+                request_body=request_body, request_text=request_text, payload=payload
             )
-            # 根据响应类型选择数据驱动assert_body的提取来源
-            if response_type == "json":
-                tcp_body_source = "response json"
-            elif response_type == "xml":
-                tcp_body_source = "response xml"
-            elif response_type == "text":
-                tcp_body_source = "response text"
-            else:
-                tcp_body_source = "response json"
             self.apply_extract_and_assert(
                 result,
                 step_label="TCP请求",
@@ -2603,7 +2538,7 @@ class TcpStepExecutor(BaseStepExecutor):
                 request_text=request_text_for_extract,
                 request_json=request_json_for_extract,
                 step_struct=step_struct,
-                body_source=tcp_body_source,
+                body_source=tcp_body_source_for_assert(response_type),
             )
         except StepExecutionError:
             raise
@@ -2865,7 +2800,7 @@ class RedisStepExecutor(BaseStepExecutor):
     """
 
     @staticmethod
-    def _has_effective_redis_result(command_results: Optional[List[Any]]) -> bool:
+    def has_effective_redis_result(command_results: Optional[List[Any]]) -> bool:
         """
         判断Redis命令结果列表是否含有效数据（非空/非空白）。
 
@@ -3059,7 +2994,7 @@ class RedisStepExecutor(BaseStepExecutor):
                         "redis_data": redis_data,
                         "redis_count": redis_count,
                     })
-                    if redis_searched and self._has_effective_redis_result(redis_data):
+                    if redis_searched and self.has_effective_redis_result(redis_data):
                         self.context.log(
                             f"【Redis请求】查到即止：{operate_no}已返回有效结果，已终止后续命令",
                             step_code=self.step_code,
@@ -3289,36 +3224,20 @@ class HttpStepExecutor(BaseStepExecutor):
             content_payload: Optional[Any] = None
             # 根据request_args_type选取请求体类型，仅使用一种方式，避免冲突
             request_args_type: Optional[AutoTestReqArgsType] = self.step.request_args_type
-            if request_args_type is None:
-                # 未配置时保持兼容：优先raw -> form-data -> urlencoded作为data，若存在request_body且未产生data载荷，则作为json
-                if request_text:
-                    data_payload = request_text
-                elif request_form_data or request_form_file:
-                    data_payload = request_form_data
-                    file_payload = request_form_file if request_form_file else None
-                elif request_form_urlencoded:
-                    data_payload = request_form_urlencoded
-                if request_body and not data_payload:
-                    json_payload = request_body
-            elif request_args_type in (AutoTestReqArgsType.NONE, AutoTestReqArgsType.PARAMS):
-                # 无请求体或仅查询参数
-                pass
-            elif request_args_type == AutoTestReqArgsType.RAW:
-                data_payload = request_text
-            elif request_args_type == AutoTestReqArgsType.JSON:
-                json_payload = request_body
-            elif request_args_type == AutoTestReqArgsType.XML:
-                content_payload = request_text
-                if request_header is None:
-                    request_header = {}
-                has_content_type = any(k.lower() == "content-type" for k in request_header)
-                if not has_content_type:
-                    request_header["Content-Type"] = "application/xml; charset=utf-8"
-            elif request_args_type == AutoTestReqArgsType.FORM_DATA:
-                data_payload = request_form_data
-                file_payload = request_form_file if request_form_file else None
-            elif request_args_type == AutoTestReqArgsType.X_WWW_FORM_URLENCODED:
-                data_payload = request_form_urlencoded
+            payloads = assemble_http_body_payloads(
+                request_args_type,
+                request_text=request_text,
+                request_body=request_body,
+                form_data=request_form_data,
+                form_files=request_form_file,
+                urlencoded=request_form_urlencoded,
+                headers=request_header,
+            )
+            json_payload = payloads.json_payload
+            data_payload = payloads.data_payload
+            content_payload = payloads.content_payload
+            file_payload = payloads.file_payload
+            request_header = payloads.headers
             # 先写入实际发往目标服务器的数据，避免后续处理response异常时落库拿不到request
             result.request = {
                 "request_url": request_url,
