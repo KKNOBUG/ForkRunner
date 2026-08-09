@@ -192,7 +192,7 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         await instance.delete()
         return instance
 
-    async def delete_roles(self, role_ids: Optional[List[int]] = None, role_codes: Optional[List[str]] = None) -> int:
+    async def delete_roles(self, role_ids: Optional[List[int]] = None, role_codes: Optional[List[str]] = None) -> List:
         """
         根据ID或code列表物理删除角色。
 
@@ -200,21 +200,24 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         :param role_codes: 角色编码列表
         :return: 实际删除的记录数
         """
-        n = 0
+        delete_ids: List[int] = []
+        delete_codes: List[str] = []
         if role_ids:
             for rid in role_ids:
                 try:
                     await self.remove_or_error(id=int(rid))
-                    n += 1
+                    delete_ids.append(rid)
                 except (DoesNotExist, Exception):
                     continue
-        elif role_codes:
+            return delete_ids
+        if role_codes:
             for code in role_codes:
                 obj = await self.get_by_code(role_code=code, state__not=1)
                 if obj:
                     try:
                         await self.remove_or_error(id=obj.id)
-                        n += 1
+                        delete_codes.append(code)
                     except Exception:
                         continue
-        return n
+            return delete_codes
+        return []

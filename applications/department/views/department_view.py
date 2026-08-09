@@ -95,7 +95,7 @@ async def batch_delete_departments(
         deleted_ids = await dept_crud.delete_departments(department_in=department_in)
         deleted_num = len(deleted_ids)
         LOGGER.info(f"根据id列表批量删除部门信息成功, 结果数量: {deleted_num}")
-        return SuccessResponse(message="删除成功", data={"deleted_ids": deleted_ids}, total=deleted_num)
+        return SuccessResponse(message="删除成功", data={"deleted": deleted_ids}, total=deleted_num)
     except Exception as e:
         LOGGER.error(f"根据id列表批量删除部门信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")

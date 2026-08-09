@@ -100,7 +100,7 @@ async def batch_delete_users(
         deleted_ids = await user_crud.delete_users(user_in=user_in)
         deleted_num = len(deleted_ids)
         LOGGER.info(f"根据id列表删除用户成功, 结果数量: {deleted_num}")
-        return SuccessResponse(message="删除成功", data={"deleted_ids": deleted_ids}, total=deleted_num)
+        return SuccessResponse(message="删除成功", data={"deleted": deleted_ids}, total=deleted_num)
     except Exception as e:
         LOGGER.error(f"根据id列表删除用户失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")

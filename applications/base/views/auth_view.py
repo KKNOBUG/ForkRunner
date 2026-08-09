@@ -78,10 +78,10 @@ async def get_login_access_token(
             is_superuser=user.is_superuser,
             last_login=user.last_login
         )
-        LOGGER.info(f"用户登录成功, username: {user.username}")
+        LOGGER.info(f"验证用户密码和状态并生成令牌成功, username: {user.username}")
         return SuccessResponse(message="登录成功", data=data.model_dump())
     except Exception as e:
-        LOGGER.error(f"用户登录失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"验证用户密码和状态并生成令牌失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"登录失败，异常描述: {e}")
 
 
