@@ -39,7 +39,7 @@ class DepartmentUpdate(BaseModel):
 
     def update_dict(self):
         """
-        转为更新字典，排除 id 与未设置字段。
+        转为更新字典，排除id与未设置字段。
 
         :return: 可直接用于update_from_dict的字段字典
         """

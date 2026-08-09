@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
-
 from typing import List
 
 from fastapi import FastAPI
 
-from applications.aotutest.models.autotest_model import (
-    AutoTestApiTagInfo,
-)
+from applications.aotutest.models.autotest_model import AutoTestApiTagInfo
 from applications.aotutest.schemas.autotest_project_schema import AutoTestApiProjectCreate
 from applications.aotutest.schemas.autotest_tag_schema import AutoTestApiTagCreate
 from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
@@ -35,6 +32,7 @@ from enums import MenuType
 
 # 初始化种子数据的创建人（管理员账号，大写）
 INIT_CREATED_USER = "ADMIN"
+
 
 async def init_database_role():
     role_crud = RoleCrud()
@@ -441,7 +439,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/autotest/ui",
             keepalive=True
-        ,
+            ,
             created_user=INIT_CREATED_USER
         ),
         Menu(
@@ -454,7 +452,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/autotest/ui",
             keepalive=True
-        ,
+            ,
             created_user=INIT_CREATED_USER
         ),
         Menu(
@@ -467,7 +465,7 @@ async def init_database_menu():
             is_hidden=True,
             component="/autotest/steps",
             keepalive=True
-        ,
+            ,
             created_user=INIT_CREATED_USER
         ),
         Menu(
@@ -480,7 +478,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/autotest/testcase",
             keepalive=True
-        ,
+            ,
             created_user=INIT_CREATED_USER
         ),
         Menu(
@@ -493,7 +491,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/autotest/report",
             keepalive=True
-        ,
+            ,
             created_user=INIT_CREATED_USER
         ),
     ]
@@ -527,7 +525,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/task/list",
             keepalive=True
-        ,
+            ,
             created_user=INIT_CREATED_USER
         ),
         Menu(
@@ -540,7 +538,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/task/record",
             keepalive=True
-        ,
+            ,
             created_user=INIT_CREATED_USER
         ),
     ]

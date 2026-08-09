@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from tortoise import fields
 
-from enums import HTTPMethod
 from applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
+from enums import HTTPMethod
 
 
 class Router(ScaffoldModel, MaintainMixin, TimestampMixin):

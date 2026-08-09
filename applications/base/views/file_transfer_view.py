@@ -57,7 +57,6 @@ async def upload_file(
         if not state:
             LOGGER.error(f"上传文件失败，异常描述: {detail}")
             return FailureResponse(message=f"上传失败，异常描述: {detail}")
-        LOGGER.info(f"上传文件成功, path: {path}")
         return SuccessResponse(message="上传成功", data=detail)
     except Exception as e:
         LOGGER.error(f"上传文件失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -96,7 +95,6 @@ async def read_file(path: Union[str, Path] = Form(..., description="文件读取
     try:
         with open(file=filepath, mode="r", encoding="utf-8") as fp:
             content: str = fp.read()
-        LOGGER.info(f"读取文件成功, path: {path}")
         return SuccessResponse(data=content, message="文件读取成功")
     except FileNotFoundError:
         return NotFoundResponse(message=f"文件:{filepath}未找到")
@@ -121,7 +119,6 @@ async def move_file(
     dst_file_path: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, dst_path)
     try:
         state: bool = FileUtils.move_directory(src_file_path, dst_file_path)
-        LOGGER.info(f"移动文件成功, src_path: {src_path}, dst_path: {dst_path}")
         return SuccessResponse(message="文件移动成功", data={"src_path": src_file_path, "dst_path": dst_file_path, "state": state})
     except Exception as e:
         LOGGER.error(f"移动文件失败，异常描述: {e}\n{traceback.format_exc()}")
