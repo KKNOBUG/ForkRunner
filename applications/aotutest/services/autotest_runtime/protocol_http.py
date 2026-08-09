@@ -183,11 +183,9 @@ def infer_http_actual_body(
             actual_body_type = "form-data" if (form_data or form_files) else "x-www-form-urlencoded"
         actual_body = data_payload
     if file_payload is not None:
+        # 与历史调试接口保持一致：直接展开合并（非dict时由调用方失败路径承接）
         actual_body = actual_body or {}
-        if isinstance(actual_body, dict):
-            actual_body = {**actual_body, "__files": file_payload}
-        else:
-            actual_body = {"__body": actual_body, "__files": file_payload}
+        actual_body = {**actual_body, "__files": file_payload}
     return actual_body_type, actual_body
 
 

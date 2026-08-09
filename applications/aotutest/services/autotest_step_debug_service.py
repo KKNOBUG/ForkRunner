@@ -32,8 +32,8 @@ from applications.aotutest.services.autotest_runtime.protocol_http import (
 from applications.aotutest.services.autotest_runtime.protocol_tcp import (
     parse_tcp_response,
     parse_tcp_timeouts,
-    resolve_tcp_request_extract_sources,
-    select_tcp_payload,
+    resolve_tcp_debug_request_extract_sources,
+    select_tcp_debug_payload,
 )
 from applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from common import AioTcpClient, TcpFrameMode
@@ -161,6 +161,9 @@ class StepDebugService:
             config_name: str,
             config_type: AutoTestConfigNodeType,
             label: str,
+            env_not_found_template: Optional[str] = None,
+            config_not_found_template: Optional[str] = None,
+            empty_env_message: Optional[str] = None,
     ) -> EnvEndpoint:
         """
         按应用+环境名+配置名+类型解析环境配置（优先env_type=1）。
@@ -171,15 +174,16 @@ class StepDebugService:
         :param config_name: 配置名称
         :param config_type: 配置节点类型
         :param label: 错误信息前缀（如HTTP请求调试失败）
+        :param env_not_found_template: 环境不存在文案模板，可用{label}/{project_id}/{env_name}
+        :param config_not_found_template: 配置不存在文案模板，可用{label}/{config_name}
+        :param empty_env_message: env_name为空时的完整错误文案
         :return: EnvEndpoint
         """
         env_name = (env_name or "").strip()
         if not env_name:
-            raise ParameterException(message=f"{label}, 参数[env_name]不允许为空")
-        if not project_id:
-            raise ParameterException(message=f"{label}, 参数[project_id]不允许为空")
-        if not (config_name or "").strip():
-            raise ParameterException(message=f"{label}, 参数[config_name]不允许为空")
+            raise ParameterException(
+                message=empty_env_message or f"{label}, 参数[env_name]不允许为空"
+            )
 
         env_row = await services.env_enum_curd.model.filter(
             project_id=project_id,
@@ -194,7 +198,10 @@ class StepDebugService:
                 state__not=1,
             ).first()
         if not env_row:
-            raise NotFoundException(message=f"{label}, 应用[{project_id}]下环境[{env_name}]不存在")
+            tmpl = env_not_found_template or "{label}, 应用[{project_id}]下环境[{env_name}]不存在"
+            raise NotFoundException(
+                message=tmpl.format(label=label, project_id=project_id, env_name=env_name)
+            )
 
         env_config_instance = await services.env_config_curd.get_by_conditions(
             only_one=True,
@@ -206,7 +213,10 @@ class StepDebugService:
             config_type=config_type,
         )
         if not env_config_instance:
-            raise NotFoundException(message=f"{label}, 目标环境下[{config_name}]配置不存在")
+            tmpl = config_not_found_template or "{label}, 目标环境下[{config_name}]配置不存在"
+            raise NotFoundException(
+                message=tmpl.format(label=label, config_name=config_name)
+            )
 
         return EnvEndpoint(
             env_id=env_row.id,
@@ -244,6 +254,7 @@ class StepDebugService:
             request_headers: Optional[Dict[str, Any]] = None,
             request_cookies: Optional[Dict[str, Any]] = None,
             prepend_extract_results: Optional[List[Dict[str, Any]]] = None,
+            sync_extract_into_lookup: bool = True,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
         调试路径提取+断言（is_core_engine=False），并将提取值写回变量池。
@@ -262,6 +273,8 @@ class StepDebugService:
         :param request_headers: 请求头
         :param request_cookies: 请求Cookie
         :param prepend_extract_results: 需前置合并的提取结果（如Redis自动写入）
+        :param sync_extract_into_lookup: 是否将提取结果同步写入session_variables_lookup；
+            Redis历史调试接口仅写入finished_variables，需传False以保持契约
         :return: (extract_results, validator_results)
         """
         extract_data, extract_results = AutoTestToolService.run_extract_variables(
@@ -279,7 +292,8 @@ class StepDebugService:
         )
         for extract_key, extract_value in extract_data.items():
             finished_variables.append(StepVariablesBase(key=extract_key, value=extract_value, desc=""))
-            session_variables_lookup[extract_key] = extract_value
+            if sync_extract_into_lookup:
+                session_variables_lookup[extract_key] = extract_value
 
         if prepend_extract_results:
             extract_results = list(prepend_extract_results) + (extract_results or [])
@@ -476,12 +490,14 @@ class StepDebugService:
             except httpx.TimeoutException as e:
                 raise StepDebugException(message="请求超时，请检查URL是否可访问或网络连接是否正常") from e
             except httpx.ConnectError as e:
-                raise StepDebugException(message=f"连接失败: {e}") from e
+                raise StepDebugException(message=f"连接失败: {str(e)}") from e
             except httpx.RequestError as e:
-                raise StepDebugException(message=f"请求失败: {e}") from e
+                raise StepDebugException(message=f"请求失败: {str(e)}") from e
             except Exception as e:
                 error_message = (
-                    f"【HTTP请求】调试异常, 错误类型: {type(e).__name__}, 错误描述: {e}"
+                    f"【HTTP请求】调试异常, "
+                    f"错误类型: {type(e).__name__}, "
+                    f"错误描述: {e}"
                 )
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 raise StepDebugException(message="HTTP请求调试异常", data=error_message) from e
@@ -639,6 +655,7 @@ class StepDebugService:
                 config_name=request_config_name,
                 config_type=AutoTestConfigNodeType.API,
                 label="TCP请求调试失败",
+                config_not_found_template="{label}, 环境配置[{config_name}]不存在",
             )
         except (ParameterException, NotFoundException) as e:
             log(str(e.message))
@@ -660,7 +677,7 @@ class StepDebugService:
                 )
             )
 
-        payload = select_tcp_payload(
+        payload = select_tcp_debug_payload(
             request_args_type, request_text=request_text, request_body=request_body
         )
         tcp_frame_mode = (debug_in.tcp_frame_mode or "length_prefix_json").strip().lower()
@@ -706,8 +723,8 @@ class StepDebugService:
         duration = int((time.time() - start_time) * 1000)
         log(f"TCP请求调试完成: 耗时: {duration}ms")
         parsed = parse_tcp_response(raw_bytes, encoding=encoding, response_type=response_type)
-        request_json_for_extract, request_text_for_extract = resolve_tcp_request_extract_sources(
-            request_body=request_body, request_text=request_text, payload=payload
+        request_json_for_extract, request_text_for_extract = resolve_tcp_debug_request_extract_sources(
+            request_body=request_body, request_text=request_text
         )
 
         extract_results, validator_results = cls.run_extract_and_assert_for_debug(
@@ -799,9 +816,8 @@ class StepDebugService:
                     session_lookup_map.update(AutoTestToolService.list_to_dict(defined_variables))
                     session_lookup_map.update(AutoTestToolService.list_to_dict(session_variables))
                     session_lookup_map.update(executive_result or {})
-                    # 与引擎apply_extract_and_assert同款管线；调试侧不抛失败，交由调用方组装Failure
-                    _, validator_result = AutoTestToolService.run_extract_and_assert(
-                        extract_variables=[],
+                    # 与改造前调试接口保持一致：仅跑断言管线（不做提取）
+                    validator_result = AutoTestToolService.run_assert_validators(
                         assert_validators=assert_validators,
                         response_text=None,
                         response_json=None,
@@ -811,7 +827,6 @@ class StepDebugService:
                         log_callback=lambda msg: context.log(msg),
                         finished_variables=context,
                         is_core_engine=True,
-                        raise_on_failure=False,
                     )
                     assert_failed_number = sum(
                         1 for valid in validator_result if not valid.get("success", True)
@@ -948,6 +963,8 @@ class StepDebugService:
                     config_name=operate_config_name,
                     config_type=AutoTestConfigNodeType.REDIS,
                     label=operate_no,
+                    env_not_found_template="{label}：应用[{project_id}]下环境[{env_name}]不存在",
+                    config_not_found_template="{label}：环境配置[{config_name}]不存在",
                 )
                 config_host = endpoint.config_host
                 config_port = endpoint.config_port
@@ -1095,6 +1112,7 @@ class StepDebugService:
             response_text=response_text_str,
             response_json=redis_operates_response,
             prepend_extract_results=mark_extract_variables,
+            sync_extract_into_lookup=False,
         )
 
         result = cls.pack_debug_result(
