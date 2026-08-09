@@ -29,11 +29,18 @@ def _build_audit_search_q(
         apply_default_time_window: bool = True,
 ) -> Q:
     """
-    组装审计列表查询条件（偏向索引友好）：
-    - method / response_code：等值匹配（可用单列或组合索引）
-    - username / router：前缀匹配（可用 BTREE 最左前缀）
-    - tags / summary：仍为包含匹配（无法很好走索引，建议配合时间范围）
-    - 时间：优先使用区间；默认最近7天, 需要全量历史时显式传入足够大的start_time/end_time。
+    组装审计列表查询条件，偏向索引友好匹配。
+
+    :param username: 用户账号前缀
+    :param request_tags: 路由标签包含匹配
+    :param request_summary: 摘要包含匹配
+    :param request_method: 请求方式等值匹配
+    :param request_router: 路由前缀匹配
+    :param response_code: 响应代码等值匹配
+    :param start_time: 起始时间
+    :param end_time: 结束时间
+    :param apply_default_time_window: 未传时间时是否默认最近7天
+    :return: Tortoise Q查询条件
     """
     q = Q()
 
@@ -47,7 +54,7 @@ def _build_audit_search_q(
     end_time = (end_time or "").strip() or None
 
     if username:
-        # 前缀匹配可利用 username 索引；全模糊改为 startswith
+        # 前缀匹配可利用username索引；全模糊改为startswith
         q &= Q(username__startswith=username)
     if request_tags:
         q &= Q(request_tags__contains=request_tags)
@@ -78,7 +85,7 @@ def _build_audit_search_q(
 
 
 async def _serialize_audit_list(audit_log_objs) -> list:
-    """列表序列化：显式排除大字段，避免 only() 后触发惰性补查。"""
+    """列表序列化：显式排除大字段，避免only()后触发惰性补查。"""
     return [
         await audit_log.to_dict(
             exclude_fields={
@@ -108,7 +115,7 @@ async def list_audit(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    根据条件分页查询审计日志（Query 方式）。
+    查询日志列表。
 
     :param page: 页码
     :param page_size: 每页条数
@@ -150,7 +157,7 @@ async def search_audit(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    根据条件分页查询审计日志（Body 方式）。
+    查询日志列表。
 
     :param audit_in: 审计日志查询入参
     :param audit_crud: 审计日志CRUD服务
@@ -202,7 +209,7 @@ async def get_audit(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@audit.get("/byUser", summary="查询用户日志", description="根据用户id分页查询日志信息")
+@audit.get("/by_user", summary="查询用户日志", description="根据用户id分页查询日志信息")
 async def get_audit_by_user(
         user_id: int = Query(..., description="用户ID"),
         page: int = Query(default=1, ge=1, description="页码"),
@@ -289,7 +296,7 @@ async def delete_audit(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    根据 id 删除审计日志。
+    根据id删除审计日志。
 
     :param audit_id: 审计日志ID
     :param audit_crud: 审计日志CRUD服务
@@ -312,7 +319,7 @@ async def batch_delete_audits(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    根据 id 列表删除审计日志。
+    根据id列表删除审计日志。
 
     :param body_in: 审计日志批量删除入参
     :param audit_crud: 审计日志CRUD服务
