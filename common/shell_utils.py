@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import re
-import subprocess
 import socket
+import subprocess
 from pathlib import Path
 
 
