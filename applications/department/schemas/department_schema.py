@@ -54,7 +54,7 @@ class DepartmentSelect(BaseModel):
     order: List[str] = Field(default_factory=lambda: ["id"], description="排序字段")
     code: Optional[str] = Field(default=None, description="部门代码")
     name: Optional[str] = Field(default=None, description="部门名称")
-    is_deleted: Optional[bool] = Field(default=None, description="是否已删除；不传则仅查未删除")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
     created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")
     created_time: Optional[datetime] = Field(default=None, description="创建时间")

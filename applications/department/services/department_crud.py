@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 
 from tortoise.expressions import Q
 
@@ -80,11 +80,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             error_message: str = "校验父级部门失败, 父级部门不能为自身"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        parent = await self.get_by_id(parent_id, on_error=True)
-        if parent.is_deleted:
-            error_message: str = f"校验父级部门失败, 记录[id={parent_id}]不存在或已删除"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
+        parent = await self.get_by_id(parent_id, on_error=True, state=0)
         if parent.parent_id != 0:
             error_message: str = "校验父级部门失败, 子部门不允许再添加子部门, 父级只能选择顶级部门"
             LOGGER.error(error_message)
@@ -120,13 +116,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         :return: 更新后的部门实例
         :raises NotFoundException: 部门不存在
         """
-        instance = await self.get_by_id(department_id)
-        fields: Dict[str, Any] = {"is_deleted": True}
-        self._fill_updated_user(fields)
-        for key, value in fields.items():
-            setattr(instance, key, value)
-        await instance.save()
-        # 删除关系
+        instance = await self.soft_delete(id=department_id)
         await DeptStruct.filter(descendant=department_id).delete()
         return instance
 
@@ -150,9 +140,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
         parent_changed = new_parent_id != instance.parent_id
         if parent_changed:
-            child_count = await self.model.filter(
-                parent_id=department_id, is_deleted=False
-            ).count()
+            child_count = await self.model.filter(parent_id=department_id, state=0).count()
             if child_count > 0 and new_parent_id != 0:
                 error_message: str = "更新部门信息失败, 含有子部门的顶级部门不能设置为子部门"
                 LOGGER.error(error_message)
@@ -175,7 +163,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         """
         q = Q()
         # 获取所有未被软删除的部门
-        q &= Q(is_deleted=False)
+        q &= Q(state=0)
         if name:
             q &= Q(name__contains=name)
         all_dept = await self.model.filter(q).order_by("order")
@@ -185,7 +173,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             """
             递归组装指定parent_id下的子树节点。
 
-            :param parent_id: 父部门ID，0 表示顶级
+            :param parent_id: 父部门ID，0表示顶级
             :return: 子节点字典列表
             """
             fmt = lambda x: datetime.datetime.strftime(x, "%Y-%m-%d %H:%M:%S") if isinstance(x, datetime.datetime) else x
@@ -197,6 +185,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
                     "description": dept.description,
                     "order": dept.order,
                     "parent_id": dept.parent_id,
+                    "state": dept.state,
                     "created_time": fmt(dept.created_time),
                     "updated_time": fmt(dept.updated_time),
                     "created_user": dept.created_user,

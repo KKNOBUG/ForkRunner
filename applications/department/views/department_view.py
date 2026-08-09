@@ -194,7 +194,7 @@ async def search_departments(
         order = department_in.order
         code = department_in.code
         name = department_in.name
-        is_deleted = department_in.is_deleted
+        state = department_in.state
         created_user = department_in.created_user
         updated_user = department_in.updated_user
 
@@ -203,15 +203,11 @@ async def search_departments(
             q &= Q(code__contains=code)
         if name:
             q &= Q(name__contains=name)
-        if is_deleted is not None:
-            q &= Q(is_deleted=is_deleted)
-        else:
-            q &= Q(is_deleted=False)
         if created_user:
             q &= Q(created_user=created_user)
         if updated_user:
             q &= Q(updated_user=updated_user)
-
+        q &= Q(state=0)
         total, instances = await dept_crud.list(page=page, page_size=page_size, search=q, order=order)
         data = [await obj.to_dict() for obj in instances]
         LOGGER.info(f"查询部门列表成功, 数量: {total}")

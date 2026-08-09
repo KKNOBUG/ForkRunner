@@ -15,7 +15,7 @@ class TokenBase(BaseModel):
     email: Optional[str] = Field(default=None, max_length=64, description="用户邮箱")
     phone: Optional[str] = Field(default=None, max_length=20, description="用户电话")
     avatar: Optional[str] = Field(default=None, max_length=255, description="用户头像")
-    state: Optional[int] = Field(default=None, description="用户状态")
+    state: Optional[int] = Field(default=None, description="状态(0:启用, 1:禁用)")
     is_active: Optional[bool] = Field(default=None, description="是否激活")
     is_superuser: Optional[bool] = Field(default=None, description="是否为超级管理员")
     last_login: Optional[datetime] = Field(default=None, description="最后一次登录时间")

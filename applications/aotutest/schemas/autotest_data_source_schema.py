@@ -69,7 +69,7 @@ class AutoTestDataSourceSelect(BaseModel):
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
     file_name: Optional[str] = Field(None, max_length=255, description="数据驱动文件存储名称")
     file_path: Optional[str] = Field(None, max_length=1024, description="数据驱动文件存储路径")
-    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)，默认仅查启用")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
 class AutoTestDataSourceConditionQuery(BaseModel):

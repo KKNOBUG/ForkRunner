@@ -84,6 +84,58 @@ class LowerStr(str):
         return cls(v.lower())
 
 
+class UpperCharField(fields.CharField):
+    """大写字符串字段，写入/读出时自动转大写（与UpperStr行为一致）。"""
+
+    def to_db_value(self, value: Any, instance) -> Optional[str]:
+        if isinstance(value, str):
+            value = value.upper()
+        return super().to_db_value(value, instance)
+
+    def to_python_value(self, value: Any) -> Optional[str]:
+        value = super().to_python_value(value)
+        if isinstance(value, str):
+            return value.upper()
+        return value
+
+
+class LowerCharField(fields.CharField):
+    """
+    小写字符串字段，写入/读出时自动转小写（与LowerStr行为一致）。
+    """
+
+    def to_db_value(self, value: Any, instance) -> Optional[str]:
+        if isinstance(value, str):
+            value = value.lower()
+        return super().to_db_value(value, instance)
+
+    def to_python_value(self, value: Any) -> Optional[str]:
+        value = super().to_python_value(value)
+        if isinstance(value, str):
+            return value.lower()
+        return value
+
+
+class JSONTextField(JSONField):
+    """
+    以TEXT类型存储JSON格式的数据字段。
+
+    与JSONField的唯一区别在于SQL_TYPE：使用LONGTEXT而非MySQL的JSON列。
+    MySQL的JSON列在落库时会对对象键做归一化(根据键长度、字节值排序)，导致字段顺序丢失；
+    改用TEXT列原样存储JSON文本即可保留插入顺序。
+    Python侧依旧表现为dict/list：继承JSONField的dict ↔ str透明转换
+    (安装了orjson时默认使用orjson，序列化/反序列化均保持顺序)，
+    空值约定：None → 落库NULL；空dict {} → 落库 "{}"。
+    """
+
+    SQL_TYPE = "LONGTEXT"
+
+    def to_python_value(self, value: Any) -> Any:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return super().to_python_value(value)
+
+
 class ScaffoldModel(models.Model):
     """
     脚手架模型基类，提供通用的模型序列化能力。
@@ -258,38 +310,6 @@ class ScaffoldModel(models.Model):
         default_connection = "default"  # 默认数据库连接
 
 
-class UpperCharField(fields.CharField):
-    """大写字符串字段，写入/读出时自动转大写（与UpperStr行为一致）。"""
-
-    def to_db_value(self, value: Any, instance) -> Optional[str]:
-        if isinstance(value, str):
-            value = value.upper()
-        return super().to_db_value(value, instance)
-
-    def to_python_value(self, value: Any) -> Optional[str]:
-        value = super().to_python_value(value)
-        if isinstance(value, str):
-            return value.upper()
-        return value
-
-
-class LowerCharField(fields.CharField):
-    """
-    小写字符串字段，写入/读出时自动转小写（与LowerStr行为一致）。
-    """
-
-    def to_db_value(self, value: Any, instance) -> Optional[str]:
-        if isinstance(value, str):
-            value = value.lower()
-        return super().to_db_value(value, instance)
-
-    def to_python_value(self, value: Any) -> Optional[str]:
-        value = super().to_python_value(value)
-        if isinstance(value, str):
-            return value.lower()
-        return value
-
-
 class UUIDModel:
     """
     UUID唯一标识Mixin，为模型添加uid字段。
@@ -357,26 +377,6 @@ class ReserveFields:
     reserve_1 = fields.CharField(max_length=64, default=None, null=True, description="备用字段1")
     reserve_2 = fields.CharField(max_length=128, default=None, null=True, description="备用字段2")
     reserve_3 = fields.CharField(max_length=255, default=None, null=True, description="备用字段3")
-
-
-class JSONTextField(JSONField):
-    """
-    以TEXT类型存储JSON格式的数据字段。
-
-    与JSONField的唯一区别在于SQL_TYPE：使用LONGTEXT而非MySQL的JSON列。
-    MySQL的JSON列在落库时会对对象键做归一化(根据键长度、字节值排序)，导致字段顺序丢失；
-    改用TEXT列原样存储JSON文本即可保留插入顺序。
-    Python侧依旧表现为dict/list：继承JSONField的dict ↔ str透明转换
-    (安装了orjson时默认使用orjson，序列化/反序列化均保持顺序)，
-    空值约定：None → 落库NULL；空dict {} → 落库 "{}"。
-    """
-
-    SQL_TYPE = "LONGTEXT"
-
-    def to_python_value(self, value: Any) -> Any:
-        if isinstance(value, str) and not value.strip():
-            return None
-        return super().to_python_value(value)
 
 
 # 类型变量定义，用于泛型约束
