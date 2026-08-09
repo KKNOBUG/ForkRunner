@@ -66,7 +66,7 @@ def _filter_menu_tree(nodes: list, *, name_kw: str, type_kw: str) -> list:
     return out
 
 
-@menu.post("/create", summary="新增菜单")
+@menu.post("/create", summary="新增菜单", description="新增菜单信息")
 async def create_menu(
         menu_in: MenuCreate = Body(..., description="菜单信息"),
         menu_crud: MenuCrud = Depends(get_menu_crud),
