@@ -93,15 +93,10 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         """
         根据条件分页查询审计日志列表。
 
-        查询方式优化：
-        - 默认/空排序回落到 -created_time，便于命中 (created_time) / (user_id, created_time) 索引
-        - 仅 SELECT 列表字段，避免拉取 request/response 大字段
-        - count 与分页查询并行执行
-
         :param page: 页码，从1开始
         :param page_size: 每页记录数
         :param search: 搜索条件(Q对象)
-        :param order: 排序字段列表；由调用方提供，空则 ["-created_time"]
+        :param order: 排序字段列表；由调用方提供，空则["-created_time"]
         :return: (总记录数, 当前页审计日志列表)
         """
         order_fields: list = self._normalize_order(order) or ["-created_time"]
@@ -172,8 +167,6 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
     async def get_statistics_by_user(self, user_id: int) -> Dict[str, Any]:
         """
         统计指定用户的审计日志：总量、根据请求方式、根据响应代码分布。
-
-        使用 group_by + Count，避免把明细列全部加载到内存。
 
         :param user_id: 用户ID
         :return: 含user_id、total_count、method_statistics、code_statistics的字典
