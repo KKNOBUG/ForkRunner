@@ -131,6 +131,23 @@ class DBEnvConfigCreate(BaseModel):
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
+class RedisEnvConfigCreate(BaseModel):
+    """新增 REDIS 类型环境配置入参。"""
+
+    env_info_id: int = Field(..., description="应用ID")
+    config_name: str = Field(..., description="配置名称", max_length=64)
+    env: str = Field(..., description="环境", max_length=64)
+    redis_host: str = Field(..., description="Redis主机", max_length=128)
+    redis_port: str = Field(..., description="Redis端口", max_length=8)
+    redis_db: str = Field(default="0", description="Redis库编号", max_length=128)
+    redis_username: Optional[str] = Field(default="", description="Redis用户名", max_length=128)
+    redis_password: Optional[str] = Field(default="", description="Redis密码", max_length=128)
+    maintainer: str = Field(..., description="维护人", max_length=128)
+    remark: Optional[str] = Field(None, description="备注", max_length=256)
+    operation: int = Field(1, description="操作类型：1-新增")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+
+
 class APPEnvConfigUpdate(BaseModel):
     """修改 APP 类型环境配置入参。"""
 

@@ -15,6 +15,7 @@ from applications.aotutest.schemas.autotest_env_config_schema import (
     APPEnvConfigCreate,
     FILEEnvConfigCreate,
     DBEnvConfigCreate,
+    RedisEnvConfigCreate,
     APPEnvConfigUpdate,
     FILEEnvConfigUpdate,
     DBEnvConfigUpdate,
@@ -186,6 +187,90 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             raise
         except Exception as e:
             error_message = f"新增环境配置失败, 错误描述: {e}"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
+
+    async def create_redis_config(self, config_in: RedisEnvConfigCreate) -> Dict[str, Any]:
+        """
+        新增REDIS类型环境配置。
+
+        :param config_in: Redis配置入参
+        :return: 配置响应字典
+        """
+        try:
+            data_dict = config_in.model_dump()
+            project_id = int(data_dict["env_info_id"])
+            config_name = data_dict["config_name"]
+            env_name = (data_dict.get("env") or "").upper()
+            operator = self._resolve_operator(config_in)
+            config_type = AutoTestConfigNodeType.REDIS.value
+
+            await AutoTestApiProjectCrud().get_by_id(project_id=project_id, on_error=True, state__not=1)
+            # Redis配置挂在同名APP环境枚举下，便于调试侧按env_name解析
+            env_enum = await self._get_or_create_env_enum(
+                project_id=project_id,
+                env_name=env_name,
+                env_type=1,
+                user=operator,
+            )
+            mapped = {
+                "config_name": config_name,
+                "config_desc": data_dict.get("remark"),
+                "config_host": data_dict["redis_host"],
+                "config_port": str(data_dict.get("redis_port") or "6379").strip()[:8],
+                "config_username": data_dict.get("redis_username") or "",
+                "config_password": data_dict.get("redis_password") or "",
+                "database_name": str(data_dict.get("redis_db") or "0").strip(),
+                "created_user": data_dict.get("created_user") or operator,
+                "updated_user": operator,
+            }
+
+            existing = await self.model.filter(
+                project_id=project_id,
+                env_id=env_enum.id,
+                config_name=config_name,
+                config_type=config_type,
+            ).first()
+            if existing:
+                if existing.state == 0:
+                    raise DataAlreadyExistsException(
+                        message=f"配置:{config_name}已存在，当前应用+环境下配置名称唯一，不能重复新增"
+                    )
+                instance = await self.update(id=existing.id, obj_in={**mapped, "state": 0, "config_type": config_type})
+                return {
+                    "id": instance.id,
+                    "env_info_id": instance.project_id,
+                    "config_name": instance.config_name,
+                    "env": env_name,
+                    "config_type": config_type,
+                    "redis_host": instance.config_host,
+                    "redis_port": instance.config_port,
+                    "redis_db": instance.database_name,
+                }
+
+            instance = await self.create(
+                {
+                    "project_id": project_id,
+                    "env_id": env_enum.id,
+                    "config_type": config_type,
+                    "state": 0,
+                    **mapped,
+                }
+            )
+            return {
+                "id": instance.id,
+                "env_info_id": instance.project_id,
+                "config_name": instance.config_name,
+                "env": env_name,
+                "config_type": config_type,
+                "redis_host": instance.config_host,
+                "redis_port": instance.config_port,
+                "redis_db": instance.database_name,
+            }
+        except (DataAlreadyExistsException, ParameterException, NotFoundException):
+            raise
+        except Exception as e:
+            error_message = f"新增Redis环境配置失败, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 

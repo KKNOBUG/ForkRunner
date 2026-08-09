@@ -13,6 +13,7 @@ from applications.aotutest.schemas.autotest_env_config_schema import (
     APPEnvConfigCreate,
     FILEEnvConfigCreate,
     DBEnvConfigCreate,
+    RedisEnvConfigCreate,
     APPEnvConfigUpdate,
     FILEEnvConfigUpdate,
     DBEnvConfigUpdate,
@@ -113,6 +114,32 @@ async def create_db_config(
     except Exception as e:
         LOGGER.error(f"新增DB配置失败: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增DB配置失败, 错误描述: {e}")
+
+
+@autotest_env_config.post("/redis/create", summary="新增REDIS类型环境配置", description="新增REDIS类型环境配置信息")
+async def create_redis_config(
+        config_in: RedisEnvConfigCreate = Body(..., description="环境配置信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    新增REDIS类型环境配置信息。
+
+    :param config_in: Redis环境配置入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        result = await services.env_config_curd.create_redis_config(config_in)
+        return SuccessResponse(message="新增Redis配置成功", data=result, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"新增Redis配置失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"新增Redis配置失败, 错误描述: {e}")
 
 
 @autotest_env_config.post("/delete", summary="删除子表环境配置", description="删除指定子表环境配置信息")
