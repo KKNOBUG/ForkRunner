@@ -145,7 +145,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
-        # 使用 create_dict 排除 role_ids，并显式写入哈希后的密码，避免明文落库
+        # 使用create_dict排除role_ids，并显式写入哈希后的密码，避免明文落库
         user_data = user_in.create_dict()
         user_data["password"] = get_password_hash(password=user_in.password)
         instance = await self.create(user_data)
@@ -163,7 +163,8 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True, **kwargs)
         instance = await self.soft_delete(id=instance.id)
-        instance.token_version += 1  # 吊销用户所有Token
+        # 吊销用户所有Token
+        instance.token_version += 1
         await instance.save(update_fields=["token_version"])
         return instance
 
@@ -188,7 +189,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     async def update_user(self, user_in: UserUpdate) -> User:
         """
-        根据user_id更新用户基础字段(不含角色，角色由update_roles单独处理)。
+        根据user_id更新用户信息。
 
         :param user_in: 更新入参
         :return: 更新后的用户实例
@@ -262,6 +263,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :raises NotFoundException: 用户不存在
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True)
-        instance.token_version += 1  # 吊销用户所有Token
+        # 吊销用户所有Token
+        instance.token_version += 1
         await instance.save()
         return instance
