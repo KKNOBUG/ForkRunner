@@ -28,6 +28,108 @@ from core.responses import (
 autotest_env = APIRouter()
 
 
+@autotest_env.post("/create", summary="新增环境")
+async def create_env(
+        env_in: EnvCreate = Body(..., description="环境信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    新增环境。
+
+    :param env_in: 环境入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        env_info = await services.env_enum_curd.create_automation_env(env_in)
+        return SuccessResponse(message="新增成功", data=env_info, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"新增环境失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"新增失败, 错误描述: {e}")
+
+
+@autotest_env.post("/delete", summary="删除环境")
+async def delete_env(
+        env_in: EnvDeleteRequest = Body(..., description="环境信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    软删指定环境下某节点类型的全部配置。
+
+    :return: 统一HTTP响应
+    """
+    try:
+        result = await services.env_enum_curd.delete_automation_env(env_in.id, env_in.env_type)
+        return SuccessResponse(message="删除成功", data=result, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"删除环境失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除失败, 错误描述: {e}")
+
+
+@autotest_env.post("/update", summary="更新环境")
+async def update_env(
+        env_in: EnvEditRequest = Body(..., description="环境信息"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    编辑环境名称/应用归属，并级联同类型配置。
+
+    :return: 统一HTTP响应
+    """
+    try:
+        env_info = await services.env_enum_curd.update_automation_env(env_in)
+        return SuccessResponse(message="更新成功", data=env_info, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"更新环境失败: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"更新失败, 错误描述: {e}")
+
+
+@autotest_env.post("/query", summary="查询环境配置并分类")
+async def classify_env_configs(
+        env_config_in: AutoTestApiEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    按应用ID列表查询环境配置并分类返回。
+
+    :param env_config_in: 含 project_ids 的查询入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        data = await services.env_config_curd.query_classified_by_project_ids(
+            project_ids=env_config_in.project_ids,
+        )
+        total_configs: int = sum(
+            len(names)
+            for envs in data.values()
+            for buckets in envs.values()
+            for names in buckets.values()
+        )
+        return SuccessResponse(message="查询成功", data=data, total=total_configs)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"按应用列表查询环境配置并分类失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败, 异常描述: {e}")
+
+
 @autotest_env.post("/list", summary="查询环境列表")
 async def list_envs(
         env_in: EnvListQuery = Body(..., description="查询条件"),
@@ -82,78 +184,6 @@ async def search_envs(
         return FailureResponse(message=f"查询失败, 错误描述: {e}")
 
 
-@autotest_env.post("/create", summary="新增环境")
-async def create_env(
-        env_in: EnvCreate = Body(..., description="环境信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
-):
-    """
-    新增环境（确保环境枚举存在）。
-
-    :param env_in: 环境入参
-    :param services: 自动化测试CRUD依赖聚合
-    :return: 统一HTTP响应
-    """
-    try:
-        env_info = await services.env_enum_curd.create_automation_env(env_in)
-        return SuccessResponse(message="新增环境成功", data=env_info, total=1)
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"新增环境失败: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增环境失败, 错误描述: {e}")
-
-
-@autotest_env.post("/update", summary="更新环境")
-async def update_env(
-        env_in: EnvEditRequest = Body(..., description="环境信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
-):
-    """
-    编辑环境名称/应用归属，并级联同类型配置。
-
-    :return: 统一HTTP响应
-    """
-    try:
-        env_info = await services.env_enum_curd.update_automation_env(env_in)
-        return SuccessResponse(message="更新环境成功", data=env_info, total=1)
-    except DataAlreadyExistsException as e:
-        return DataAlreadyExistsResponse(message=str(e.message))
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"更新环境失败: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新环境失败, 错误描述: {e}")
-
-
-@autotest_env.post("/delete", summary="删除环境")
-async def delete_env(
-        env_in: EnvDeleteRequest = Body(..., description="环境信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
-):
-    """
-    软删指定环境下某节点类型的全部配置。
-
-    :return: 统一HTTP响应
-    """
-    try:
-        result = await services.env_enum_curd.delete_automation_env(env_in.id, env_in.env_type)
-        return SuccessResponse(message="删除环境成功", data=result, total=1)
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"删除环境失败: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除环境失败, 错误描述: {e}")
-
-
 @autotest_env.get("/get_all_app", summary="查询全部应用")
 async def get_all_apps(
         page: int = Query(1, ge=1, description="页码"),
@@ -171,37 +201,4 @@ async def get_all_apps(
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"获取所有应用失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {e}")
-
-
-@autotest_env.post("/query", summary="查询环境配置并分类")
-async def classify_env_configs(
-        env_config_in: AutoTestApiEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
-):
-    """
-    按应用ID列表查询环境配置并分类返回。
-
-    :param env_config_in: 含 project_ids 的查询入参
-    :param services: 自动化测试CRUD依赖聚合
-    :return: 统一HTTP响应
-    """
-    try:
-        data = await services.env_config_curd.query_classified_by_project_ids(
-            project_ids=env_config_in.project_ids,
-        )
-        total_configs: int = sum(
-            len(names)
-            for envs in data.values()
-            for buckets in envs.values()
-            for names in buckets.values()
-        )
-        LOGGER.info(
-            f"按应用列表查询环境配置并分类成功, project_ids={env_config_in.project_ids}, 配置条数: {total_configs}"
-        )
-        return SuccessResponse(message="查询成功", data=data, total=total_configs)
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"按应用列表查询环境配置并分类失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 异常描述: {e}")

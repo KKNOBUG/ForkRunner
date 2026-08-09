@@ -85,7 +85,6 @@ async def list_funcs():
     """
     try:
         func_list = _build_func_list_with_desc(GenerateUtils)
-        LOGGER.info("辅助函数查询成功")
         return SuccessResponse(message="查询成功", data=func_list, total=len(func_list))
     except Exception as e:
         LOGGER.error(f"辅助函数查询失败，异常描述: {e}\n{traceback.format_exc()}")

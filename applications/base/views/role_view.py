@@ -53,7 +53,6 @@ async def create_role(
     try:
         instance = await role_crud.create_role(role_in=role_in)
         data: dict = await instance.to_dict()
-        LOGGER.info(f"新增角色成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -77,7 +76,6 @@ async def delete_role(
     try:
         instance = await role_crud.delete_role(role_id=role_id)
         data = await instance.to_dict()
-        LOGGER.info(f"根据id删除角色信息成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -106,7 +104,6 @@ async def batch_delete_roles(
             role_codes=role_in.role_codes,
         )
         deleted_num = len(deleted_ids_or_codes)
-        LOGGER.info(f"根据角色id或code列表删除成功, 结果数量: {deleted_num}")
         return SuccessResponse(message="删除成功", data={"deleted": deleted_ids_or_codes}, total=deleted_num)
     except Exception as e:
         LOGGER.error(f"根据角色id或code列表删除失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -130,7 +127,6 @@ async def update_role(
     try:
         instance = await role_crud.update_role(role_in=role_in)
         data: dict = await instance.to_dict()
-        LOGGER.info(f"根据id更新角色信息成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -173,7 +169,6 @@ async def get_role(
         else:
             instance = await role_crud.get_by_name(role_name=name, on_error=True)
         data = await instance.to_dict()
-        LOGGER.info(f"根据角色id或code或name查询角色信息成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -210,7 +205,6 @@ async def search_roles(
             page=page, page_size=page_size, search=q, order=order
         )
         data = [await obj.to_dict() for obj in role_objs]
-        LOGGER.info(f"根据角色name查询角色信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据角色name查询角色信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -232,7 +226,6 @@ async def get_role_authorized(
     try:
         role_obj = await role_crud.get_or_error(id=id)
         data = await role_obj.to_dict(m2m=True)
-        LOGGER.info(f"根据角色id查询角色权限成功, role_id={id}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"根据角色id查询角色权限失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -254,7 +247,6 @@ async def update_role_authorized(
     try:
         role_obj = await role_crud.get_by_id(role_id=role_in.id, on_error=True)
         await role_crud.update_roles(role=role_obj, menu_ids=role_in.menu_ids, router_infos=role_in.router_infos)
-        LOGGER.info(f"根据角色id更新角色权限成功, role_id={role_in.id}")
         return SuccessResponse(message="更新成功")
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))

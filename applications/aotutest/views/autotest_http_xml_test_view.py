@@ -220,12 +220,7 @@ async def http_xml_test(
         return FailureResponse(message=f"读取请求体失败，异常描述: {e}")
 
     response_xml = _build_claim_response(text)
-    LOGGER.info(f"HTTP XML测试接口处理完成, 请求长度: {len(text)}")
-
-    return FastAPIResponse(
-        content=response_xml,
-        media_type="application/xml; charset=utf-8",
-    )
+    return FastAPIResponse(content=response_xml, media_type="application/xml; charset=utf-8")
 
 
 @autotest_http_xml_test.get("/sample/request", summary="查询XML请求示例报文")

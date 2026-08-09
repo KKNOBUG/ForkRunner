@@ -78,7 +78,6 @@ async def get_login_access_token(
             is_superuser=user.is_superuser,
             last_login=user.last_login
         )
-        LOGGER.info(f"验证用户密码和状态并生成令牌成功, username: {user.username}")
         return SuccessResponse(message="登录成功", data=data.model_dump())
     except Exception as e:
         LOGGER.error(f"验证用户密码和状态并生成令牌失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -137,7 +136,6 @@ async def get_user_info(
         user_id = CTX_USER_ID.get()
         user_obj = await user_crud.get_by_id(user_id=user_id, on_error=True)
         data = await user_obj.to_dict(exclude_fields=["password"])
-        LOGGER.info(f"查询当前用户信息成功, user_id: {user_id}")
         return SuccessResponse(message="查询成功", data=data)
     except Exception as e:
         LOGGER.error(f"查询当前用户信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -157,7 +155,6 @@ async def get_user_router():
         if user_obj.is_superuser:
             router_objs: List[Router] = await Router.all()
             routers = [router.method.lower() + router.path for router in router_objs]
-            LOGGER.info(f"查询当前用户路由成功, user_id: {user_id}, 数量: {len(routers)}")
             return SuccessResponse(message="查询成功", data=routers)
         role_objs: List[Role] = await user_obj.roles
         routers = []
@@ -165,7 +162,6 @@ async def get_user_router():
             router_objs: List[Router] = await role_obj.routers
             routers.extend([router.method.lower() + router.path for router in router_objs])
         routers = list(set(routers))
-        LOGGER.info(f"查询当前用户路由成功, user_id: {user_id}, 数量: {len(routers)}")
         return SuccessResponse(message="查询成功", data=routers)
     except Exception as e:
         LOGGER.error(f"查询当前用户路由失败，异常描述: {e}\n{traceback.format_exc()}")

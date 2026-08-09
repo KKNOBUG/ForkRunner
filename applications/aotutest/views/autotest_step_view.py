@@ -84,7 +84,6 @@ async def create_step(
             },
             replace_fields={"id": "step_id"}
         )
-        LOGGER.info(f"新增步骤成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -124,7 +123,6 @@ async def delete_step(
             },
             replace_fields={"id": "step_id"}
         )
-        LOGGER.info(f"根据id或code删除步骤信息成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -162,7 +160,6 @@ async def update_step(
             },
             replace_fields={"id": "step_id"}
         )
-        LOGGER.info(f"根据id或code更新步骤信息成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -205,7 +202,6 @@ async def get_step(
             },
             replace_fields={"id": "step_id"}
         )
-        LOGGER.info(f"根据id或code查询步骤信息成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -265,7 +261,6 @@ async def search_steps(
                 replace_fields={"id": "step_id"}
             ) for obj in instances
         ]
-        LOGGER.info(f"根据条件分页查询步骤列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -290,7 +285,6 @@ async def get_step_tree(
     """
     try:
         load = await services.step_curd.get_by_case_id(case_id=case_id, case_code=case_code)
-        LOGGER.info(f"根据用例id或code查询步骤树结构成功, 结果明细: {load.step_counter.model_dump()}")
         if load.root_steps:
             data = [s.model_dump(mode="json") for s in load.root_steps]
         elif load.case_only_when_no_steps is not None:
@@ -326,7 +320,6 @@ async def copy_step_tree(
         if not case_id and not case_code:
             return BadReqResponse(message="参数[case_id, case_code]不允许为空")
         copy_data = await services.step_curd.get_copy_tree(case_id=case_id, case_code=case_code)
-        LOGGER.info(f"根据用例id或code查询步骤树结构(返回未保存的副本)成功, 结果明细: {copy_data}")
         return SuccessResponse(message="复制成功", data=copy_data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -957,7 +950,6 @@ async def debug_http_request(
             }
         }
         LOGGER.info(f"HTTP请求调试完成: {request_method} {request_url}, 状态码: {response.status_code}, 耗时: {duration}ms")
-
         return SuccessResponse(message="HTTP请求调试完成", data=result_data)
     except Exception as e:
         LOGGER.error(f"HTTP请求调试失败，异常描述: {e}\n{traceback.format_exc()}")

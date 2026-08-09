@@ -459,11 +459,7 @@ async def start_tcp_test_server(
     try:
         await _tcp_test_server.start(host=host, json_port=json_port, xml_port=xml_port)
         status = _tcp_test_server.status()
-        LOGGER.info(f"启动TCP测试服务器成功, host: {host}, json_port: {json_port}, xml_port: {xml_port}")
-        return SuccessResponse(
-            message="启动成功",
-            data=status,
-        )
+        return SuccessResponse(message="启动成功", data=status)
     except OSError as e:
         LOGGER.error(f"启动TCP测试服务器失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"启动失败，异常描述: {e}")
@@ -478,7 +474,6 @@ async def stop_tcp_test_server():
     try:
         await _tcp_test_server.stop()
         status = _tcp_test_server.status()
-        LOGGER.info("停止TCP测试服务器成功")
         return SuccessResponse(message="停止成功", data=status)
     except Exception as e:
         LOGGER.error(f"停止TCP测试服务器失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -489,7 +484,6 @@ async def stop_tcp_test_server():
 async def get_tcp_test_server_status():
     """查询两个 TCP 端口的运行状态和连接计数。"""
     status = _tcp_test_server.status()
-    LOGGER.info(f"查询TCP测试服务器状态成功, is_running: {status.get('is_running')}")
     return SuccessResponse(message="查询成功", data=status)
 
 

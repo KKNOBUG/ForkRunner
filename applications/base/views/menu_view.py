@@ -81,7 +81,6 @@ async def create_menu(
     try:
         instance = await menu_crud.create_menu(menu_in=menu_in)
         data = await instance.to_dict()
-        LOGGER.info(f"新增菜单成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -108,7 +107,6 @@ async def delete_menu(
     try:
         instance = await menu_crud.delete_menu(menu_id=id)
         data = await instance.to_dict()
-        LOGGER.info(f"根据id删除菜单信息成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -134,7 +132,6 @@ async def update_menu(
     try:
         instance = await menu_crud.update_menu(menu_in=menu_in)
         data = await instance.to_dict()
-        LOGGER.info(f"根据id更新菜单信息成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -182,7 +179,6 @@ async def list_menu(
         tk = menu_type.strip() if menu_type else ""
         if nk or tk:
             res_menu = _filter_menu_tree(res_menu, name_kw=nk, type_kw=tk)
-        LOGGER.info(f"根据name或type查询菜单信息成功, 结果数量: {len(res_menu)}")
         return SuccessResponse(message="查询成功", data=res_menu, total=len(res_menu))
     except Exception as e:
         LOGGER.error(f"根据name或type查询菜单信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -203,7 +199,6 @@ async def get_menu(
     """
     try:
         result = await menu_crud.get_by_id(menu_id=menu_id, on_error=True)
-        LOGGER.info(f"根据id查询菜单信息成功, 结果明细: {result}")
         return SuccessResponse(message="查询成功", data=result, total=1)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))

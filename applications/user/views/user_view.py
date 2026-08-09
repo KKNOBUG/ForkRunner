@@ -49,7 +49,6 @@ async def create_user(
     try:
         instance = await user_crud.create_user(user_in=user_in)
         data = await instance.to_dict(exclude_fields=["password"])
-        LOGGER.info(f"新增用户成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -73,7 +72,6 @@ async def delete_user(
     try:
         instance = await user_crud.delete_user(user_id)
         data = await instance.to_dict(exclude_fields=["password"])
-        LOGGER.info(f"根据id删除用户成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -99,7 +97,6 @@ async def batch_delete_users(
     try:
         deleted_ids = await user_crud.delete_users(user_in=user_in)
         deleted_num = len(deleted_ids)
-        LOGGER.info(f"根据id列表删除用户成功, 结果数量: {deleted_num}")
         return SuccessResponse(message="删除成功", data={"deleted": deleted_ids}, total=deleted_num)
     except Exception as e:
         LOGGER.error(f"根据id列表删除用户失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -123,7 +120,6 @@ async def update_user(
         instance = await user_crud.update_user(user_in=user_in)
         await user_crud.update_roles(instance, user_in.role_ids)
         data = await instance.to_dict(exclude_fields=["password"])
-        LOGGER.info(f"根据id列表更新用户成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -153,7 +149,6 @@ async def get_user(
         data: dict = await instance.to_dict(m2m=True, exclude_fields=["password"])
         dept_id = data.pop("dept_id", None)
         data["dept"] = await (await dept_crud.get_or_error(id=dept_id)).to_dict() if dept_id else {}
-        LOGGER.info(f"根据id查询用户成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"根据id查询用户失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -177,7 +172,6 @@ async def get_user_by_username(
         if not instance:
             return NotFoundResponse(message=f"用户[username={username}]信息不存在")
         data: dict = await instance.to_dict(exclude_fields=["password"])
-        LOGGER.info(f"根据username查询用户成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"根据username查询用户失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -249,7 +243,6 @@ async def search_users(
         for item in data:
             dept_id = item.pop("dept_id", None)
             item["dept"] = await (await dept_crud.get_or_error(id=dept_id)).to_dict() if dept_id else {}
-        LOGGER.info(f"根据条件分页查询用户列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据条件分页查询用户列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -307,7 +300,6 @@ async def list_users(
         for item in data:
             dept_id = item.pop("dept_id", None)
             item["dept"] = await (await dept_crud.get_or_error(id=dept_id)).to_dict() if dept_id else {}
-        LOGGER.info(f"根据条件分页查询用户列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据条件分页查询用户列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -335,7 +327,6 @@ async def update_user_password(
         instance.password = get_password_hash(req_in.new_password)
         await instance.save()
         data = await instance.to_dict(exclude_fields=["password"])
-        LOGGER.info(f"根据当前登录用户ID修改密码成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"根据当前登录用户ID修改密码失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -356,7 +347,6 @@ async def reset_password(
     """
     try:
         data = await user_crud.reset_password(user_id)
-        LOGGER.info(f"根据id重置用户密码成功, 结果明细: {data}")
         return SuccessResponse(message="重置成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"根据id重置用户密码失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -377,7 +367,6 @@ async def logout(
     try:
         instance = await user_crud.logout(user_id=user_id)
         data = await instance.to_dict(exclude_fields=["id", "password"])
-        LOGGER.info(f"签退当前登录用户的所有会话信息成功, user_id: {user_id}")
         return SuccessResponse(message="登出成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"签退当前登录用户的所有会话信息失败，异常描述: {e}\n{traceback.format_exc()}")

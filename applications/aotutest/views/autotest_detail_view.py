@@ -51,7 +51,6 @@ async def create_step_detail(
             },
             replace_fields={"id": "detail_id"}
         )
-        LOGGER.info(f"新增明细成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -95,7 +94,6 @@ async def delete_step_detail(
             },
             replace_fields={"id": "detail_id"}
         )
-        LOGGER.info(f"根据id或code删除明细信息成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -129,7 +127,6 @@ async def update_step_detail(
             },
             replace_fields={"id": "detail_id"}
         )
-        LOGGER.info(f"根据id或code更新明细信息成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -176,7 +173,6 @@ async def get_step_detail(
             },
             replace_fields={"id": "detail_id"}
         )
-        LOGGER.info(f"根据id或code查询明细信息成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -242,7 +238,6 @@ async def search_step_details(
                 replace_fields={"id": "detail_id"}
             )
             detail_serializes.append(serialize)
-        LOGGER.info(f"根据条件分页查询明细列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=detail_serializes, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))

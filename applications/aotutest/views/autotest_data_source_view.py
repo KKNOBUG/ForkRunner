@@ -116,7 +116,6 @@ async def create_data_source(
     try:
         instance = await services.data_source_curd.create_data_source(data_source_in=data_source_in)
         data = await _serialize_data_source(instance)
-        LOGGER.info(f"新增数据源成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -161,7 +160,6 @@ async def delete_data_source(
             step_code=step_code,
         )
         data = await _serialize_data_source(instance)
-        LOGGER.info(f"软删除数据源信息成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -186,7 +184,6 @@ async def unbind_case_data_source(
     """
     try:
         result = await services.data_source_curd.unbind_case_data_sources(case_id=case_id)
-        LOGGER.info(f"解绑用例下全部数据源成功, case_id={case_id}, 结果明细: {result}")
         return SuccessResponse(message="解绑成功", data=result)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -226,7 +223,6 @@ async def update_data_source(
             )
         instance = await services.data_source_curd.update_data_source(data_source_in=effective)
         data = await _serialize_data_source(instance)
-        LOGGER.info(f"更新数据源成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -316,7 +312,6 @@ async def save_or_update_data_source(
         )
 
         data = await _serialize_data_source(instance)
-        LOGGER.info(f"保存或更新数据源信息成功, 结果明细: {data}")
         return SuccessResponse(message="保存成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -361,7 +356,6 @@ async def get_data_source(
         if isinstance(instance, list):
             return ParameterResponse(message="当前条件匹配多条记录，请使用get_by_case_step或search接口")
         data = await _serialize_data_source(instance)
-        LOGGER.info(f"根据条件查询单条数据源信息成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message), data=e.data)
@@ -403,7 +397,6 @@ async def get_dataset_names(
                     seen.add(name_str)
                     merged_names.append(name_str)
 
-    LOGGER.info(f"查询案例数据场景名称成功, case_id={case_id}, 结果数量: {len(merged_names)}")
     return SuccessResponse(message="查询成功", data=merged_names)
 
 
@@ -448,7 +441,6 @@ async def search_data_sources(
         serializes: List[Dict[str, Any]] = []
         for inst in instances:
             serializes.append(await _serialize_data_source(inst))
-        LOGGER.info(f"根据条件分页查询数据源列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=serializes, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -478,10 +470,8 @@ async def get_data_source_by_case_step(
         )
         if isinstance(result, list):
             serializes = [await _serialize_data_source(x) for x in result]
-            LOGGER.info(f"根据用例与步骤查询数据源成功, 结果数量: {len(serializes)}")
             return SuccessResponse(message="查询成功", data=serializes, total=len(serializes))
         data = await _serialize_data_source(result)
-        LOGGER.info(f"根据用例与步骤查询数据源成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -766,7 +756,6 @@ async def single_step_dataset_upload(
         file_desc=file_desc,
     )
     data = await _serialize_data_source(instance)
-    LOGGER.info(f"单步骤数据集上传成功, 结果明细: {data}")
     return SuccessResponse(message="单步骤数据集上传成功，已创建数据源并同步缓存", data=data, total=1)
 
 
@@ -777,7 +766,6 @@ async def single_step_dataset_download(
         step_code: str = Query(..., description="步骤标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    """从数据库dataframe字段导出xlsx（不依赖前端当前表格状态）。"""
     try:
         instance = await services.data_source_curd.get_by_case_step(
             case_id=case_id,
@@ -952,7 +940,6 @@ async def batch_step_dataset_upload(
         LOGGER.error(f"批量上传数据源失败, 已全部回滚: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"批量上传数据源失败，已全部回滚: {e}")
 
-    LOGGER.info(f"多步骤数据集批量上传成功, case_id={case_id}, 数量: {len(created)}")
     return SuccessResponse(
         message=f"多步骤数据集批量上传成功，共{len(created)}条数据源",
         data=created,

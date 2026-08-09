@@ -138,7 +138,6 @@ async def list_audit(
     try:
         total, audit_log_objs = await audit_crud.list_audit(page=page, page_size=page_size, order=order, search=q)
         data = await _serialize_audit_list(audit_log_objs)
-        LOGGER.info(f"根据条件分页查询日志信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据条件分页查询日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -174,7 +173,6 @@ async def search_audit(
             page=audit_in.page, page_size=audit_in.page_size, search=q, order=audit_in.order
         )
         data = await _serialize_audit_list(audit_log_objs)
-        LOGGER.info(f"根据条件分页查询日志信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据条件分页查询日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -196,7 +194,6 @@ async def get_audit(
     try:
         instance = await audit_crud.get_by_id(audit_id=audit_id)
         data = await instance.to_dict()
-        LOGGER.info(f"根据id查询日志信息成功, audit_id: {audit_id}")
         return SuccessResponse(message="查询成功", data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -237,7 +234,6 @@ async def get_audit_by_user(
             page=page, page_size=page_size, search=q, order=order
         )
         data = await _serialize_audit_list(audit_log_objs)
-        LOGGER.info(f"根据用户id分页查询日志信息成功, 用户ID: {user_id}, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"根据用户id分页查询日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -261,7 +257,6 @@ async def get_recent_audits(
     try:
         audit_logs = await audit_crud.get_recent_audits(limit=limit, user_id=user_id)
         data = await _serialize_audit_list(audit_logs)
-        LOGGER.info(f"根据条件获取最近日志信息成功, 结果数量: {len(data)}")
         return SuccessResponse(message="查询成功", data=data, total=len(data))
     except Exception as e:
         LOGGER.error(f"根据条件获取最近日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -282,7 +277,6 @@ async def get_audit_statistics(
     """
     try:
         data = await audit_crud.get_statistics_by_user(user_id=user_id)
-        LOGGER.info(f"根据用户id查询日志统计信息成功, 用户ID: {user_id}")
         return SuccessResponse(message="统计成功", data=data)
     except Exception as e:
         LOGGER.error(f"根据用户id查询日志统计信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -304,7 +298,6 @@ async def delete_audit(
     try:
         instance = await audit_crud.delete_by_id(audit_id=audit_id)
         data = await instance.to_dict()
-        LOGGER.info(f"根据id删除日志信息成功, id: {audit_id}")
         return SuccessResponse(message="删除成功", data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -327,7 +320,6 @@ async def batch_delete_audits(
     """
     try:
         count = await audit_crud.delete_by_ids(body_in.audit_ids)
-        LOGGER.info(f"根据id列表批量删除日志信息成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except Exception as e:
         LOGGER.error(f"根据id列表批量删除日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -348,7 +340,6 @@ async def delete_audits_by_user(
     """
     try:
         count = await audit_crud.delete_by_user_id(user_id=user_id)
-        LOGGER.info(f"根据用户id删除全部日志信息成功, user_id: {user_id}, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count})
     except Exception as e:
         LOGGER.error(f"根据用户id删除全部日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -371,8 +362,7 @@ async def delete_audits_by_time(
     """
     try:
         count = await audit_crud.delete_by_time_range(start_time=start_time, end_time=end_time)
-        LOGGER.info(f"根据时间删除审计日志成功, 范围: {start_time} ~ {end_time}, 数量: {count}")
-        return SuccessResponse(message="删除成功", data={"affected": count})
+        return SuccessResponse(message="删除成功", data={"deleted": count})
     except Exception as e:
         LOGGER.error(f"根据时间删除审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
@@ -390,7 +380,6 @@ async def clear_all_audits(
     """
     try:
         count = await audit_crud.clear_all()
-        LOGGER.warning(f"清空所有审计日志, 数量: {count}")
         return SuccessResponse(message="清空成功", data={"affected": count})
     except Exception as e:
         LOGGER.error(f"清空审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
