@@ -22,7 +22,6 @@ async def _export_testcases_impl(case_ids: List[int], created_user: Optional[str
     :param case_ids: 用例主键列表
     :param created_user: 提交用户账号(仅作元信息随结果落入执行记录)
     :return: 含file_name/file_path/case_count等的结果字典
-    :raises ValueError: 无合规用例可导出时
     """
     services = await get_autotest_api_services()
     cases_data, invalid = await prepare_export_cases(case_ids=case_ids, services=services)
@@ -60,7 +59,6 @@ def export_testcases_task(
     :param created_user: 提交用户账号
     :param report_type: 报告类型快照(供Worker写执行记录；任务体本身不消费)
     :return: 导出结果字典(落入task_summary)
-    :raises Exception: 导出失败时向上抛出，供Celery on_failure处理
     """
     try:
         LOGGER.info(

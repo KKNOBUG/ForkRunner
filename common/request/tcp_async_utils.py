@@ -79,7 +79,6 @@ class AsyncTcpUtils:
         TCP请求统一调度方法, 执行TCP收发并返回响应字节。
 
         :return: 响应体字节(若协议包含长度前缀, 已在内部剥离)
-        :raises ReqInvalidException: 当连接、发送、接收或协议解析发生异常时抛出
         """
         try:
             return await self.client.exchange(
@@ -103,8 +102,6 @@ class AsyncTcpUtils:
         获取响应的JSON数据。
 
         :return: 解析后的JSON对象；空响应返回None
-        :raises ReqInvalidException: 当TCP请求失败时抛出
-        :raises ResInvalidException: 当响应体不是合法JSON或解析失败时抛出
         """
         try:
             raw = await self.execute()
@@ -123,8 +120,6 @@ class AsyncTcpUtils:
         获取响应的文本数据。
 
         :return: 解码后的文本字符串
-        :raises ReqInvalidException: 当 TCP 请求失败时抛出
-        :raises ResInvalidException: 当解码失败或处理异常时抛出
         """
         try:
             raw = await self.execute()
@@ -141,8 +136,6 @@ class AsyncTcpUtils:
         获取响应的字节数据。
 
         :return: 响应体字节
-        :raises ReqInvalidException: 当TCP请求失败时抛出
-        :raises ResInvalidException: 当处理异常时抛出
         """
         try:
             return await self.execute()
@@ -156,8 +149,6 @@ class AsyncTcpUtils:
         获取响应的XML文本, 并格式化后返回。
 
         :return: 格式化后的 XML 字符串；空响应返回None
-        :raises ReqInvalidException: 当TCP请求失败时抛出
-        :raises ResInvalidException: 当响应体不是合法XML或解析失败时抛出
         """
         try:
             raw = await self.execute()
@@ -323,7 +314,6 @@ class AioTcpClient:
         内部请求实现: 建立连接、发送数据、接收响应并返回(短连接)
 
         :return: 响应体字节。
-        :raises ReqInvalidException: 当连接/读写/协议解析异常时抛出
         """
         del kwargs  # 预留扩展(如local_addr/ssl等)
         conn_timeout = (connect_timeout or self.connect_timeout).total_seconds()

@@ -143,7 +143,6 @@ def execute_step_tree_task(
     :param steps_execute_config: 步骤执行环境配置
     :param created_user: 提交用户账号
     :return: 执行结果字典
-    :raises Exception: 执行失败时向上抛出，供Celery on_failure处理
     """
     try:
         rt = AutoTestReportType.SCHEDULE_EXEC

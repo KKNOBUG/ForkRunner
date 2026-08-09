@@ -25,8 +25,6 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 角色实例或None
-        :raises ParameterException: role_id为空
-        :raises NotFoundException: on_error为True且角色不存在
         """
         if not role_id:
             error_message: str = "查询角色信息失败, 参数[role_id]不允许为空"
@@ -47,8 +45,6 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 角色实例或None
-        :raises ParameterException: role_code为空
-        :raises NotFoundException: on_error为True且角色不存在
         """
         if not role_code:
             error_message: str = "查询角色信息失败, 参数[role_code]不允许为空"
@@ -69,8 +65,6 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 角色实例或None
-        :raises ParameterException: role_name为空
-        :raises NotFoundException: on_error为True且角色不存在
         """
         if not role_name:
             error_message: str = "查询角色信息失败, 参数[role_name]不允许为空"
@@ -99,7 +93,6 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
 
         :param role_in: 新增角色入参
         :return: 新建的角色实例
-        :raises DataAlreadyExistsException: code或name已存在
         """
         code = role_in.code
         name = role_in.name
@@ -118,8 +111,6 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
 
         :param role_in: 更新入参（含可选 updated_user；有登录上下文时由服务端覆盖）
         :return: 更新后的角色实例
-        :raises NotFoundException: 角色不存在
-        :raises DataAlreadyExistsException: code或name与其它角色冲突
         """
         role_id = role_in.id
         await self.get_by_id(role_id=role_id, on_error=True)
@@ -152,7 +143,6 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         :param menu_ids: 菜单ID列表
         :param router_infos: 路由信息列表，每项含path、method
         :return: None
-        :raises ParameterException: role为空，或菜单/路由不存在
         """
         if role is None:
             error_message: str = "更新角色权限失败, 参数[role]不允许为空"
@@ -186,7 +176,6 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         :param role_id: 角色ID
         :param kwargs: 额外查询条件
         :return: 被删除的角色实例
-        :raises NotFoundException: 角色不存在
         """
         instance = await self.get_by_id(role_id=role_id, on_error=True, **kwargs)
         await instance.delete()

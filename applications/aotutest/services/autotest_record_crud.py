@@ -30,8 +30,6 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 执行记录实例或None
-        :raises ParameterException: record_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not record_id:
             error_message: str = "查询执行记录信息失败, 参数[record_id]不允许为空"
@@ -84,8 +82,6 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
         :param record_id: 执行记录主键
         :param celery_id: Celery任务ID；与 record_id 二选一
         :return: 更新后的记录实例
-        :raises ParameterException: record_id与celery_id均未传
-        :raises NotFoundException: 记录不存在
         """
         if not record_id and not celery_id:
             error_message: str = "更新执行记录失败, 参数[record_id]或[celery_id]不允许为空"
@@ -149,7 +145,6 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
 
         :param record_in: 查询条件(含分页、排序与时间区间)
         :return: (总数, 记录列表)
-        :raises ParameterException: 查询字段非法时
         """
         try:
             q = Q()

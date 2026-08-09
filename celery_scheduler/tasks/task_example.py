@@ -16,8 +16,6 @@ async def task_example(write_number: int = 100, write_message: Optional[str] = N
     :param write_number: 计划写入行数，须为1–100的正整数
     :param write_message: 每行附加文案；为空时使用默认测试文案
     :return: None
-    :raises ValueError: write_number非法
-    :raises RuntimeError: 模拟意外事件触发时抛出
     """
     if not write_number or (0 > write_number > 100):
         raise ValueError("参数传[max_number]逻辑错误，必须传递小于100的正整数类型")

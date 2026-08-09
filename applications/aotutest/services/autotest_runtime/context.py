@@ -16,7 +16,6 @@ class VariableResolver(Protocol):
 
         :param name: 变量名（占位符${name}中的name）
         :return: 变量值
-        :raises KeyError: 变量未定义或不存在时
         """
         ...
 
@@ -53,7 +52,6 @@ class ListVariableResolver:
 
         :param name: 变量名
         :return: 对应value
-        :raises KeyError: 未找到或值为空定义时
         """
         from applications.aotutest.services.autotest_runtime.util_kv import KvUtils
 

@@ -64,8 +64,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 用例实例或None
-        :raises ParameterException: case_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not case_id:
             error_message: str = "查询用例信息失败, 参数[case_id]不允许为空"
@@ -87,8 +85,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 用例实例或None
-        :raises ParameterException: case_code为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not case_code:
             error_message: str = "查询用例信息失败, 参数[case_code]不允许为空"
@@ -128,10 +124,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
         :param case_in: 用例创建schema
         :return: 创建后的用例实例
-        :raises ParameterException: 用户脚本未填标签，或公共脚本/公共接口误填标签，或标签格式非法
-        :raises NotFoundException: 标签不存在
-        :raises DataAlreadyExistsException: 同项目下用例名重复
-        :raises DataBaseStorageException: 违反数据库约束
         """
         case_name: str = case_in.case_name
         case_project: int = case_in.case_project
@@ -191,9 +183,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
         :param case_in: 用例更新schema，需含case_id或case_code
         :return: 更新后的用例实例
-        :raises NotFoundException: 用例或关联标签不存在
-        :raises DataAlreadyExistsException: 同项目下用例名重复
-        :raises DataBaseStorageException: 违反数据库约束
         """
         case_id: Optional[int] = case_in.case_id
         case_code: Optional[str] = case_in.case_code
@@ -272,9 +261,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
         :return: 软删除后的用例实例
-        :raises ParameterException: case_id与case_code均未传
-        :raises NotFoundException: 用例不存在
-        :raises DataAlreadyExistsException: 公共脚本仍被引用
         """
         if not case_id and not case_code:
             error_message: str = "删除用例信息失败, 参数[case_id]或[case_code]不允许为空"
@@ -309,7 +295,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
-        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -324,7 +309,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
         校验切换为公共接口前存量步骤树形态是否合规。
 
         :param case_instance: 待切换的用例实例
-        :raises ParameterException: 存量步骤树形态不满足公共接口约束时
         """
         root_steps: List[AutoTestApiStepInfo] = await AutoTestApiStepInfo.filter(
             case_id=case_instance.id, parent_step_id=None, state__not=1
@@ -351,10 +335,6 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
         :param cases_data: 用例更新schema列表
         :return: 含created_count、updated_count、success_detail的字典
-        :raises NotFoundException: 关联标签不存在
-        :raises ParameterException: 必填字段缺失
-        :raises DataAlreadyExistsException: 同项目下用例名重复
-        :raises DataBaseStorageException: 数据库写入异常
         """
         created_count: int = 0
         updated_count: int = 0

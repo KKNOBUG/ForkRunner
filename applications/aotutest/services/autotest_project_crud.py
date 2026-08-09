@@ -36,8 +36,6 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 应用实例或None
-        :raises ParameterException: project_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not project_id:
             error_message: str = "查询应用信息失败, 参数[project_id]不允许为空"
@@ -64,8 +62,6 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         :param on_error: 存在缺失ID时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 应用列表；缺失且on_error为False时返回False
-        :raises ParameterException: project_ids为空或类型非法
-        :raises NotFoundException: on_error为True且存在缺失ID
         """
         if not project_ids:
             error_message: str = "查询应用信息失败, 参数[project_ids]不允许为空"
@@ -94,8 +90,6 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 应用实例或None
-        :raises ParameterException: project_code为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not project_code:
             error_message: str = "查询应用信息失败, 参数[project_code]不允许为空"
@@ -117,8 +111,6 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 应用实例或None
-        :raises ParameterException: project_name为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not project_name:
             error_message: str = "查询应用信息失败, 参数[project_name]不允许为空"
@@ -138,7 +130,6 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
 
         :param project_in: 应用创建schema
         :return: 创建或恢复后的应用实例
-        :raises DataBaseStorageException: 违反数据库约束
         """
         project_name: str = project_in.project_name
 
@@ -177,9 +168,6 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
 
         :param project_in: 应用更新schema
         :return: 更新后的应用实例
-        :raises NotFoundException: 应用不存在
-        :raises DataAlreadyExistsException: 应用名重复
-        :raises DataBaseStorageException: 违反约束
         """
         project_id: Optional[int] = project_in.project_id
         project_code: Optional[str] = project_in.project_code
@@ -235,9 +223,6 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         :param project_id: 应用主键ID，与project_code二选一
         :param project_code: 应用标识代码，与project_id二选一
         :return: 软删除后的应用实例
-        :raises ParameterException: project_id与project_code均未传
-        :raises NotFoundException: 应用不存在
-        :raises DataBaseStorageException: 存在关联数据
         """
         if not project_id and not project_code:
             error_message: str = "删除应用信息失败, 参数[project_id]或[project_code]不允许为空"
@@ -273,9 +258,6 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
 
         :param project_in: 应用删除schema
         :return: 更新条数
-        :raises ParameterException: project_ids与project_codes均未传
-        :raises NotFoundException: 应用不存在
-        :raises DataBaseStorageException: 存在关联数据
         """
         project_ids: Optional[List[int]] = project_in.project_ids
         project_codes: Optional[List[str]] = project_in.project_codes
@@ -306,7 +288,6 @@ class AutoTestApiProjectCrud(ScaffoldCrud[AutoTestApiProjectInfo, AutoTestApiPro
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
-        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)

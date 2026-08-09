@@ -29,7 +29,6 @@ class XPathUtils:
 
         :param xml_data: XML 字符串或 ElementTree 元素。
         :return: ElementTree 元素。
-        :raises ValueError: 输入为无效 XML 字符串时抛出。
         """
         if isinstance(xml_data, str):
             return ElementTree.fromstring(xml_data.encode("utf-8"))
@@ -188,7 +187,6 @@ class XPathUtils:
         :param value: 新数据；会被转换为字符串写入新元素 text。
         :param tag: 新子元素标签名；不提供时根据上述规则推导。
         :return: 新增后的 XML 字符串。
-        :raises ValueError: 输入为无效 XML 格式时抛出。
         """
         if not xpath:
             if isinstance(xml_data, str):
@@ -295,7 +293,6 @@ class XPathUtils:
         :param xml_data: 待删除的 XML 字符串或 ElementTree 元素。
         :param xpath: XPath 表达式。
         :return: 删除后的 XML 字符串。
-        :raises ValueError: 输入为无效 XML 格式时抛出。
         """
         if not xpath:
             if isinstance(xml_data, str):
@@ -332,7 +329,6 @@ class XPathUtils:
         :param xpath: XPath 表达式。
         :param value: 新值；会被转换为字符串写入匹配元素的 text。
         :return: 更新后的 XML 字符串。
-        :raises ValueError: 输入为无效 XML 格式时抛出。
         """
         if not xpath:
             if isinstance(xml_data, str):
@@ -365,7 +361,6 @@ class XPathUtils:
         :param xml_data: 待查询的 XML 字符串或 ElementTree 元素。
         :param xpath: XPath 表达式。
         :return: 最后一个匹配元素的 text 或 XML 字符串；未匹配到时返回 ``None``。
-        :raises ValueError: 输入为无效 XML 格式时抛出。
         """
         if not xpath:
             return None

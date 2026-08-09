@@ -38,8 +38,6 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 报告实例或None
-        :raises ParameterException: report_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not report_id:
             error_message: str = "查询报告信息失败, 参数[report_id]不允许为空"
@@ -61,8 +59,6 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 报告实例或None
-        :raises ParameterException: report_code为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not report_code:
             error_message: str = "查询报告信息失败, 参数[report_code]不允许为空"
@@ -82,8 +78,6 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
         :param report_in: 报告创建schema
         :return: 创建后的报告实例
-        :raises NotFoundException: 用例不存在
-        :raises DataBaseStorageException: 违反数据库约束
         """
         case_id: int = report_in.case_id
         case_code: str = report_in.case_code
@@ -111,8 +105,6 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
         :param report_in: 报告更新schema
         :return: 更新后的报告实例
-        :raises NotFoundException: 报告不存在
-        :raises DataBaseStorageException: 违反约束
         """
         report_id: Optional[int] = report_in.report_id
         report_code: Optional[str] = report_in.report_code
@@ -143,7 +135,6 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         :param report_id: 报告主键ID，与report_code二选一
         :param report_code: 报告标识代码，与report_id二选一
         :return: 软删除后的报告实例
-        :raises NotFoundException: 报告不存在
         """
         if report_id:
             instance = await self.get_by_id(report_id=report_id, on_error=True, state__not=1)
@@ -171,7 +162,6 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
-        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)

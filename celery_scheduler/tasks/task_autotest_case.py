@@ -44,7 +44,6 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
     :param task_id: 自动化任务主键ID
     :param report_type: 报告类型；为ASYNC_EXEC或异步执行时根据手动执行处理
     :return: 含success、task_id及批次执行汇总的字典
-    :raises Exception: 执行过程异常时重新抛出，供Celery on_failure更新记录
     """
     span_id = get_span_id_for_log()
     task = await AutoTestApiTaskInfo.get_or_none(id=task_id)

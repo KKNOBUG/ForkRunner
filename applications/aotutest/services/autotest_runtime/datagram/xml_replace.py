@@ -25,7 +25,6 @@ class XmlDatagram:
         :param body_map: XPath->值的映射
         :param request_text: XML报文字符串；空值原样返回
         :return: 替换后的XML字符串
-        :raises ValueError: 报文不是有效XML，或XPath执行失败时
         """
         if not request_text:
             return request_text

@@ -132,8 +132,6 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 任务实例或None
-        :raises ParameterException: task_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not task_id:
             error_message: str = "查询任务信息失败, 参数[task_id]不允许为空"
@@ -154,8 +152,6 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 任务实例或None
-        :raises ParameterException: task_code为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not task_code:
             error_message: str = "查询任务信息失败, 参数[task_code]不允许为空"
@@ -174,9 +170,6 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
         :param task_in: 任务创建schema
         :return: 创建后的任务实例
-        :raises NotFoundException: 应用不存在
-        :raises DataAlreadyExistsException: 同应用下任务名已存在
-        :raises DataBaseStorageException: 违反数据库约束
         """
         task_name: str = task_in.task_name
         task_project: int = task_in.task_project
@@ -210,9 +203,6 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
         :param task_in: 任务更新schema
         :return: 更新后的任务实例
-        :raises NotFoundException: 任务不存在
-        :raises DataAlreadyExistsException: 同应用下任务名已存在
-        :raises DataBaseStorageException: 违反约束
         """
         task_id: Optional[int] = task_in.task_id
         task_code: Optional[str] = task_in.task_code
@@ -272,7 +262,6 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         :param task_id: 任务主键ID，与task_code二选一
         :param task_code: 任务标识代码，与task_id二选一
         :return: 软删除后的任务实例
-        :raises NotFoundException: 任务不存在
         """
         if task_id:
             instance = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
@@ -291,7 +280,6 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         :param task_id: 任务主键ID
         :param enabled: 是否启用
         :return: 更新后的任务实例
-        :raises NotFoundException: 任务不存在
         """
         instance = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
         instance.task_enabled = enabled
@@ -307,7 +295,6 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
-        :raises ParameterException: 查询字段非法
         """
         try:
             # 根据执行时间排序时：有执行记录优先（NULL 置后），再根据时间倒序

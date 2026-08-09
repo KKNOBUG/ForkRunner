@@ -34,8 +34,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 明细实例或None
-        :raises ParameterException: detail_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not detail_id:
             error_message: str = "查询明细信息失败, 参数[detail_id]不允许为空"
@@ -57,8 +55,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 明细实例或None
-        :raises ParameterException: detail_code为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not detail_code:
             error_message: str = "查询明细信息失败, 参数[detail_code]不允许为空"
@@ -79,8 +75,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         :param detail_in: 明细创建schema
         :param skip_report_check: 为True时不校验报告是否存在
         :return: 创建后的明细实例
-        :raises NotFoundException: 用例或报告不存在
-        :raises DataBaseStorageException: 违反约束规则或其他写入异常
         """
         case_id: int = detail_in.case_id
         case_code: str = detail_in.case_code
@@ -122,9 +116,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
 
         :param detail_in: 明细更新schema
         :return: 更新后的明细实例
-        :raises ParameterException: 定位参数缺失
-        :raises NotFoundException: 用例、报告或明细不存在
-        :raises DataBaseStorageException: 违反约束
         """
         case_id: Optional[int] = detail_in.case_id
         case_code: Optional[str] = detail_in.case_code
@@ -190,8 +181,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         :param step_code: 步骤标识代码
         :param report_code: 报告标识代码
         :return: 软删除后的明细实例
-        :raises ParameterException: 参数缺失
-        :raises NotFoundException: 明细不存在
         """
         if not detail_id and (not report_code or not step_code):
             error_message: str = f"参数[detail_id]或[report_code, step_code]不允许为空"
@@ -219,7 +208,6 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
-        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)

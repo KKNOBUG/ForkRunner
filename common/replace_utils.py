@@ -15,7 +15,6 @@ class ReplaceUtils(object):
         :param relevance_data: 包含替换值的字典。
         :param return_type: 返回数据的类型，可以是Dict[str, Any]或str，默认为str。
         :return: 替换后的JSON数据，类型由return_type指定。
-        :raises TypeError: 如果datagram不是字典类型。
         """
         # 判断datagram是否为字典
         if not isinstance(datagram, dict):

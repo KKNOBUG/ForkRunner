@@ -44,7 +44,6 @@ async def init_tortoise_orm() -> None:
     在当前running loop所在线程中初始化Tortoise，并做连接可用性检查。
 
     :return: None
-    :raises RuntimeError: 数据库主机不可达等连接失败
     """
     global _tortoise_orm_initialized
 

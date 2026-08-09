@@ -491,7 +491,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param id: 对象唯一标识符
         :param kwargs: 额外的过滤条件
         :return: 数据库模型实例
-        :raises NotFoundException: 对象不存在时抛出
         """
         try:
             return await self.model.get(id=id, **kwargs)
@@ -522,8 +521,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param on_error: True时未找到则抛出NotFoundException
         :param kwargs: 查询条件字段
         :return: 单条记录、记录列表或None
-        :raises ParameterException: 查询条件字段错误时抛出
-        :raises NotFoundException: 未找到记录且on_error=True时抛出
         """
         try:
             stmt: QuerySet = self.model.filter(**kwargs)
@@ -546,7 +543,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         :param order: 原始排序字段列表
         :return: 可用于 order_by 的字段列表
-        :raises ParameterException: 存在非字符串排序项时
         """
         if not order:
             return []
@@ -637,7 +633,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param id: 要更新的记录ID
         :param obj_in: 更新数据，可以是Pydantic Schema实例或字典
         :return: 更新后的数据库对象
-        :raises NotFoundException: 记录不存在时抛出
         """
         obj = await self.get_or_error(id=id)
         if isinstance(obj_in, Dict):
@@ -712,7 +707,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param id: 要删除的记录ID
         :param kwargs: 额外的过滤条件
         :return: 被删除的数据库对象
-        :raises DoesNotExist: 记录不存在时抛出
         """
         obj = await self.get_or_error(id=id, **kwargs)
         await obj.delete()
@@ -724,7 +718,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         :param id: 要硬删除的记录ID
         :return: 被删除的数据库对象
-        :raises DoesNotExist: 记录不存在时抛出
         """
         obj = await self.get_or_error(id=id)
         await obj.delete()
@@ -881,7 +874,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param obj_in: 主记录创建数据
         :param related_data: 关联数据字典，格式为{"field_name": [obj1, obj2, ...]}
         :return: 创建成功的主记录对象
-        :raises Exception: 创建失败时回滚事务
         """
         async with in_transaction() as connection:
             # 创建主记录
@@ -927,7 +919,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param obj_in: 主记录更新数据
         :param related_updates: 关联数据更新字典，格式为{"field_name": [{"id": 1, "data": {...}}, ...]}
         :return: 更新后的主记录对象
-        :raises Exception: 更新失败时回滚事务
         """
         async with in_transaction() as connection:
             # 更新主记录
@@ -966,8 +957,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param id: 要软删除的记录ID
         :param updated_user: 无登录上下文时的回落更新人；有登录上下文时以当前用户为准
         :return: 更新后的数据库对象
-        :raises DoesNotExist: 记录不存在时抛出
-        :raises ParameterException: 模型未继承StateModel时抛出
         """
         obj = await self.get_or_error(id=id)
         if not hasattr(obj, 'state'):
@@ -989,8 +978,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param id: 要恢复的记录ID
         :param updated_user: 无登录上下文时的回落更新人；有登录上下文时以当前用户为准
         :return: 恢复后的数据库对象
-        :raises DoesNotExist: 记录不存在时抛出
-        :raises ParameterException: 模型未继承StateModel时抛出
         """
         obj = await self.get_or_error(id=id)
 
@@ -1021,7 +1008,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param search: 额外的搜索条件
         :param order: 排序字段列表，默认根据updated_time倒序
         :return: (总记录数, 已删除记录列表)
-        :raises ParameterException: 模型未继承StateModel时抛出
         """
         if not hasattr(self.model, 'state'):
             error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法查询已删除记录"
@@ -1039,7 +1025,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param ids: 要软删除的记录ID列表
         :param updated_user: 无登录上下文时的回落更新人；有登录上下文时以当前用户为准
         :return: 实际更新的记录数
-        :raises ParameterException: 模型未继承StateModel时抛出
         """
         if not hasattr(self.model, 'state'):
             error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法执行批量软删除"
@@ -1061,7 +1046,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param ids: 要恢复的记录ID列表
         :param updated_user: 无登录上下文时的回落更新人；有登录上下文时以当前用户为准
         :return: 实际恢复的记录数
-        :raises ParameterException: 模型未继承StateModel时抛出
         """
         if not hasattr(self.model, 'state'):
             error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法执行批量恢复"

@@ -21,8 +21,6 @@ class YamlUtils:
         加载 YAML 配置文件并返回数据字典。
 
         :return: 配置数据字典。
-        :raises FileNotFoundError: 如果文件不存在，将引发异常。
-        :raises yaml.YAMLError: 如果 YAML 文件格式错误，将引发异常。
         """
         try:
             with open(file=self.abspath, mode="r", encoding="utf-8") as file:
@@ -38,7 +36,6 @@ class YamlUtils:
 
         :param path: 配置值的路径，使用点分隔符。
         :return: 返回对应的配置值，如果路径无效则返回 None。
-        :raises TypeError: 如果 path 不是字符串，将引发异常。
         """
         if not isinstance(path, str):
             raise TypeError("path 必须是字符串")
@@ -63,7 +60,6 @@ class YamlUtils:
         :param path: 配置值的路径，使用点分隔符。
         :param value: 要更新的值。
         :return: 更新后的配置数据字典。
-        :raises TypeError: 如果 path 不是字符串，将引发异常。
         """
         if not isinstance(path, str):
             raise TypeError("path 必须是字符串")
@@ -87,7 +83,6 @@ class YamlUtils:
 
         :param path: 配置值的路径，使用点分隔符。
         :return: 删除后的配置数据字典。
-        :raises TypeError: 如果 path 不是字符串，将引发异常。
         """
         if not isinstance(path, str):
             raise TypeError("path 必须是字符串")
@@ -107,11 +102,7 @@ class YamlUtils:
         return self.config_data
 
     def save_yaml_data(self):
-        """
-        将当前配置数据保存到 YAML 文件中。
-
-        :raises FileNotFoundError: 如果文件路径无效，将引发异常。
-        """
+        """将当前配置数据保存到 YAML 文件中。"""
         if not os.path.exists(self.abspath):
             raise FileNotFoundError(f"配置文件[{self.abspath}]不存在")
 

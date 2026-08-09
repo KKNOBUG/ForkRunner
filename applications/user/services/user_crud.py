@@ -34,8 +34,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 用户实例或None
-        :raises ParameterException: user_id为空
-        :raises NotFoundException: on_error为True且用户不存在
         """
         if not user_id:
             error_message: str = "查询用户信息失败, 参数[user_id]不允许为空"
@@ -56,8 +54,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 用户实例或None
-        :raises ParameterException: username为空
-        :raises NotFoundException: on_error为True且用户不存在
         """
         if not username:
             error_message: str = "查询用户信息失败, 参数[username]不允许为空"
@@ -78,8 +74,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 用户实例或None
-        :raises ParameterException: alias为空
-        :raises NotFoundException: on_error为True且用户不存在
         """
         if not alias:
             error_message: str = "查询用户信息失败, 参数[alias]不允许为空"
@@ -98,8 +92,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         :param credentials: 登录凭证(username、password)
         :return: 用户实例
-        :raises NotFoundException: 用户不存在或密码错误
-        :raises NoPermissionException: 用户已禁用
         """
         user = await self.model.filter(username=credentials.username).first()
         if not user:
@@ -123,7 +115,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         :param user_id: 用户ID
         :return: None
-        :raises NotFoundException: 用户不存在
         """
         user = await self.get_by_id(user_id=user_id, on_error=True)
         user.last_login = datetime.now()
@@ -135,7 +126,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         :param user_in: 新增用户入参
         :return: 新建的用户实例
-        :raises DataAlreadyExistsException: 邮箱或账号已存在
         """
         email = user_in.email
         username = user_in.username
@@ -159,7 +149,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param user_id: 用户ID
         :param kwargs: 额外查询条件
         :return: 更新后的用户实例
-        :raises NotFoundException: 用户不存在
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True, **kwargs)
         instance = await self.soft_delete(id=instance.id)
@@ -194,7 +183,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         :param user_in: 更新入参
         :return: 更新后的用户实例
-        :raises NotFoundException: 用户不存在
         """
         user_id: int = user_in.user_id
         user_if: dict = user_in.model_dump(exclude_none=True)
@@ -215,7 +203,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param user: 用户实例
         :param role_ids: 角色ID列表；空列表表示清空
         :return: None
-        :raises DoesNotExist: 角色不存在
         """
         await user.roles.clear()
         for role_id in role_ids or []:
@@ -228,7 +215,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         :param user_id: 用户ID
         :return: 不含密码的用户字典，或ForbiddenResponse
-        :raises DoesNotExist: 用户不存在
         """
         instance = await self.get_or_error(id=user_id)
         if instance.is_superuser:
@@ -247,7 +233,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param user_id: 用户ID
         :param new_password: 新密码(明文)
         :return: 更新后的用户实例
-        :raises NotFoundException: 用户不存在
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True)
         instance.password = get_password_hash(password=new_password)
@@ -261,7 +246,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         :param user_id: 用户ID
         :return: 更新后的用户实例
-        :raises NotFoundException: 用户不存在
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True)
         # 吊销用户所有Token

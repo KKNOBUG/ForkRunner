@@ -192,7 +192,6 @@ class StepExecutionContext:
 
         若未指定外部HTTP客户端, 将创建一个默认的httpx.AsyncClient实例，并通过AsyncExitStack管理其生命周期, 确保在上下文退出时自动关闭客户端连接。
         :return: 上下文管理器实例本身, 用于异步with语句
-        :raises StepExecutionError: 创建 HTTP 客户端失败时抛出
         """
         try:
             if self._http_client is None:
@@ -264,7 +263,6 @@ class StepExecutionContext:
         获取当前HTTP客户端，必须在async with上下文中使用。
 
         :return: 当前注入或创建的HTTP客户端
-        :raises RuntimeError: HTTP客户端未创建时抛出
         """
         if self._http_client is None:
             raise RuntimeError("异步上下文管理器: HTTP客户端未创建, 请在异步上下文中使用")
@@ -314,7 +312,6 @@ class StepExecutionContext:
         :param variables: 待更新的变量列表
         :param scope: 目标作用域（defined_variables 或 session_variables）
         :return: None
-        :raises ValueError: 作用域非法、入参非列表或元素非法时抛出
         """
         if scope not in ("defined_variables", "session_variables"):
             raise ValueError(
@@ -357,8 +354,6 @@ class StepExecutionContext:
         session_variables 为持续累积已执行的步骤产生的变量（所有步骤共享）。
         :param name: 变量名，非空字符串
         :return: 变量值
-        :raises StepExecutionError: 变量名不是非空字符串时抛出
-        :raises KeyError: 变量未定义时抛出
         """
         if not name or not isinstance(name, str):
             raise StepExecutionError(f"【获取变量】变量名无效: \n\t变量名必须是非空字符串, 当前值: {name}")
@@ -379,7 +374,6 @@ class StepExecutionContext:
 
         :param seconds: 等待秒数；None不等待，小于0或大于300抛出异常
         :return: None
-        :raises StepExecutionError: seconds非法或等待异常时抛出
         """
         if seconds is None:
             return
@@ -423,7 +417,6 @@ class StepExecutionContext:
         :param files: 上传文件
         :param timeout: 超时秒数，None使用上下文默认
         :return: 响应对象
-        :raises StepExecutionError: 请求失败、超时、URL非法或连接异常时抛出
         """
         try:
             client = self.http_client
@@ -688,7 +681,6 @@ class StepExecutionContext:
 
         :param source: 待校验的Python源代码字符串
         :return: None
-        :raises StepExecutionError: 导入非白名单模块或使用相对导入时抛出
         """
         allowed_cn = "、".join(sorted(USER_CODE_ALLOWED_IMPORT_ROOTS))
         try:
@@ -1061,7 +1053,6 @@ class BaseStepExecutor:
         :param session_lookup_extra: 额外并入变量池查找表的会话变量
         :param body_source: 提取断言所用的响应体来源标识
         :return: None
-        :raises StepExecutionError: 提取/断言存在失败项或处理异常时抛出
         """
         session_lookup = AutoTestToolService.build_session_lookup(
             self.context.defined_variables,
@@ -1386,7 +1377,6 @@ class LoopStepExecutor(BaseStepExecutor):
 
         :param result: 用于挂载子步骤结果与成败状态的执行结果对象
         :return: None
-        :raises StepExecutionError: 循环模式/错误策略缺失或非法，或子步骤根据策略停止时抛出
         """
         try:
             loop_mode_str = self.step.loop_mode
@@ -1444,7 +1434,6 @@ class LoopStepExecutor(BaseStepExecutor):
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
-        :raises StepExecutionError: loop_maximums为空、子步骤根据停止策略失败或循环次数超限时抛出
         """
         loop_maximums = self.step.loop_maximums
         if not loop_maximums:
@@ -1526,7 +1515,6 @@ class LoopStepExecutor(BaseStepExecutor):
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
-        :raises StepExecutionError: loop_iterable为空、数据源非可迭代对象、子步骤根据停止策略失败或循环执行异常时抛出
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
@@ -1637,7 +1625,6 @@ class LoopStepExecutor(BaseStepExecutor):
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
-        :raises StepExecutionError: loop_iterable为空、数据源非字典、子步骤根据停止策略失败或循环执行异常时抛出
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
@@ -1757,7 +1744,6 @@ class LoopStepExecutor(BaseStepExecutor):
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
-        :raises StepExecutionError: conditions为空、子步骤根据停止策略失败或循环轮数超限时抛出
         """
         condition = self.step.conditions
         if not condition:
@@ -1887,7 +1873,6 @@ class LoopStepExecutor(BaseStepExecutor):
 
         :param condition: 待评估的条件模型
         :return: 条件成立返回 True，否则False
-        :raises StepExecutionError: 条件缺少必要字段、变量未定义、占位符解析异常或条件执行异常时抛出
         """
         condition_expr = condition.condition_expr
         condition_compare = condition.condition_compare
@@ -1923,7 +1908,6 @@ class LoopStepExecutor(BaseStepExecutor):
 
         :param source: 数据源，可为${var}、JSON字符串或已解析对象
         :return: 可迭代对象（如 list、dict）
-        :raises StepExecutionError: 解析失败时
         """
         try:
             # 占位符解析后再解析${var} 或JSON字面量
@@ -2069,7 +2053,6 @@ class PythonStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: 代码执行失败、断言失败或结果提取失败时抛出
         """
         try:
             code = self.step.code
@@ -2149,7 +2132,6 @@ class WaitStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果（等待步骤通常不写入额外字段）
         :return: None
-        :raises StepExecutionError: 等待异常时抛出
         """
         try:
             wait_seconds = self.step.wait
@@ -2180,7 +2162,6 @@ class AssertStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: 缺少断言配置、规则类型非法或断言失败时抛出
         """
         try:
             assert_validators = self.step.assert_validators
@@ -2229,7 +2210,6 @@ class UserVariablesStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: 变量解析或合并异常时抛出
         """
         try:
             session_variables_raw: List[StepVariablesBase] = self.step.session_variables
@@ -2258,7 +2238,6 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果，子步骤结果写入children
         :return: None
-        :raises StepExecutionError: 子用例执行异常时抛出
         """
         previous_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
         try:
@@ -2384,7 +2363,6 @@ class TcpStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: 环境/报文解析或请求异常时抛出
         """
         try:
             env_name: Optional[str] = None
@@ -2647,7 +2625,6 @@ class DataBaseStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: SQL执行或结果处理异常时抛出
         """
         try:
             merge_operates_env_name: Optional[str] = None
@@ -2913,7 +2890,6 @@ class RedisStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: Redis命令执行或结果处理异常时抛出
         """
         try:
             merge_operates_env_name: Optional[str] = None
@@ -3182,7 +3158,6 @@ class HttpStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果
         :return: None
-        :raises StepExecutionError: URL/环境非法、请求配置或数据源处理异常、响应解析失败时抛出
         """
         try:
             request_url: str = (self.step.request_url or "").strip().lstrip("/")
@@ -3433,7 +3408,6 @@ class DefaultStepExecutor(BaseStepExecutor):
 
         :param result: 本步执行结果，子步骤写入children
         :return: None
-        :raises StepExecutionError: 子步骤执行异常时抛出
         """
         try:
             child_results = await self._execute_children()
@@ -3475,7 +3449,6 @@ class StepExecutorFactory:
         :param step: 步骤树节点
         :param context: 执行上下文
         :return: 步骤执行器实例
-        :raises StepExecutionError: 步骤类型未定义、无法转换或执行器实例化失败时抛出
         """
         try:
             raw_type = step.step_type

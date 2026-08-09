@@ -51,7 +51,6 @@ class FileUtils:
 
         :param abspath: 输入的绝对路径，可以是字符串或 Path 对象
         :return: 转换后的 Path 对象
-        :raises TypeRejectException: 如果输入的路径不是字符串或 Path 对象类型
         """
         if not isinstance(abspath, (str, Path)):
             raise TypeRejectException()
@@ -273,8 +272,6 @@ class FileUtils:
         :param abspath: 文件的绝对路径，可以是字符串或 Path 对象
         :param unit: 要转换的目标单位，可选值包括 'B'（字节）、'KB'（千字节）、'MB'（兆字节）、'GB'（吉字节）等
         :return: 转换为指定单位后的文件大小，保留两位小数，四舍五入
-        :raises NotFoundException: 如果文件不存在
-        :raises NotImplementedException: 如果指定的单位不在支持的转换单位列表中
         """
         abspath = self.str_to_path(abspath=abspath)
         if not abspath.exists():
@@ -305,7 +302,6 @@ class FileUtils:
 
         :param abspath: 文件的绝对路径，可以是字符串或 Path 对象
         :return: 文件的最后修改时间
-        :raises NotFoundException: 如果文件不存在
         """
         abspath = self.str_to_path(abspath=abspath)
         if not abspath.exists():
@@ -319,7 +315,6 @@ class FileUtils:
 
         :param abspath: 目录的绝对路径，可以是字符串或 Path 对象
         :return: 最后创建的文件的名称
-        :raises NotFoundException: 如果目录不存在或目录中没有文件
         """
         abspath = self.str_to_path(abspath=abspath)
         if not abspath.exists():

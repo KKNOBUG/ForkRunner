@@ -48,7 +48,6 @@ def resolve_config_type(env_type: int) -> str:
 
     :param env_type: 1=APP, 2=FILE, 3=DB
     :return: api/file/database
-    :raises ParameterException: env_type非法
     """
     config_type = ENV_TYPE_TO_CONFIG_TYPE.get(env_type)
     if not config_type:
@@ -80,8 +79,6 @@ async def resolve_env_api_base_host_port(project_id: int, env_name: str) -> Tupl
     :param project_id: 应用主键ID
     :param env_name: 环境名称
     :return: (host, port)；port可为空
-    :raises ParameterException: env_name为空
-    :raises NotFoundException: 环境或API配置不存在
     """
     pid = int(project_id)
     name = (env_name or "").strip()
@@ -144,8 +141,6 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 环境枚举实例或None
-        :raises ParameterException: env_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not env_id:
             error_message: str = "查询环境枚举信息失败, 参数[env_id]不允许为空"
@@ -167,8 +162,6 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 环境枚举实例或None
-        :raises ParameterException: env_code为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not env_code:
             error_message: str = "查询环境枚举信息失败, 参数[env_code]不允许为空"
@@ -190,8 +183,6 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 环境枚举实例或None
-        :raises ParameterException: env_name为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not env_name:
             error_message: str = "查询环境枚举信息失败, 参数[env_name]不允许为空"
@@ -211,8 +202,6 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
         :param env_in: 环境创建schema（含 project_id / env_type）
         :return: 创建或恢复后的环境实例
-        :raises ParameterException: env_type非法
-        :raises DataBaseStorageException: 违反数据库约束或记录异常丢失
         """
         resolve_config_type(env_in.env_type)
         env_name: str = env_in.env_name
@@ -246,8 +235,6 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
         :param env_in: 环境枚举更新schema
         :return: 更新后的环境枚举实例
-        :raises NotFoundException: 环境枚举不存在
-        :raises DataBaseStorageException: 违反约束
         """
         env_id: Optional[int] = env_in.env_id
         env_code: Optional[str] = env_in.env_code
@@ -287,8 +274,6 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         :param env_id: 环境枚举主键，与env_code二选一
         :param env_code: 环境枚举标识代码，与env_id二选一
         :return: 软删除后的环境枚举实例
-        :raises ParameterException: env_id与env_code均未传
-        :raises NotFoundException: 环境枚举不存在
         """
         if not env_id and not env_code:
             error_message: str = "删除环境枚举信息失败, 参数[env_id]或[env_code]不允许为空"
@@ -307,8 +292,6 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
         :param env_in: 环境枚举删除schema
         :return: 更新条数
-        :raises ParameterException: env_ids与env_codes均未传
-        :raises NotFoundException: 环境枚举不存在
         """
         env_ids: Optional[List[int]] = env_in.env_ids
         env_codes: Optional[List[str]] = env_in.env_codes
@@ -339,7 +322,6 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
-        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -357,7 +339,6 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
         :param project_id: None=全局聚合；[]=全部应用；[ids]=指定应用
         :return: {APP/FILE/DB: [...]} 或 {project_id: {APP/FILE/DB: [...]}}
-        :raises ParameterException: 查询异常
         """
         try:
             env_type_to_label = {
@@ -416,7 +397,6 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
         以环境主表分页查询；可选按子配置 IP 过滤。
 
         :return: (总条数, 当前页记录)；记录含 id/project_id/env_name/env_type/project_name/is_delete/时间字段
-        :raises ParameterException: 查询异常或节点类型非法
         """
         try:
             if env_type is not None:

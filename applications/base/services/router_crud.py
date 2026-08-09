@@ -25,8 +25,6 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 路由实例或None
-        :raises ParameterException: router_id为空
-        :raises NotFoundException: on_error为True且路由不存在
         """
         if not router_id:
             error_message: str = "查询路由信息失败, 参数[router_id]不允许为空"
@@ -47,8 +45,6 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 路由实例列表；无匹配且on_error为False时为空列表
-        :raises ParameterException: path为空
-        :raises NotFoundException: on_error为True且无匹配路由
         """
         if not path:
             error_message: str = "查询路由信息失败, 参数[path]不允许为空"
@@ -69,8 +65,6 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 路由实例列表；无匹配且on_error为False时为空列表
-        :raises ParameterException: method为空
-        :raises NotFoundException: on_error为True且无匹配路由
         """
         if not method:
             error_message: str = "查询路由信息失败, 参数[method]不允许为空"
@@ -91,8 +85,6 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 路由实例列表；无匹配且on_error为False时为空列表
-        :raises ParameterException: summary为空
-        :raises NotFoundException: on_error为True且无匹配路由
         """
         if not summary:
             error_message: str = "查询路由信息失败, 参数[summary]不允许为空"
@@ -113,8 +105,6 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 路由实例列表；无匹配且on_error为False时为空列表
-        :raises ParameterException: tags为空
-        :raises NotFoundException: on_error为True且无匹配路由
         """
         if not tags:
             error_message: str = "查询路由信息失败, 参数[tags]不允许为空"
@@ -133,7 +123,6 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
 
         :param router_in: 新增路由入参
         :return: 新建的路由实例
-        :raises DataAlreadyExistsException: 相同path与method已存在
         """
         path = router_in.path
         method = router_in.method
@@ -153,7 +142,6 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         :param router_id: 路由ID
         :param kwargs: 额外查询条件
         :return: 被删除的路由实例
-        :raises NotFoundException: 路由不存在
         """
         instance = await self.get_by_id(router_id, on_error=True, **kwargs)
         await instance.delete()
@@ -165,7 +153,6 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
 
         :param router_in: 更新入参
         :return: 更新后的路由实例
-        :raises NotFoundException: 路由不存在
         """
         router_id: int = router_in.id
         router_if: dict = router_in.model_dump(exclude_none=True)

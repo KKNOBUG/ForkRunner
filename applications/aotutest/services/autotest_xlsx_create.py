@@ -39,7 +39,6 @@ def read_excel_template(file_path: str) -> List[Field]:
 
     :param file_path: 模板文件路径
     :return: Field 列表
-    :raises ValueError: 缺少表头或「输入」标识行时
     """
     df = pd.read_excel(file_path, sheet_name=0, header=None)
 
@@ -177,7 +176,6 @@ def generate_length_invalid(field: Field, rule: str) -> Tuple[Optional[str], Opt
     :param field: 字段定义
     :param rule: ``length_int`` 或 ``length_float``
     :return: (非法值, 配置长度)；无法生成时为 (None, None)
-    :raises ValueError: 小数位数配置非法时
     """
     if not field.length:
         return None, None
@@ -213,7 +211,6 @@ def generate_decimal_invalid(field: Field, decimal_flag: str) -> Optional[str]:
     :param field: 字段定义（需含 length 如 ``总长,小数位``）
     :param decimal_flag: 边界规则标识（decimal_nine / decimal_zero 等）
     :return: 生成值；无法生成时返回 None
-    :raises ValueError: 小数位数配置非法时
     """
     if not field.length:
         return None

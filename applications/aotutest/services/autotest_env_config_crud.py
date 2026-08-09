@@ -52,7 +52,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
         :param config_type: 配置类型枚举或枚举值
         :param payload: 含配置字段的对象(支持getattr)
-        :raises ParameterException: 类型非法或必填字段缺失
         """
         type_value = config_type.value if hasattr(config_type, "value") else config_type
         if type_value not in AutoTestConfigNodeType.get_values():
@@ -92,8 +91,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 配置实例或None
-        :raises ParameterException: config_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not config_id:
             error_message: str = "查询配置信息失败, 参数[config_id]不允许为空"
@@ -114,8 +111,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 配置实例或None
-        :raises ParameterException: config_code为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not config_code:
             error_message: str = "查询配置信息失败, 参数[config_code]不允许为空"
@@ -304,8 +299,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
         :param config_in: 环境配置批量删除schema
         :return: 更新条数
-        :raises ParameterException: config_ids与config_codes均未传
-        :raises NotFoundException: 配置不存在
         """
         config_ids: Optional[List[int]] = config_in.config_ids
         config_codes: Optional[List[str]] = config_in.config_codes
@@ -336,7 +329,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
-        :raises ParameterException: 查询字段非法
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -354,7 +346,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
         :param project_ids: 应用ID列表
         :return: project_id -> env_name -> APP|FILE|DB -> config_name -> 主机信息
-        :raises ParameterException: project_ids为空
         """
         if not project_ids:
             error_message: str = "按应用列表查询环境配置失败, 参数(project_ids)不允许为空"
@@ -563,7 +554,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :param env_type: 节点类型 1/2/3
         :param user: 操作人
         :return: 环境主表实例
-        :raises ParameterException: env_name为空
         """
         name = (env_name or "").strip().upper()
         if not name:
@@ -598,7 +588,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :param mapped: 已映射的落库字段
         :param exclude_id: 更新时排除的配置ID
         :return: None
-        :raises DataAlreadyExistsException: 主机配置冲突
         """
         host = mapped.get("config_host")
         if not host:

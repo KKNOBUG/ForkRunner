@@ -157,7 +157,6 @@ class AssertionCompare:
 
         :param expected: 用户给定的集合或可解析为集合的值
         :return: 元素列表
-        :raises ValueError: 期望值非法时
         """
         if expected is None:
             raise ValueError("集合期望值不允许为[None | Null]")
@@ -212,7 +211,6 @@ class AssertionCompare:
         :param operation: 操作符(与AutoTestAssertionOperation一致)
         :param expected: 期望值(部分操作符可忽略)
         :return: 断言是否通过
-        :raises ValueError: 不支持的操作符或比较过程异常
         """
         try:
             op = AutoTestAssertionOperation(operation)

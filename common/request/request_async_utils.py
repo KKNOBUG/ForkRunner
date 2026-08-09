@@ -38,7 +38,6 @@ class AsyncHttpUtils:
         HTTP请求统一调度方法，执行HTTP请求并返回响应对象。
 
         :return: 响应对象
-        :raises Exception: 当请求发生异常时抛出异常
         """
         try:
             return await self.client.request(
@@ -54,7 +53,6 @@ class AsyncHttpUtils:
         获取响应的JSON数据。
 
         :return: 响应的JSON数据
-        :raises Exception: 当请求或解析JSON数据发生异常时抛出异常
         """
         try:
             if isinstance(self.client, AioHttpClient):
@@ -71,7 +69,6 @@ class AsyncHttpUtils:
         获取响应的文本数据。
 
         :return: 响应的文本数据
-        :raises Exception: 当请求或获取文本数据发生异常时抛出异常
         """
         try:
             if isinstance(self.client, AioHttpClient):
@@ -88,7 +85,6 @@ class AsyncHttpUtils:
         获取响应的字节数据。
 
         :return: 响应的字节数据
-        :raises Exception: 当请求或获取字节数据发生异常时抛出异常
         """
         try:
             if isinstance(self.client, AioHttpClient):
@@ -106,7 +102,6 @@ class AsyncHttpUtils:
 
         :param chunk_size: 流的块大小，默认为1024字节
         :return: 响应的字节数据块的生成器
-        :raises Exception: 当请求或获取流数据发生异常时抛出异常
         """
         try:
             if isinstance(self.client, AioHttpClient):
@@ -125,7 +120,6 @@ class AsyncHttpUtils:
         获取响应头跟响应体信息。
 
         :return: 包含响应体和响应头的元组
-        :raises Exception: 当请求或解析JSON数据发生异常时抛出异常
         """
         try:
             if isinstance(self.client, AioHttpClient):
@@ -213,7 +207,6 @@ class AioHttpClient:
         :param headers: 字典类型；非必填项；默认接口请求携带的头部信息
         :param kwargs: 其他关键字参数（通过底层代码查看可传递关键字）
         :return: ClientSession 的响应对象
-        :raises Exception: 当请求发生异常时抛出异常
         """
         timeout = timeout or self.default_timeout
         if isinstance(timeout, timedelta):
@@ -332,7 +325,6 @@ class AioHttpClient:
         :param content_type: 内容类型
         :param kwargs: 其他关键字参数
         :return: AsyncHttpUtils实例
-        :raises Exception: 当文件处理或请求发生异常时抛出异常
         """
         try:
             form_data = FormData()
@@ -404,7 +396,6 @@ class HttpxClient:
         :param timeout: 接口超时时间
         :param kwargs: 其他关键字参数（通过底层代码查看可传递关键字）
         :return: httpx.Response 对象
-        :raises Exception: 当请求发生异常时抛出异常
         """
         timeout = timeout or self.default_timeout
 

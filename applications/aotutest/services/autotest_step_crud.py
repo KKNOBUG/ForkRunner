@@ -63,8 +63,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 步骤实例或None
-        :raises ParameterException: step_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not step_id:
             error_message: str = "查询步骤信息失败, 参数[step_id]不允许为空"
@@ -85,8 +83,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 步骤实例或None
-        :raises ParameterException: step_code为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not step_code:
             error_message: str = "查询步骤信息失败, 参数[step_code]不允许为空"
@@ -107,7 +103,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
         :return: AutoTestCaseStepTreeLoadResult(根步骤为AutoTestStepTreeUpdateItem)
-        :raises NotFoundException: 用例不存在
         """
         case_crud = AutoTestApiCaseCrud()
         if case_id:
@@ -379,8 +374,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         :param step_in: 步骤创建schema
         :return: 创建后的步骤实例
-        :raises NotFoundException: 用例、父步骤或引用脚本不存在时
-        :raises DataBaseStorageException: 违反数据库约束时
         """
         case_id: int = step_in.case_id
         step_no: int = step_in.step_no
@@ -436,9 +429,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
 
         :param step_in: 步骤更新schema
         :return: 更新后的步骤实例
-        :raises NotFoundException: 步骤或用例或父步骤不存在时
-        :raises DataAlreadyExistsException: 同用例下步骤序号重复时
-        :raises DataBaseStorageException: 循环引用或违反约束时
         """
         step_id: Optional[int] = step_in.step_id
         step_code: Optional[str] = step_in.step_code
@@ -552,8 +542,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param step_id: 步骤主键ID，与step_code二选一
         :param step_code: 步骤标识代码，与step_id二选一
         :return: 软删除后的步骤实例
-        :raises NotFoundException: 步骤不存在时
-        :raises DataAlreadyExistsException: 存在子步骤时
         """
         if step_id:
             instance = await self.get_by_id(step_id=step_id, on_error=True, state__not=1)
@@ -673,7 +661,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: 由 (总条数, 当前页记录列表) 组成的元组
-        :raises ParameterException: 查询条件非法导致FieldError时
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -706,7 +693,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param steps_data: 根级步骤树项列表
         :param case_type: 当前用例目标类型(必为公共家族成员)
         :param case_project: 当前用例所属应用ID(公共接口一致性校验使用)
-        :raises ParameterException: 任一约束不满足时(调用方事务回滚)
         """
         if case_type == AutoTestCaseType.PUBLIC_API:
             cls._validate_public_api_tree(steps_data)
@@ -735,7 +721,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         校验公共接口步骤树形态：仅1个HTTP/TCP根步骤且无子级与数据源。
 
         :param steps_data: 根级步骤树项列表
-        :raises ParameterException: 任一约束不满足时(调用方事务回滚)
         """
         if len(steps_data) != 1:
             error_message: str = f"公共接口用例有且仅需 1 个请求步骤，当前提交({len(steps_data)})步"
@@ -768,10 +753,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param parent_step_id: 当前层级的父步骤ID，用于新增时挂载
         :param branch_index: 当前层级所属分支序号(条件分支子步骤使用)
         :return: 包含created_count、updated_count、process_detail、success_detail的字典
-        :raises ParameterException: 必填字段缺失或父步骤类型不允许子步骤时
-        :raises NotFoundException: 用例或父步骤不存在时
-        :raises DataAlreadyExistsException: 同用例下步骤序号重复时
-        :raises DataBaseStorageException: 数据库写入异常时
         """
         created_count: int = 0
         updated_count: int = 0
@@ -1169,8 +1150,6 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
         :param batch_code: 批次标识代码，可选
         :param dataset_name: 参数化执行时本次数据集名称，写入报告；数据由HTTP步骤执行器内查表获取
         :return: 含success、步骤指标(total/success/failed_steps、passed_ratio%)、report_code等
-        :raises NotFoundException: 用例不存在时
-        :raises ParameterException: 用例无可执行步骤时
         """
         if not initial_variables or not isinstance(initial_variables, list):
             LOGGER.info(f"初始化变量[initial_variables]为空或非列表类型")

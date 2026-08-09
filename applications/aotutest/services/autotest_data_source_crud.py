@@ -46,8 +46,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 数据源实例或None
-        :raises ParameterException: data_source_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not data_source_id:
             error_message: str = "查询数据源失败, 参数[data_source_id]不允许为空"
@@ -69,8 +67,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param on_error: 为True时若未找到则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 数据源实例或None
-        :raises ParameterException: 当data_source_code为空时
-        :raises NotFoundException: 当on_error为True且记录不存在时
         """
         if not (data_source_code or "").strip():
             error_message: str = "查询数据源失败, 参数[data_source_code]不允许为空"
@@ -92,8 +88,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param on_error: 为True时未找到则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 数据源实例或None
-        :raises ParameterException: file_hash为空时
-        :raises NotFoundException: on_error为True且记录不存在时
         """
         if not file_hash:
             error_message: str = "查询数据源信息失败, 参数[file_hash]不允许为空"
@@ -126,8 +120,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param on_error: 为True时若未找到则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 单条实例、列表或None
-        :raises ParameterException: 未传case_id且case_code为空时
-        :raises NotFoundException: 当on_error为True且无匹配记录时
         """
         if not case_id and not (case_code or "").strip():
             error_message: str = "查询数据源失败, 参数[case_id]或[case_code]不允许为空"
@@ -171,8 +163,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param on_error: 为True时未找到则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 数据源实例或None
-        :raises ParameterException: case_id为空时
-        :raises NotFoundException: on_error为True且记录不存在时
         """
         if not case_id:
             error_message: str = "查询数据源失败, 参数[case_id]不允许为空"
@@ -214,9 +204,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
         :param data_source_in: 创建schema(data_source_code由模型默认值生成，无需传入)
         :return: 新建或恢复后的数据源实例
-        :raises DataAlreadyExistsException: 同键已存在且为启用状态时
-        :raises DataBaseStorageException: 违反数据库约束时
-        :raises NotFoundException: 恢复路径上记录异常丢失时
         """
         data_dict: Dict[str, Any] = data_source_in.model_dump(exclude_none=True, exclude_unset=True)
         case_id = data_dict.get("case_id")
@@ -271,9 +258,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
         :param data_source_in: 更新schema
         :return: 更新后的数据源实例
-        :raises ParameterException: 定位参数[data_source_id]或[data_source_code]或[case_id, case_code, step_id, step_code]不允许为空时
-        :raises NotFoundException: 记录不存在时
-        :raises DataBaseStorageException: 违反约束时
         """
         case_id: Optional[int] = data_source_in.case_id
         step_id: Optional[int] = data_source_in.step_id
@@ -346,8 +330,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param step_id: 步骤主键
         :param step_code: 步骤标识代码
         :return: 软删除后的实例
-        :raises ParameterException: 定位参数[data_source_id]或[data_source_code]或[case_id, case_code, step_id, step_code]不允许为空时
-        :raises NotFoundException: 记录不存在时
         """
         if data_source_id:
             instance: Optional[AutoTestApiDataSourceInfo] = await self.get_by_id(
@@ -383,7 +365,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
 
         :param case_id: 用例主键
         :return: {"data_source": 软删记录数, "step": 清空指针的步骤数}
-        :raises ParameterException: case_id为空时
         """
         if not case_id:
             error_message: str = "解绑用例数据源失败, 参数[case_id]不允许为空"
@@ -412,7 +393,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)元组
-        :raises ParameterException: 查询条件非法导致FieldError时
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -430,8 +410,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param dataset_name: 场景名；为空则返回完整dataset
         :param kwargs: 额外过滤条件
         :return: 含dataset字段的字典
-        :raises ParameterException: case_id或step_code为空时
-        :raises NotFoundException: 无匹配记录或指定场景不存在时
         """
         if not case_id or not step_code:
             error_message: str = "查询数据源信息失败, 参数[case_id, step_code]不允许为空"
@@ -495,7 +473,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param axis: 数据矩阵方向(0:水平模式, 1:垂直模式)
         :param created_user: 创建人(更新路径会映射为updated_user)
         :return: 数据源实例
-        :raises ParameterException: parsed_data为空时
         """
         if not parsed_data:
             error_message: str = "参数[parsed_data]不允许为空"
@@ -565,7 +542,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param case_id: 用例主键
         :param state: 状态过滤，默认0(启用)
         :return: 根据updated_time倒序及步骤字段排序的列表
-        :raises ParameterException: case_id为空时
         """
         if not case_id:
             error_message: str = "参数[case_id]不允许为空"
@@ -590,7 +566,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
         :param step_code: 新步骤标识代码
         :param source_data_source_id: 源数据源主键ID
         :return: 新数据源主键ID；源数据源不存在时返回None
-        :raises ParameterException: case_id或step_code为空时
         """
         if not case_id or not (step_code or "").strip():
             error_message: str = "复制数据源失败, 参数[case_id, step_code]不允许为空"
@@ -632,8 +607,6 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         :param on_error: 为True时未找到则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 生成记录或None
-        :raises ParameterException: create_code为空时
-        :raises NotFoundException: on_error为True且记录不存在时
         """
         if not create_code:
             error_message: str = "查询数据源生成信息失败, 参数[create_code]不允许为空"
@@ -656,8 +629,6 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         :param on_error: 为True时无记录则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 生成记录列表
-        :raises ParameterException: step_code为空时
-        :raises NotFoundException: on_error为True且无记录时
         """
         if not step_code:
             error_message: str = "查询数据源生成信息失败, 参数[step_code]不允许为空"
@@ -679,8 +650,6 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         :param on_error: 为True时未找到则抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 生成记录或None
-        :raises ParameterException: file_hash为空时
-        :raises NotFoundException: on_error为True且记录不存在时
         """
         if not file_hash:
             error_message: str = "查询数据源生成信息失败, 参数[file_hash]不允许为空"
@@ -700,7 +669,6 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
         :param data_in: 创建入参
         :return: 创建或更新后的生成记录
-        :raises DataBaseStorageException: 持久化异常时
         """
         try:
             instance = await self.get_by_hash(file_hash=data_in.file_hash, state__not=1)
@@ -728,7 +696,6 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
         :param data_in: 更新入参
         :return: 更新后的生成记录
-        :raises DataBaseStorageException: 更新异常时
         """
         try:
             data_dict = data_in.model_dump(exclude_none=True, exclude_unset=True)
@@ -745,8 +712,6 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
 
         :param create_code: 生成任务标识
         :return: 软删除后的记录
-        :raises ParameterException: 参数校验失败时
-        :raises NotFoundException: 记录不存在时
         """
         if not create_code:
             error_message: str = "删除数据源生成信息失败, 参数[create_code]不允许为空"
@@ -765,7 +730,6 @@ class AutoTestApiDataCreateCrud(ScaffoldCrud[AutoTestApiDataCreateInfo, AutoTest
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总数, 实例列表)
-        :raises ParameterException: 查询字段非法时
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)

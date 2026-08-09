@@ -43,8 +43,6 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :param audit_id: 审计日志ID
         :param on_error: 未找到时是否抛出NotFoundException
         :return: 审计日志实例或None
-        :raises ParameterException: audit_id为空
-        :raises NotFoundException: on_error为True且记录不存在
         """
         if not audit_id:
             error_message: str = "查询审计日志失败, 参数[audit_id]不允许为空"
@@ -64,8 +62,6 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :param user_id: 用户ID
         :param on_error: 无记录时是否抛出NotFoundException
         :return: 审计日志列表；无匹配且on_error为False时为空列表
-        :raises ParameterException: user_id空
-        :raises NotFoundException: on_error为True且该用户无审计日志
         """
         if not user_id:
             error_message: str = "查询审计日志失败, 参数[user_id]不允许为空"
@@ -129,7 +125,6 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 
         :param audit_id: 审计日志ID
         :return: 被删除的审计日志实例
-        :raises NotFoundException: 记录不存在
         """
         instance = await self.get_by_id(audit_id=audit_id, on_error=True)
         await instance.delete()
@@ -153,7 +148,6 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 
         :param user_id: 用户ID
         :return: 实际删除的记录数
-        :raises ParameterException: user_id为空
         """
         if not user_id:
             error_message: str = "删除审计日志失败, 参数[user_id]不允许为空"
@@ -168,7 +162,6 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :param start_time: 起始时间
         :param end_time: 结束时间
         :return: 实际删除的记录数
-        :raises ParameterException: start_time或end_time为空
         """
         if not start_time or not end_time:
             error_message: str = "删除审计日志失败, 参数[start_time, end_time]不允许为空"
@@ -184,7 +177,6 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 
         :param user_id: 用户ID
         :return: 含user_id、total_count、method_statistics、code_statistics的字典
-        :raises ParameterException: user_id为空
         """
         if not user_id:
             error_message: str = "统计审计日志失败, 参数[user_id]不允许为空"

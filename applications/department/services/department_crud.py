@@ -24,8 +24,6 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 部门实例或None
-        :raises ParameterException: department_id为空
-        :raises NotFoundException: on_error为True且部门不存在
         """
         if not department_id:
             error_message: str = "查询部门信息失败, 参数[department_id]不允许为空"
@@ -46,8 +44,6 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         :param on_error: 未找到时是否抛出NotFoundException
         :param kwargs: 额外过滤条件
         :return: 部门实例或None
-        :raises ParameterException: code为空
-        :raises NotFoundException: on_error为True且部门不存在
         """
         if not code:
             error_message: str = "查询部门信息失败, 参数[code]不允许为空"
@@ -92,8 +88,6 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
         :param department_in: 新增部门入参
         :return: 新建的部门实例
-        :raises ParameterException: 父级不合法
-        :raises DataAlreadyExistsException: code或name已存在
         """
         await self._validate_parent_id(department_in.parent_id)
         code = department_in.code
@@ -114,7 +108,6 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
         :param department_id: 部门ID
         :return: 更新后的部门实例
-        :raises NotFoundException: 部门不存在
         """
         instance = await self.soft_delete(id=department_id)
         await DeptStruct.filter(descendant=department_id).delete()
@@ -126,8 +119,6 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
         :param department_in: 更新部门入参
         :return: 更新后的部门实例
-        :raises NotFoundException: 部门不存在
-        :raises ParameterException: 父级变更不合法或含子部门的顶级部门不能降为子部门
         """
         department_id: int = department_in.id
         instance = await self.get_by_id(department_id=department_id)
