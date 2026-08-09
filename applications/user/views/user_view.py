@@ -34,7 +34,7 @@ user_public = APIRouter()
 user_secure = APIRouter()
 
 
-@user_public.post("/create", summary="新增用户")
+@user_public.post("/create", summary="新增用户", description="新增用户信息")
 async def create_user(
         user_in: UserCreate = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
