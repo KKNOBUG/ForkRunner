@@ -85,15 +85,6 @@ class DebugLogger:
 
 
 class StepDebugService:
-    """
-    步骤调试服务。
-
-    View仅负责入参绑定与HTTP响应映射；变量合并、环境解析、协议发送与提取断言均在此编排。
-    """
-
-    # ------------------------------------------------------------------
-    # 共性能力
-    # ------------------------------------------------------------------
 
     @staticmethod
     def make_debug_logger(step_name: str) -> DebugLogger:
@@ -181,9 +172,7 @@ class StepDebugService:
         """
         env_name = (env_name or "").strip()
         if not env_name:
-            raise ParameterException(
-                message=empty_env_message or f"{label}, 参数[env_name]不允许为空"
-            )
+            raise ParameterException(message=empty_env_message or f"{label}, 参数[env_name]不允许为空")
 
         env_row = await services.env_enum_curd.model.filter(
             project_id=project_id,
@@ -356,10 +345,6 @@ class StepDebugService:
             "logs": logs,
             "request_info": request_info,
         }
-
-    # ------------------------------------------------------------------
-    # HTTP
-    # ------------------------------------------------------------------
 
     @classmethod
     async def debug_http(
@@ -586,10 +571,6 @@ class StepDebugService:
         )
         return result
 
-    # ------------------------------------------------------------------
-    # TCP
-    # ------------------------------------------------------------------
-
     @classmethod
     async def debug_tcp(
             cls,
@@ -758,10 +739,6 @@ class StepDebugService:
         LOGGER.info(f"TCP请求调试完成: 耗时: {duration}ms")
         return result
 
-    # ------------------------------------------------------------------
-    # Python
-    # ------------------------------------------------------------------
-
     @classmethod
     async def debug_python(cls, debug_in: AutoTestPythonCodeDebugRequest) -> Dict[str, Any]:
         """
@@ -853,10 +830,6 @@ class StepDebugService:
                 debugging_return["error"] = str(e)
                 LOGGER.error(f"【Python代码调试】失败, 错误回溯: {traceback.format_exc()}")
                 raise StepDebugException(message="Python代码调试失败", data=debugging_return) from e
-
-    # ------------------------------------------------------------------
-    # Redis
-    # ------------------------------------------------------------------
 
     @classmethod
     async def debug_redis(

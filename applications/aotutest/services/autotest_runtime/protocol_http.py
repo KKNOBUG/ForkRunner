@@ -10,8 +10,6 @@ from enums import AutoTestReqArgsType
 
 @dataclass
 class HttpBodyPayloads:
-    """HTTP请求体装配结果（与HttpStepExecutor语义一致）。"""
-
     json_payload: Optional[Any] = None
     data_payload: Optional[Any] = None
     content_payload: Optional[Any] = None

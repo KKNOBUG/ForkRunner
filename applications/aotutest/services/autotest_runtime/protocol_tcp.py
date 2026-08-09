@@ -12,8 +12,6 @@ from enums import AutoTestReqArgsType
 
 @dataclass
 class TcpParsedResponse:
-    """TCP响应本地解析结果（与TcpStepExecutor语义一致）。"""
-
     response_text: str
     response_json: Optional[Any]
     response_data: Optional[Union[str, dict, list]]
