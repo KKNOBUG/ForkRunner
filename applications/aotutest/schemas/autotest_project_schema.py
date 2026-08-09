@@ -7,7 +7,7 @@ from applications.base.services.scaffold import UpperStr
 
 
 class AutoTestApiProjectBase(BaseModel):
-    """应用公共字段（创建/更新/查询共用）。"""
+    """应用公共字段。"""
 
     project_name: Optional[str] = Field(None, max_length=255, description="应用名称")
     project_desc: Optional[str] = Field(None, max_length=2048, description="应用描述")

@@ -29,7 +29,7 @@ autotest_env = APIRouter()
 
 
 @autotest_env.post("/create", summary="新增环境", description="新增环境")
-async def create_env(
+async def create_environment(
         env_in: EnvCreate = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -55,7 +55,7 @@ async def create_env(
 
 
 @autotest_env.post("/delete", summary="删除环境", description="软删指定环境下某节点类型的全部配置")
-async def delete_env(
+async def delete_environment(
         env_in: EnvDeleteRequest = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -79,7 +79,7 @@ async def delete_env(
 
 
 @autotest_env.post("/update", summary="更新环境", description="更新环境名称/应用归属，并级联同类型配置")
-async def update_env(
+async def update_environment(
         env_in: EnvEditRequest = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -105,7 +105,7 @@ async def update_env(
 
 
 @autotest_env.post("/query", summary="查询环境配置并分类", description="按id列表查询环境配置并分类返回")
-async def classify_env_configs(
+async def classify_environment_configs(
         env_config_in: AutoTestApiEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -135,7 +135,7 @@ async def classify_env_configs(
 
 
 @autotest_env.post("/list", summary="查询环境列表", description="按节点类型/应用聚合环境名称")
-async def list_envs(
+async def list_environments(
         env_in: EnvListQuery = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
@@ -157,7 +157,7 @@ async def list_envs(
 
 
 @autotest_env.get("/page", summary="查询环境分页列表", description="按应用/环境/节点类型聚合后分页查询")
-async def search_envs(
+async def search_environments(
         project_id: Optional[int] = Query(None, description="应用ID", ge=1),
         env_name: Optional[str] = Query(None, description="环境名称"),
         env_type: Optional[int] = Query(None, description="节点类型"),

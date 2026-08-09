@@ -8,7 +8,7 @@ from enums import AutoTestCaseType, AutoTestCaseAttr, AutoTestStepType, AutoTest
 
 
 class AutoTestApiCaseMeta(BaseModel):
-    """用例公共字段（更新/查询共用）。"""
+    """用例公共字段。"""
 
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
@@ -20,7 +20,7 @@ class AutoTestApiCaseMeta(BaseModel):
 
 
 class AutoTestApiCaseBase(BaseModel):
-    """用例公共字段（更新/查询共用）。"""
+    """用例公共字段。"""
 
     case_name: Optional[str] = Field(None, max_length=255, description="用例名称")
     case_tags: Optional[List[int]] = Field(None, description="用例所属标签")

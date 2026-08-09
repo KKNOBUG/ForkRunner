@@ -7,7 +7,7 @@ from applications.base.services.scaffold import UpperStr
 
 
 class AutoTestDataSourceBase(BaseModel):
-    """数据驱动文件公共字段（创建/更新共用）。"""
+    """数据驱动文件公共字段。"""
 
     case_id: Optional[int] = Field(None, ge=1, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")

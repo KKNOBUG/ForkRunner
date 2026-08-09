@@ -401,7 +401,7 @@ async def search_task_records(
 @autotest_task.get("/record/{record_id}/attachments/{key}/download", summary="下载执行记录附件", description="根据记录id与附件key下载附件")
 async def download_task_record_attachment(
         record_id: int = Path(..., description="执行记录主键"),
-        key: str = Path(..., description="附件 key，默认 main"),
+        key: str = Path(..., description="附件key，默认main"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """

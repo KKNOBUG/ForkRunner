@@ -458,15 +458,15 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                     await AutoTestApiTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
 
                 if "case_name" in update_case_dict or "case_project" in update_case_dict:
-                    uniq_name = update_case_dict.get("case_name", case_instance.case_name)
-                    uniq_project = update_case_dict.get("case_project", case_instance.case_project)
+                    unique_name = update_case_dict.get("case_name", case_instance.case_name)
+                    unique_project = update_case_dict.get("case_project", case_instance.case_project)
                     existing_case_instance: Optional[AutoTestApiCaseInfo] = await self.model.filter(
-                        case_project=uniq_project, case_name=uniq_name, state__not=1
+                        case_project=unique_project, case_name=unique_name, state__not=1
                     ).exclude(id=case_id).first()
                     if existing_case_instance:
                         error_message: str = (
                             f"第{cid}条用例更新失败, 相同应用下用例名称不允许重复, "
-                            f"查询条件: [case_project={uniq_project}, case_name={uniq_name}, case_type={case_type}]"
+                            f"查询条件: [case_project={unique_project}, case_name={unique_name}, case_type={case_type}]"
                         )
                         LOGGER.error(error_message)
                         raise DataAlreadyExistsException(message=error_message)
