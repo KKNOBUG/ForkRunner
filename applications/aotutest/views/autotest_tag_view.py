@@ -31,7 +31,7 @@ from core.responses import (
 autotest_tag = APIRouter()
 
 
-@autotest_tag.post("/create", summary="新增标签")
+@autotest_tag.post("/create", summary="新增标签", description="新增标签信息")
 async def create_tag(
         tag_in: AutoTestApiTagCreate = Body(..., description="标签信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

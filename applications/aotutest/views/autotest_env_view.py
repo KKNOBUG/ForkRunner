@@ -28,7 +28,7 @@ from core.responses import (
 autotest_env = APIRouter()
 
 
-@autotest_env.post("/create", summary="新增环境")
+@autotest_env.post("/create", summary="新增环境", description="新增环境")
 async def create_env(
         env_in: EnvCreate = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -54,7 +54,7 @@ async def create_env(
         return FailureResponse(message=f"新增失败, 错误描述: {e}")
 
 
-@autotest_env.post("/delete", summary="删除环境")
+@autotest_env.post("/delete", summary="删除环境", description="软删指定环境下某节点类型的全部配置")
 async def delete_env(
         env_in: EnvDeleteRequest = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -62,6 +62,8 @@ async def delete_env(
     """
     软删指定环境下某节点类型的全部配置。
 
+    :param env_in: 环境删除入参
+    :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
@@ -76,7 +78,7 @@ async def delete_env(
         return FailureResponse(message=f"删除失败, 错误描述: {e}")
 
 
-@autotest_env.post("/update", summary="更新环境")
+@autotest_env.post("/update", summary="更新环境", description="更新环境名称/应用归属，并级联同类型配置")
 async def update_env(
         env_in: EnvEditRequest = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -84,6 +86,8 @@ async def update_env(
     """
     编辑环境名称/应用归属，并级联同类型配置。
 
+    :param env_in: 环境更新入参
+    :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
@@ -100,7 +104,7 @@ async def update_env(
         return FailureResponse(message=f"更新失败, 错误描述: {e}")
 
 
-@autotest_env.post("/query", summary="查询环境配置并分类")
+@autotest_env.post("/query", summary="查询环境配置并分类", description="按id列表查询环境配置并分类返回")
 async def classify_env_configs(
         env_config_in: AutoTestApiEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -108,7 +112,7 @@ async def classify_env_configs(
     """
     按应用ID列表查询环境配置并分类返回。
 
-    :param env_config_in: 含 project_ids 的查询入参
+    :param env_config_in: 含project_ids的查询入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
@@ -130,7 +134,7 @@ async def classify_env_configs(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_env.post("/list", summary="查询环境列表")
+@autotest_env.post("/list", summary="查询环境列表", description="按节点类型/应用聚合环境名称")
 async def list_envs(
         env_in: EnvListQuery = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -152,7 +156,7 @@ async def list_envs(
         return FailureResponse(message=f"查询失败: {e}")
 
 
-@autotest_env.get("/page", summary="查询环境分页列表")
+@autotest_env.get("/page", summary="查询环境分页列表", description="按应用/环境/节点类型聚合后分页查询")
 async def search_envs(
         project_id: Optional[int] = Query(None, description="应用ID", ge=1),
         env_name: Optional[str] = Query(None, description="环境名称"),
@@ -165,6 +169,13 @@ async def search_envs(
     """
     按应用/环境/节点类型聚合后分页查询。
 
+    :param project_id: 应用主键ID
+    :param env_name: 环境名称
+    :param env_type: 节点类型
+    :param ip: IP地址
+    :param page: 页码
+    :param page_size: 每页条数
+    :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
@@ -184,7 +195,7 @@ async def search_envs(
         return FailureResponse(message=f"查询失败, 错误描述: {e}")
 
 
-@autotest_env.get("/get_all_app", summary="查询全部应用")
+@autotest_env.get("/get_all_app", summary="查询全部应用", description="获取全部启用应用列表")
 async def get_all_apps(
         page: int = Query(1, ge=1, description="页码"),
         page_size: int = Query(10000, ge=1, description="每页条数"),
@@ -193,7 +204,10 @@ async def get_all_apps(
     """
     获取全部启用应用列表。
 
-    :return: 统一HTTP响应；data 元素含 id/project_name/project_mark
+    :param page: 页码
+    :param page_size: 每页条数
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         data, total = await services.project_curd.get_all_project(page, page_size)

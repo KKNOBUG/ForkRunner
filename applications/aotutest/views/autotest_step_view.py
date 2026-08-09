@@ -61,7 +61,7 @@ from enums import AutoTestReportType, AutoTestReqArgsType, AutoTestStepType, Aut
 autotest_step = APIRouter()
 
 
-@autotest_step.post("/create", summary="新增步骤")
+@autotest_step.post("/create", summary="新增步骤", description="新增步骤信息")
 async def create_step(
         step_in: AutoTestApiStepCreate = Body(..., description="步骤信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -573,7 +573,7 @@ async def validate_step_tree(
         return FailureResponse(message=f"校验步骤树异常，异常描述: {e}")
 
 
-@autotest_step.post("/http_debugging", summary="调试HTTP请求")
+@autotest_step.post("/http_debugging", summary="调试HTTP请求", description="调试HTTP请求步骤")
 async def debug_http_request(
         debug_in: AutoTestHttpDebugRequest = Body(..., description="HTTP请求步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -956,7 +956,7 @@ async def debug_http_request(
         return FailureResponse(message=f"HTTP请求调试失败，异常描述: {e}")
 
 
-@autotest_step.post("/tcp_debugging", summary="调试TCP请求")
+@autotest_step.post("/tcp_debugging", summary="调试TCP请求", description="调试TCP请求步骤")
 async def debug_tcp_request(
         debug_in: AutoTestTcpDebugRequest = Body(..., description="TCP请求步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -1260,7 +1260,7 @@ async def debug_tcp_request(
         return FailureResponse(message=f"TCP请求调试失败，异常描述: {e}")
 
 
-@autotest_step.post("/python_code_debugging", summary="调试Python代码请求")
+@autotest_step.post("/python_code_debugging", summary="调试Python代码请求", description="调试Python代码步骤")
 async def debug_python_code(
         debug_in: AutoTestPythonCodeDebugRequest = Body(..., description="Python代码步骤数据"),
 ):
@@ -1268,7 +1268,6 @@ async def debug_python_code(
     Python代码调试。
 
     :param debug_in: 步骤调试入参
-    :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
@@ -1364,7 +1363,7 @@ async def debug_python_code(
         return FailureResponse(message=f"Python代码调试异常", data=response_data)
 
 
-@autotest_step.post("/redis_debugging", summary="调试Redis请求")
+@autotest_step.post("/redis_debugging", summary="调试Redis请求", description="调试Redis请求步骤")
 async def debug_redis_request(
         debug_in: AutoTestRedisDebugRequest = Body(..., description="Redis请求步骤数据"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -1703,7 +1702,7 @@ async def execute_step_tree(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    执行或调试步骤树。无 steps 为运行模式，有 steps 为调试模式。
+    执行或调试步骤树。无steps为运行模式，有steps为调试模式。
 
     :param exec_in: 业务入参
     :param services: 自动化测试CRUD依赖聚合
@@ -1725,7 +1724,7 @@ async def execute_step_tree(
             )
 
         def serialize_result(r: Any) -> Dict[str, Any]:
-            """递归序列化步骤执行结果（含 children）。"""
+            """递归序列化步骤执行结果（含children）。"""
             return {
                 "case_id": r.case_id,
                 "step_id": r.step_id,
@@ -1924,7 +1923,7 @@ async def execute_step_tree(
         return FailureResponse(message=f"执行或调试步骤树失败，异常描述: {e}")
 
 
-@autotest_step.post("/batch_execute", summary="执行批量用例")
+@autotest_step.post("/batch_execute", summary="执行批量用例", description="批量异步执行用例")
 async def batch_execute_cases(
         batch_in: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

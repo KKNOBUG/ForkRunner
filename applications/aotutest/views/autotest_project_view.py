@@ -31,7 +31,7 @@ from core.responses import (
 autotest_project = APIRouter()
 
 
-@autotest_project.post("/create", summary="新增应用")
+@autotest_project.post("/create", summary="新增应用", description="新增应用信息")
 async def create_project(
         project_in: AutoTestApiProjectCreate = Body(..., description="应用信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

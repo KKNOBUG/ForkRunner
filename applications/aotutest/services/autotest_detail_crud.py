@@ -112,7 +112,7 @@ class AutoTestApiDetailCrud(ScaffoldCrud[AutoTestApiDetailInfo, AutoTestApiDetai
 
     async def update_detail(self, detail_in: AutoTestApiDetailUpdate) -> AutoTestApiDetailInfo:
         """
-        更新明细，需提供detail_id或 (report_code, step_code) 定位。
+        更新明细，需提供detail_id或(report_code, step_code)定位。
 
         :param detail_in: 明细更新schema
         :return: 更新后的明细实例

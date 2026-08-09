@@ -30,7 +30,7 @@ from core.responses import (
 autotest_report = APIRouter()
 
 
-@autotest_report.post("/create", summary="新增报告")
+@autotest_report.post("/create", summary="新增报告", description="新增报告信息")
 async def create_report(
         report_in: AutoTestApiReportCreate = Body(..., description="报告信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -179,7 +179,7 @@ async def search_reports(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按条件分页查询报告列表（筛选与出参对齐 zzt/autoapitool/report/search）。
+    按条件分页查询报告列表。
 
     :param report_in: 报告查询入参
     :param services: 自动化测试CRUD依赖聚合
@@ -292,7 +292,7 @@ async def search_report_batches(
 
     :param batch_in: 含必填task_code；page/page_size针对批次数
     :param services: 自动化测试CRUD依赖聚合
-    :return: data 为批次汇总列表，total为批次总数
+    :return: 统一HTTP响应
     """
     try:
         total, batches = await services.report_curd.search_batches(batch_in)

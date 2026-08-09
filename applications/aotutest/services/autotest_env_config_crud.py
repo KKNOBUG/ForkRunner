@@ -437,7 +437,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             ],
     ) -> int:
         """
-        根据 typed schema 推断节点类型。
+        根据typed schema推断节点类型。
 
         :param config_in: APP/FILE/DB 创建或更新入参
         :return: 1=APP, 2=FILE, 3=DB
@@ -452,7 +452,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     def _resolve_operator(self, config_in: Any) -> str:
         """
-        解析操作人：登录上下文优先，其次 schema 的 created/updated_user/maintainer。
+        解析操作人：登录上下文优先，其次schema的created/updated_user/maintainer。
 
         :param config_in: 入参对象
         :return: 大写用户名（最多16位）
@@ -469,7 +469,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
     def _map_typed_config_fields(self, env_type: int, data_dict: dict) -> Dict[str, Any]:
         """
-        将按节点类型拆分的入参映射为 EnvConfig 落库字段。
+        将按节点类型拆分的入参映射为EnvConfig落库字段。
 
         :param env_type: 1=APP, 2=FILE, 3=DB
         :param data_dict: 创建/更新入参字典
@@ -579,7 +579,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             exclude_id: Optional[int] = None,
     ) -> None:
         """
-        校验同应用+环境+类型下 host/port(/database_name) 唯一。
+        校验同应用+环境+类型下host/port(/database_name)唯一。
 
         :param project_id: 应用ID
         :param env_id: 环境ID
@@ -622,7 +622,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             page_size: int = 10,
     ) -> Tuple[int, List[Dict[str, Any]]]:
         """
-        分页查询环境配置，并统一为 ip/port + 类型扩展字段结构。
+        分页查询环境配置，并统一为ip/port+类型扩展字段结构。
 
         :param env_info_id: 应用ID
         :param env_name: 环境名称

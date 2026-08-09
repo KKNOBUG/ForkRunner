@@ -53,7 +53,7 @@ autotest_case = APIRouter()
 EXPORT_ASYNC_THRESHOLD = 10
 
 
-@autotest_case.post("/create", summary="新增用例")
+@autotest_case.post("/create", summary="新增用例", description="新增用例信息")
 async def create_case(
         case_in: AutoTestApiCaseCreate = Body(..., description="用例信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -424,12 +424,18 @@ async def get_request_step_selected_project_ids(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    从步骤树中提取以下步骤类型所选择的应用ID并去重返回：
+    从步骤树中提取以下步骤类型所选择的应用ID并去重返回。
+
     - HTTP请求：step.request_project_id
     - TCP请求：step.request_project_id
     - 数据库请求：step.database_operates[*].project_id（可能多个）
 
     同时递归遍历children与quote_steps（引用公共脚本展开后的步骤）。
+
+    :param case_id: 用例主键ID
+    :param case_code: 用例业务标识
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     try:
         project_ids: List[int] = await services.step_curd.get_request_step_project_ids(
@@ -453,11 +459,11 @@ async def export_case_datagram_sync(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    同步导出公共接口用例的请求头与请求体为xlsx, 数量不超过EXPORT_ASYNC_THRESHOLD。
+    同步导出公共接口用例的请求头与请求体为xlsx，数量不超过EXPORT_ASYNC_THRESHOLD。
 
     :param case_ids: 用例主键列表
     :param services: 自动化测试CRUD依赖聚合
-    :return: xlsx 文件流
+    :return: 文件流响应
     """
     try:
         if not case_ids:
@@ -494,7 +500,9 @@ async def export_case_datagram_async(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    异步导出公共接口用例, 数量超过 EXPORT_ASYNC_THRESHOLD：校验通过后下发Celery任务，任务生成xlsx并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
+    异步导出公共接口用例，数量超过EXPORT_ASYNC_THRESHOLD。
+
+    校验通过后下发Celery任务，任务生成xlsx并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
 
     :param case_ids: 用例主键列表
     :param services: 自动化测试CRUD依赖聚合
@@ -534,11 +542,13 @@ async def export_case_scripts_sync(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    同步导出公共接口脚本, 数量不超过EXPORT_ASYNC_THRESHOLD：复制模板副本写入数据行，产出文件可直接用于导入脚本, 更新或新增公共接口。
+    同步导出公共接口脚本，数量不超过EXPORT_ASYNC_THRESHOLD。
+
+    复制模板副本写入数据行，产出文件可直接用于导入脚本、更新或新增公共接口。
 
     :param case_ids: 用例主键列表
     :param services: 自动化测试CRUD依赖聚合
-    :return: xlsx 文件流
+    :return: 文件流响应
     """
     try:
         if not case_ids:
@@ -575,10 +585,12 @@ async def export_case_scripts_async(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    异步导出公共接口脚本, 数量超过EXPORT_ASYNC_THRESHOLD：校验通过后下发Celery任务，任务生成xlsx并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
+    异步导出公共接口脚本，数量超过EXPORT_ASYNC_THRESHOLD。
+
+    校验通过后下发Celery任务，任务生成xlsx并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
 
     :param case_ids: 用例主键列表
-    :param services: 
+    :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
@@ -615,11 +627,13 @@ async def import_case_scripts(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    导入公共接口脚本：解析模板文件逐行校验，根据所属应用+接口名称匹配，存在更新、不存在新增；用例类型固定公共接口、用例属性固定正用例；全部行校验通过才在单事务内落库。
+    导入公共接口脚本。
+
+    解析模板文件逐行校验，根据所属应用+接口名称匹配，存在更新、不存在新增；用例类型固定公共接口、用例属性固定正用例；全部行校验通过才在单事务内落库。
 
     :param file: 模板xlsx文件
-    :param services: 
-    :return: 统 HTTP响应（含新增/更新计数或不合规行明细）
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
     """
     if not (file.filename or "").endswith(".xlsx"):
         return FileExtensionResponse(message="仅支持.xlsx后缀的模板文件")

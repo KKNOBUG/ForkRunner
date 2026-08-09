@@ -88,7 +88,7 @@ async def _sync_step_data_source_meta(
 
 
 def _safe_sheet_name(name: Any, used: Set[str]) -> str:
-    """清洗为合法 Excel sheet 名（去非法字符、截断31字符、重名追加序号）。"""
+    """清洗为合法Excel sheet名（去非法字符、截断31字符、重名追加序号）。"""
     clean = re.sub(r"[:\\/?*\[\]]", "_", str(name or "").strip()) or "sheet"
     clean = clean[:31]
     base = clean
@@ -101,7 +101,7 @@ def _safe_sheet_name(name: Any, used: Set[str]) -> str:
     return clean
 
 
-@autotest_data_source.post("/create", summary="新增数据源")
+@autotest_data_source.post("/create", summary="新增数据源", description="新增数据源信息")
 async def create_data_source(
         data_source_in: AutoTestDataSourceCreate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -192,7 +192,7 @@ async def unbind_case_data_source(
         return FailureResponse(message=f"解绑失败，异常描述: {e}")
 
 
-@autotest_data_source.post("/update", summary="更新数据源")
+@autotest_data_source.post("/update", summary="更新数据源", description="更新数据源信息")
 async def update_data_source(
         data_source_in: AutoTestDataSourceUpdate = Body(..., description="数据源信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -241,7 +241,9 @@ async def save_or_update_data_source(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    保存或更新数据源信息, 根据case_id, step_id, step_code定位：存在则更新，不存在则新增; case_code 缺失时自动查询用例表补齐。
+    保存或更新数据源信息。
+
+    根据case_id、step_id、step_code定位：存在则更新，不存在则新增；case_code缺失时自动查询用例表补齐。
 
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
@@ -334,7 +336,20 @@ async def get_data_source(
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
-    """定位优先级：data_source_id > data_source_code > (case+step)。"""
+    """
+    根据条件查询单条数据源信息。
+
+    定位优先级：data_source_id > data_source_code > (case+step)。
+
+    :param data_source_id: 数据源主键ID
+    :param data_source_code: 数据源业务标识
+    :param case_id: 用例主键ID
+    :param case_code: 用例业务标识
+    :param step_id: 步骤主键ID
+    :param step_code: 步骤业务标识
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
     try:
         if data_source_id:
             instance = await services.data_source_curd.get_by_id(data_source_id=data_source_id, on_error=True, state__not=1)
@@ -458,7 +473,18 @@ async def get_data_source_by_case_step(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 
 ):
-    """未传step条件时返回该用例下数据源列表；传入step条件时返回单条。"""
+    """
+    根据用例与步骤查询数据源。
+
+    未传step条件时返回该用例下数据源列表；传入step条件时返回单条。
+
+    :param case_id: 用例主键ID
+    :param case_code: 用例业务标识
+    :param step_id: 步骤主键ID
+    :param step_code: 步骤业务标识
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
     try:
         result = await services.data_source_curd.get_by_case_step(
             case_id=case_id,
@@ -615,7 +641,13 @@ async def get_dataset_scenario(
 
 @autotest_data_source.get("/import_template_download", summary="下载数据源导入模板", description="下载请求步骤数据集导入模板xlsx")
 async def download_import_template():
-    """分发仓库内置于output/template的xlsx（HTTP/TCP请求步骤共用）；流式读取，不加UTF-8 BOM，避免损坏二进制格式。"""
+    """
+    下载请求步骤数据集导入模板xlsx。
+
+    分发仓库内置于output/template的xlsx（HTTP/TCP请求步骤共用）；流式读取，不加UTF-8 BOM，避免损坏二进制格式。
+
+    :return: 文件流响应
+    """
     filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "测试用例HTTP请求步骤数据源模板.xlsx"))
     if not filepath.startswith(PROJECT_CONFIG.OUTPUT_DIR) or not os.path.isfile(filepath):
         return NotFoundResponse(message="导入模板文件不存在，请确认已部署 output/template 下模板文件")
@@ -631,7 +663,7 @@ async def download_import_template():
     )
 
 
-@autotest_data_source.post("/single_step_dataset_upload", summary="上传单步骤数据源")
+@autotest_data_source.post("/single_step_dataset_upload", summary="上传单步骤数据源", description="参数化驱动单步骤数据集上传")
 async def single_step_dataset_upload(
         case_id: int = Form(..., description="用例ID"),
         step_id: str = Form(..., description="步骤ID"),
@@ -766,6 +798,15 @@ async def single_step_dataset_download(
         step_code: str = Query(..., description="步骤标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    根据用例步骤导出数据源xlsx。
+
+    :param case_id: 用例主键ID
+    :param step_id: 步骤主键ID
+    :param step_code: 步骤业务标识
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 文件流响应
+    """
     try:
         instance = await services.data_source_curd.get_by_case_step(
             case_id=case_id,
@@ -798,7 +839,7 @@ async def single_step_dataset_download(
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
-@autotest_data_source.post("/batch_step_dataset_upload", summary="上传步骤数据源")
+@autotest_data_source.post("/batch_step_dataset_upload", summary="上传步骤数据源", description="参数化驱动多步骤数据集批量上传")
 async def batch_step_dataset_upload(
         case_id: int = Form(..., description="用例ID"),
         file_desc: Optional[str] = Form(None, description="数据驱动文件场景描述"),
@@ -953,12 +994,13 @@ async def batch_step_dataset_download(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    汇总导出用例下所有HTTP/TCP请求步骤绑定的数据源为单个xlsx：
-    每个步骤一个sheet（sheet 名=步骤名，数据=该步骤数据源的dataframe）。
+    汇总导出用例下所有HTTP/TCP请求步骤绑定的数据源为单个xlsx。
+
+    每个步骤一个sheet（sheet名=步骤名，数据=该步骤数据源的dataframe）。
 
     :param case_id: 用例主键ID
     :param services: 自动化测试CRUD依赖聚合
-    :return: xlsx 文件流
+    :return: 文件流响应
     """
     try:
         data_sources = await services.data_source_curd.get_by_case_step(case_id=case_id, state__not=1)

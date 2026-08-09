@@ -28,7 +28,7 @@ from core.responses import (
 autotest_detail = APIRouter()
 
 
-@autotest_detail.post("/create", summary="新增明细")
+@autotest_detail.post("/create", summary="新增明细", description="新增明细信息")
 async def create_step_detail(
         detail_in: AutoTestApiDetailCreate = Body(..., description="明细信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

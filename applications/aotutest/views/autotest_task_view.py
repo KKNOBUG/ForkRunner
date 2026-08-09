@@ -37,7 +37,7 @@ from core.responses import (
 autotest_task = APIRouter()
 
 
-@autotest_task.post("/create", summary="新增任务")
+@autotest_task.post("/create", summary="新增任务", description="新增任务信息")
 async def create_task(
         task_in: AutoTestApiTaskCreate = Body(..., description="任务信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -251,7 +251,7 @@ async def search_tasks(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_task.post("/run", summary="执行任务")
+@autotest_task.post("/run", summary="执行任务", description="立即执行任务")
 async def run_task(
         task_in: Dict[str, Any] = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -405,12 +405,12 @@ async def download_task_record_attachment(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据执行记录 attachments 项下载文件。
+    根据执行记录attachments项下载文件。
 
     :param record_id: 执行记录主键
-    :param key: 附件标识（信封 attachments[].key）
+    :param key: 附件标识（信封attachments[].key）
     :param services: 自动化测试CRUD依赖聚合
-    :return: 文件流或统一错误响应
+    :return: 文件流响应
     """
     try:
         record = await services.record_curd.get_or_none(id=record_id, state__not=1)
@@ -428,10 +428,6 @@ async def download_task_record_attachment(
         if not os.path.isfile(file_path):
             return ParameterResponse(message="附件文件不存在或已过期清理")
         file_name = str(item.get("name") or os.path.basename(file_path))
-        LOGGER.info(
-            f"根据记录id与附件key下载附件成功: record_id={record_id}, key={want}, "
-            f"storage_key={item['storage_key']}, file_name={file_name}"
-        )
         return FileResponse(
             path=file_path,
             media_type=str(item.get("content_type") or "application/octet-stream"),

@@ -37,11 +37,18 @@ from enums import AutoTestConfigNodeType
 autotest_env_config = APIRouter()
 
 
-@autotest_env_config.post("/app/create", summary="新增APP类型环境配置")
+@autotest_env_config.post("/app/create", summary="新增APP类型环境配置", description="新增APP类型环境配置信息")
 async def create_app_config(
         config_in: APPEnvConfigCreate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    新增APP类型环境配置信息。
+
+    :param config_in: APP环境配置入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
     try:
         result = await services.env_config_curd.create_config(config_in)
         return SuccessResponse(message="新增APP配置成功", data=result, total=1)
@@ -56,11 +63,18 @@ async def create_app_config(
         return FailureResponse(message=f"新增APP配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/file/create", summary="新增FILE类型环境配置")
+@autotest_env_config.post("/file/create", summary="新增FILE类型环境配置", description="新增FILE类型环境配置信息")
 async def create_file_config(
         config_in: FILEEnvConfigCreate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    新增FILE类型环境配置信息。
+
+    :param config_in: FILE环境配置入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
     try:
         result = await services.env_config_curd.create_config(config_in)
         return SuccessResponse(message="新增FILE配置成功", data=result, total=1)
@@ -75,11 +89,18 @@ async def create_file_config(
         return FailureResponse(message=f"新增FILE配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/database/create", summary="新增DB类型环境配置")
+@autotest_env_config.post("/database/create", summary="新增DB类型环境配置", description="新增DB类型环境配置信息")
 async def create_db_config(
         config_in: DBEnvConfigCreate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    新增DB类型环境配置信息。
+
+    :param config_in: DB环境配置入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
     try:
         result = await services.env_config_curd.create_config(config_in)
         return SuccessResponse(message="新增DB配置成功", data=result, total=1)
@@ -94,11 +115,18 @@ async def create_db_config(
         return FailureResponse(message=f"新增DB配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/delete", summary="删除子表环境配置")
+@autotest_env_config.post("/delete", summary="删除子表环境配置", description="删除指定子表环境配置信息")
 async def delete_env_config(
         config_in: EnvConfigDelete = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    删除指定子表环境配置信息。
+
+    :param config_in: 环境配置删除入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
     try:
         result = await services.env_config_curd.delete_config(config_in)
         return SuccessResponse(message="删除配置成功", data=result, total=1)
@@ -111,11 +139,18 @@ async def delete_env_config(
         return FailureResponse(message=f"删除配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/app/update", summary="更新APP类型环境配置")
+@autotest_env_config.post("/app/update", summary="更新APP类型环境配置", description="更新APP类型环境配置信息")
 async def update_app_config(
         config_in: APPEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    更新APP类型环境配置信息。
+
+    :param config_in: APP环境配置更新入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
     try:
         result = await services.env_config_curd.update_config(config_in)
         return SuccessResponse(message="修改APP配置成功", data=result, total=1)
@@ -130,11 +165,18 @@ async def update_app_config(
         return FailureResponse(message=f"修改APP配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/file/update", summary="更新FILE类型环境配置")
+@autotest_env_config.post("/file/update", summary="更新FILE类型环境配置", description="更新FILE类型环境配置信息")
 async def update_file_config(
         config_in: FILEEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    更新FILE类型环境配置信息。
+
+    :param config_in: FILE环境配置更新入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
     try:
         result = await services.env_config_curd.update_config(config_in)
         return SuccessResponse(message="修改FILE配置成功", data=result, total=1)
@@ -149,11 +191,18 @@ async def update_file_config(
         return FailureResponse(message=f"修改FILE配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/database/update", summary="更新DB类型环境配置")
+@autotest_env_config.post("/database/update", summary="更新DB类型环境配置", description="更新DB类型环境配置信息")
 async def update_db_config(
         config_in: DBEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    更新DB类型环境配置信息。
+
+    :param config_in: DB环境配置更新入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
     try:
         result = await services.env_config_curd.update_config(config_in)
         return SuccessResponse(message="修改DB配置成功", data=result, total=1)
@@ -293,6 +342,13 @@ async def classify_env_configs(
         env_config_in: AutoTestEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    根据应用列表查询环境配置并分类。
+
+    :param env_config_in: 含project_ids的查询入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
     try:
         data = await services.env_config_curd.query_classified_by_project_ids(
             project_ids=env_config_in.project_ids,
@@ -340,7 +396,7 @@ async def get_env_config_names(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_env_config.get("/list", summary="查询子表环境配置列表")
+@autotest_env_config.get("/list", summary="查询子表环境配置列表", description="按条件分页查询子表环境配置列表")
 async def list_env_configs(
         env_info_id: Optional[int] = Query(None, description="应用ID"),
         env_name: Optional[str] = Query(None, description="环境"),
@@ -349,6 +405,17 @@ async def list_env_configs(
         page_size: int = Query(10, description="每页条数", ge=1, le=100),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    按条件分页查询子表环境配置列表。
+
+    :param env_info_id: 应用主键ID
+    :param env_name: 环境名称
+    :param env_type: 节点类型
+    :param page: 页码
+    :param page_size: 每页条数
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
     try:
         total, data = await services.env_config_curd.get_config_list(
             env_info_id=env_info_id,
@@ -365,11 +432,18 @@ async def list_env_configs(
         return FailureResponse(message=f"查询失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/database/test_connection", summary="执行数据库连接测试")
+@autotest_env_config.post("/database/test_connection", summary="执行数据库连接测试", description="根据入参测试数据库连接是否可用")
 async def test_db_connection(
         config_in: TestDBConnectionRequest = Body(..., description="连接测试入参"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
+    """
+    根据入参测试数据库连接是否可用。
+
+    :param config_in: 数据库连接测试入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
     try:
         return await services.env_config_curd.test_db_connection(
             config_id=config_in.id,

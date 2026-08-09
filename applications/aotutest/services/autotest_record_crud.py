@@ -76,7 +76,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
             celery_id: Optional[str] = None,
     ) -> AutoTestApiRecordInfo:
         """
-        更新一条任务执行记录（按主键或 celery_id 定位）。
+        更新一条任务执行记录（按主键或celery_id定位）。
 
         :param data: 更新入参Schema或字段字典
         :param record_id: 执行记录主键

@@ -103,6 +103,13 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
             step_type: Optional[AutoTestStepType] = None,
             request_args_type: Optional[AutoTestReqArgsType] = None,
     ) -> Optional[List[int]]:
+        """
+        根据请求步骤类型与参数类型查询关联用例ID列表。
+
+        :param step_type: 请求步骤类型；可选
+        :param request_args_type: 请求参数类型；可选
+        :return: 关联用例ID列表；两者皆空时返回None
+        """
         if step_type is None and request_args_type is None:
             return None
 

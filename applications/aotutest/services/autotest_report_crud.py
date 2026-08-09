@@ -172,6 +172,12 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
     @staticmethod
     def _parse_elapsed_seconds(val: Any) -> float:
+        """
+        将耗时字段解析为秒数浮点值。
+
+        :param val: 耗时原始值
+        :return: 秒数；无法解析时返回0.0
+        """
         if val is None or val == "":
             return 0.0
         text = str(val).strip().rstrip("sS")
@@ -182,6 +188,12 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
 
     @staticmethod
     def _is_case_success(case_state: Any) -> bool:
+        """
+        判断用例执行状态是否表示成功。
+
+        :param case_state: 用例执行状态
+        :return: 是否成功
+        """
         return case_state is True or case_state == "true"
 
     @classmethod
@@ -189,9 +201,8 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
         """
         按脚本维度汇总批次结果。
 
-        - 成功：每个脚本的全部运行（含数据驱动）均成功
-        - 部分成功：至少一个脚本的全部运行均成功，但并非全部脚本都如此
-        - 失败：没有任何一个脚本达到「其全部运行均成功」
+        :param reports: 报告字典列表
+        :return: 成功(各脚本全部运行均成功)、部分成功(至少一个脚本全部运行成功)或失败
         """
         by_case: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         for row in reports:

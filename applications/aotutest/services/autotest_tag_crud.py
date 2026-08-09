@@ -137,7 +137,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
     async def update_tag(self, tag_in: AutoTestApiTagUpdate) -> AutoTestApiTagInfo:
         """
-        更新标签，根据tag_id或tag_code定位并校验 (tag_project, tag_mode, tag_name) 唯一。
+        更新标签，根据tag_id或tag_code定位并校验(tag_project, tag_mode, tag_name)唯一。
 
         :param tag_in: 标签更新schema
         :return: 更新后的标签实例

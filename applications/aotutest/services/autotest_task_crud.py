@@ -166,7 +166,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     async def create_task(self, task_in: AutoTestApiTaskCreate) -> AutoTestApiTaskInfo:
         """
-        创建任务，校验应用存在及 (task_name, task_project) 唯一。
+        创建任务，校验应用存在及(task_name, task_project)唯一。
 
         :param task_in: 任务创建schema
         :return: 创建后的任务实例
@@ -199,7 +199,7 @@ class AutoTestApiTaskCrud(ScaffoldCrud[AutoTestApiTaskInfo, AutoTestApiTaskCreat
 
     async def update_task(self, task_in: AutoTestApiTaskUpdate) -> AutoTestApiTaskInfo:
         """
-        更新任务，根据task_id或task_code定位并校验 (task_name, task_project) 唯一。
+        更新任务，根据task_id或task_code定位并校验(task_name, task_project)唯一。
 
         :param task_in: 任务更新schema
         :return: 更新后的任务实例

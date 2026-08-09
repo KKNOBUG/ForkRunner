@@ -44,7 +44,7 @@ CONFIG_TYPE_TO_ENV_TYPE = {
 
 def resolve_config_type(env_type: int) -> str:
     """
-    将节点类型编码转换为 config_type 枚举值。
+    将节点类型编码转换为config_type枚举值。
 
     :param env_type: 1=APP, 2=FILE, 3=DB
     :return: api/file/database
@@ -58,12 +58,12 @@ def resolve_config_type(env_type: int) -> str:
 
 
 def enum_field_value(value: Any) -> str:
-    """兼容 CharEnumField 返回枚举实例或字符串。"""
+    """兼容CharEnumField返回枚举实例或字符串。"""
     return value.value if hasattr(value, "value") else str(value)
 
 
 def format_datetime(value: Any) -> Optional[str]:
-    """将时间格式化为 YYYY-MM-DD HH:MM:SS；空值返回 None。"""
+    """将时间格式化为YYYY-MM-DD HH:MM:SS；空值返回None。"""
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -394,7 +394,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
             page_size: int = 10,
     ) -> Tuple[int, List[Dict[str, Any]]]:
         """
-        以环境主表分页查询；可选按子配置 IP 过滤。
+        以环境主表分页查询；可选按子配置IP过滤。
 
         :return: (总条数, 当前页记录)；记录含 id/project_id/env_name/env_type/project_name/is_delete/时间字段
         """
@@ -527,7 +527,7 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
     async def update_automation_env(self, data: EnvEditRequest) -> Dict[str, Any]:
         """
-        更新环境主表字段，并级联同类型配置的 env_id / project_id。
+        更新环境主表字段，并级联同类型配置的env_id/project_id。
 
         :param data: 环境编辑入参
         :return: 环境响应字典
