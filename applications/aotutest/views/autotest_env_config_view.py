@@ -44,7 +44,7 @@ async def get_env_config(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据id或code查询环境配置。
+    根据id或code查询环境配置信息。
 
     :param config_id: 环境配置主键ID
     :param config_code: 环境配置业务标识
@@ -65,14 +65,14 @@ async def get_env_config(
             },
             replace_fields={"id": "env_id"}
         )
-        LOGGER.info(f"根据id或code查询环境配置成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询环境配置信息成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code查询环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询环境配置信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -82,7 +82,7 @@ async def search_env_configs(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据条件查询环境配置。
+    根据条件分页查询环境配置列表信息。
 
     :param config_in: 环境配置入参
     :param services: 自动化测试CRUD依赖聚合
@@ -150,12 +150,12 @@ async def search_env_configs(
             }
             for item in report_instances
         ]
-        LOGGER.info(f"根据条件查询环境配置成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件分页查询环境配置列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件查询环境配置失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件分页查询环境配置列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -213,12 +213,12 @@ async def get_env_config_names(
             config_type=config_type_val,
         )
         LOGGER.info(
-            f"获取去重配置名称列表成功, project_id={project_id}, env_id={env_id}, "
+            f"获取去重后的配置名称列表成功, project_id={project_id}, env_id={env_id}, "
             f"config_type={config_type_val}, 数量={len(data)}"
         )
         return SuccessResponse(message="查询成功", data=data, total=len(data))
     except Exception as e:
-        LOGGER.error(f"获取去重配置名称列表失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"获取去重后的配置名称列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 

@@ -24,6 +24,7 @@ from core.responses import (
     NotFoundResponse,
     DataAlreadyExistsResponse,
 )
+
 autotest_env = APIRouter()
 
 
@@ -45,7 +46,7 @@ async def list_envs(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"获取环境列表失败: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询环境列表失败: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败: {e}")
 
 
@@ -77,7 +78,7 @@ async def search_envs(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"环境分页列表失败: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询环境分页列表失败: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败, 错误描述: {e}")
 
 

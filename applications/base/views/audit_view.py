@@ -313,7 +313,7 @@ async def delete_audit(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@audit.post("/delete", summary="批量删除日志", description="根据id列表批量删除日志信息")
+@audit.post("/deletes", summary="批量删除日志", description="根据id列表批量删除日志信息")
 async def batch_delete_audits(
         body_in: AuditBatchDelete = Body(..., description="审计日志ID列表"),
         audit_crud: AuditCrud = Depends(get_audit_crud),

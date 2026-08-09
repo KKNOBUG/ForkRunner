@@ -70,7 +70,7 @@ async def delete_project(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据id或code删除应用。
+    根据id或code删除应用信息。
 
     :param project_id: 应用主键ID
     :param project_code: 应用业务标识
@@ -88,7 +88,7 @@ async def delete_project(
             },
             replace_fields={"id": "project_id"}
         )
-        LOGGER.info(f"根据id或code删除应用成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code删除应用信息成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -97,7 +97,7 @@ async def delete_project(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code删除应用失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除应用信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -107,7 +107,7 @@ async def batch_delete_projects(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据id或code列表删除项目。
+    根据id或code列表删除应用信息。
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
@@ -115,7 +115,7 @@ async def batch_delete_projects(
     """
     try:
         count = await services.project_curd.delete_projects(project_in=project_in)
-        LOGGER.info(f"根据id或code列表删除项目成功, 数量: {count}")
+        LOGGER.info(f"根据id或code列表删除应用信息成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -124,7 +124,7 @@ async def batch_delete_projects(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code列表删除项目失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code列表删除应用信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -134,7 +134,7 @@ async def update_project(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据id或code更新应用。
+    根据id或code更新应用信息。
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
@@ -151,7 +151,7 @@ async def update_project(
             },
             replace_fields={"id": "project_id"}
         )
-        LOGGER.info(f"根据id或code更新应用成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新应用信息成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -162,7 +162,7 @@ async def update_project(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code更新应用失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新应用信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
@@ -173,7 +173,7 @@ async def get_project(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据id或code查询应用。
+    根据id或code查询应用信息。
 
     :param project_id: 应用主键ID
     :param project_code: 应用业务标识
@@ -194,14 +194,14 @@ async def get_project(
             },
             replace_fields={"id": "project_id"}
         )
-        LOGGER.info(f"根据id或code查询应用成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询应用信息成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code查询应用失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询应用信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -210,17 +210,17 @@ async def get_project_names(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    查询应用名称(去重)。
+    查询去重后的应用名称列表。
 
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
         names: List[str] = await services.project_curd.model.filter(state__not=1).distinct().values_list("project_name", flat=True)
-        LOGGER.info(f"查询应用名称(去重)成功, 结果明细: {names}")
+        LOGGER.info(f"查询去重后的应用名称列表成功, 结果明细: {names}")
         return SuccessResponse(message="查询成功", data=names, total=len(names))
     except Exception as e:
-        LOGGER.error(f"查询应用名称(去重)失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询去重后的应用名称列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -230,7 +230,7 @@ async def search_projects(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据条件查询应用。
+    根据条件分页查询应用列表信息。
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
@@ -275,10 +275,10 @@ async def search_projects(
             )
             for obj in instances
         ]
-        LOGGER.info(f"根据条件查询应用成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件分页查询应用列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件查询应用失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件分页查询应用列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")

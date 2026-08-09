@@ -140,7 +140,7 @@ async def delete_data_source(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    删除数据源(软删)。
+    软删除数据源信息。
 
     :param data_source_id: 数据源主键ID
     :param data_source_code: 数据源业务标识
@@ -161,14 +161,14 @@ async def delete_data_source(
             step_code=step_code,
         )
         data = await _serialize_data_source(instance)
-        LOGGER.info(f"删除数据源成功, 结果明细: {data}")
+        LOGGER.info(f"软删除数据源信息成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"删除数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"软删除数据源信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -186,12 +186,12 @@ async def unbind_case_data_source(
     """
     try:
         result = await services.data_source_curd.unbind_case_data_sources(case_id=case_id)
-        LOGGER.info(f"解绑用例数据源成功, case_id={case_id}, 结果明细: {result}")
+        LOGGER.info(f"解绑用例下全部数据源成功, case_id={case_id}, 结果明细: {result}")
         return SuccessResponse(message="解绑成功", data=result)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"解绑用例数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"解绑用例下全部数据源失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"解绑失败，异常描述: {e}")
 
 
@@ -245,7 +245,7 @@ async def save_or_update_data_source(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    保存或更新数据源, 根据case_id, step_id, step_code定位：存在则更新，不存在则新增; case_code 缺失时自动查询用例表补齐。
+    保存或更新数据源信息, 根据case_id, step_id, step_code定位：存在则更新，不存在则新增; case_code 缺失时自动查询用例表补齐。
 
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
@@ -316,7 +316,7 @@ async def save_or_update_data_source(
         )
 
         data = await _serialize_data_source(instance)
-        LOGGER.info(f"保存或更新数据源成功, 结果明细: {data}")
+        LOGGER.info(f"保存或更新数据源信息成功, 结果明细: {data}")
         return SuccessResponse(message="保存成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -325,7 +325,7 @@ async def save_or_update_data_source(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"保存或更新数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"保存或更新数据源信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"保存失败，异常描述: {e}")
 
 
@@ -361,14 +361,14 @@ async def get_data_source(
         if isinstance(instance, list):
             return ParameterResponse(message="当前条件匹配多条记录，请使用get_by_case_step或search接口")
         data = await _serialize_data_source(instance)
-        LOGGER.info(f"查询数据源成功, 结果明细: {data}")
+        LOGGER.info(f"根据条件查询单条数据源信息成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message), data=e.data)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件查询单条数据源信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -403,7 +403,7 @@ async def get_dataset_names(
                     seen.add(name_str)
                     merged_names.append(name_str)
 
-    LOGGER.info(f"查询案例数据场景成功, case_id={case_id}, 结果数量: {len(merged_names)}")
+    LOGGER.info(f"查询案例数据场景名称成功, case_id={case_id}, 结果数量: {len(merged_names)}")
     return SuccessResponse(message="查询成功", data=merged_names)
 
 
@@ -448,12 +448,12 @@ async def search_data_sources(
         serializes: List[Dict[str, Any]] = []
         for inst in instances:
             serializes.append(await _serialize_data_source(inst))
-        LOGGER.info(f"根据条件查询数据源成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件分页查询数据源列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=serializes, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件分页查询数据源列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -478,17 +478,17 @@ async def get_data_source_by_case_step(
         )
         if isinstance(result, list):
             serializes = [await _serialize_data_source(x) for x in result]
-            LOGGER.info(f"根据case_step查询数据源成功, 结果数量: {len(serializes)}")
+            LOGGER.info(f"根据用例与步骤查询数据源成功, 结果数量: {len(serializes)}")
             return SuccessResponse(message="查询成功", data=serializes, total=len(serializes))
         data = await _serialize_data_source(result)
-        LOGGER.info(f"根据case_step查询数据源成功, 结果明细: {data}")
+        LOGGER.info(f"根据用例与步骤查询数据源成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据case_step查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据用例与步骤查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -588,7 +588,7 @@ async def get_scene_names_by_case(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据用例查询数据源场景列名失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据用例查询已落库数据源场景列名失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -619,7 +619,7 @@ async def get_dataset_scenario(
             return SuccessResponse(message="未找到场景数据", data=None, total=0)
         return SuccessResponse(message="查询成功", data=scenario, total=1)
     except Exception as e:
-        LOGGER.error(f"查询数据集场景失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询某步骤下单个数据集场景失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 

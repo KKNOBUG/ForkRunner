@@ -124,7 +124,7 @@ async def delete_step(
             },
             replace_fields={"id": "step_id"}
         )
-        LOGGER.info(f"根据id或code删除步骤成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code删除步骤信息成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -135,7 +135,7 @@ async def delete_step(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code删除步骤失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除步骤信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
@@ -162,7 +162,7 @@ async def update_step(
             },
             replace_fields={"id": "step_id"}
         )
-        LOGGER.info(f"根据id或code更新步骤成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新步骤信息成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -173,7 +173,7 @@ async def update_step(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code更新步骤失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新步骤信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
@@ -205,14 +205,14 @@ async def get_step(
             },
             replace_fields={"id": "step_id"}
         )
-        LOGGER.info(f"根据id或code查询步骤成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询步骤信息成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code查询步骤失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询步骤信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -265,12 +265,12 @@ async def search_steps(
                 replace_fields={"id": "step_id"}
             ) for obj in instances
         ]
-        LOGGER.info(f"根据条件查询步骤成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件分页查询步骤列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件查询步骤失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件分页查询步骤列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -290,7 +290,7 @@ async def get_step_tree(
     """
     try:
         load = await services.step_curd.get_by_case_id(case_id=case_id, case_code=case_code)
-        LOGGER.info(f"根据id或code查询步骤树成功, 结果明细: {load.step_counter.model_dump()}")
+        LOGGER.info(f"根据用例id或code查询步骤树结构成功, 结果明细: {load.step_counter.model_dump()}")
         if load.root_steps:
             data = [s.model_dump(mode="json") for s in load.root_steps]
         elif load.case_only_when_no_steps is not None:
@@ -304,7 +304,7 @@ async def get_step_tree(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code查询步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据用例id或code查询步骤树结构失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -326,14 +326,14 @@ async def copy_step_tree(
         if not case_id and not case_code:
             return BadReqResponse(message="参数[case_id, case_code]不允许为空")
         copy_data = await services.step_curd.get_copy_tree(case_id=case_id, case_code=case_code)
-        LOGGER.info("复制用例步骤树成功")
+        LOGGER.info(f"根据用例id或code查询步骤树结构(返回未保存的副本)成功, 结果明细: {copy_data}")
         return SuccessResponse(message="复制成功", data=copy_data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"复制用例步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据用例id或code查询步骤树结构(返回未保存的副本)失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"复制失败，异常描述: {str(e)}")
 
 
@@ -515,7 +515,7 @@ async def batch_update_steps_tree(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"更新用例及步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"更新或创建用例级步骤树结构失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新用例及步骤树失败，异常描述: {e}")
 
 

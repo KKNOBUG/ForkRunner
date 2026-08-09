@@ -98,7 +98,7 @@ async def delete_case(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据id或code软删除用例及其下属步骤。
+    根据id或code软删除用例及其步骤。
 
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
@@ -116,7 +116,7 @@ async def delete_case(
             },
             replace_fields={"id": "case_id"}
         )
-        LOGGER.info(f"根据id或code删除用例成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code软删除用例及其步骤成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -125,7 +125,7 @@ async def delete_case(
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code删除用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code软删除用例及其步骤失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -135,7 +135,7 @@ async def update_case(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据id或code更新用例。
+    根据id或code更新用例信息。
 
     :param case_in: 用例入参
     :param services: 自动化测试CRUD依赖聚合
@@ -152,7 +152,7 @@ async def update_case(
             },
             replace_fields={"id": "case_id"}
         )
-        LOGGER.info(f"根据id或code更新用例成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新用例信息成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -163,7 +163,7 @@ async def update_case(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code更新用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新用例信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
@@ -174,7 +174,7 @@ async def get_case(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据id或code查询用例。
+    根据id或code查询用例信息。
 
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
@@ -219,14 +219,14 @@ async def get_case(
                 replace_fields={"id": "tag_id"}
             ) for obj in await services.tag_curd.get_by_ids(tag_ids=tag_ids, on_error=True, state__not=1)
         ] if tag_ids else []
-        LOGGER.info(f"根据id或code查询用例成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询用例信息成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询用例信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -251,7 +251,7 @@ async def batch_fetch_related_data(
     acquire_step_type_instance_task = services.step_curd.model.filter(
         ~Q(case_id__isnull=True),
         case_id__in=case_ids,
-        state__not = 1
+        state__not=1
     ).values_list("case_id", "step_type") if case_ids else asyncio.sleep(0, result=[])
 
     project_objs, tag_objs, step_type_raw = await asyncio.gather(
@@ -312,7 +312,7 @@ async def search_cases(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据条件查询用例。
+    根据条件分页查询用例列表信息。
 
     :param case_in: 用例入参
     :param services: 自动化测试CRUD依赖聚合
@@ -350,7 +350,7 @@ async def search_cases(
                 request_args_type=case_in.request_args_type,
             )
             if not matched_case_ids:
-                LOGGER.info("按条件查询用例成功, 结果数量: 0")
+                LOGGER.info("根据条件分页查询用例列表信息成功, 结果数量: 0")
                 return SuccessResponse(message="查询成功", data=[], total=0)
             q &= Q(id__in=matched_case_ids)
 
@@ -361,7 +361,7 @@ async def search_cases(
             order=case_in.order
         )
         if not instances:
-            LOGGER.info(f"按条件查询用例成功, 结果数量: {total}")
+            LOGGER.info(f"根据条件分页查询用例列表信息成功, 结果数量: {total}")
             return SuccessResponse(message="查询成功", data=[], total=total)
 
         # 预收集所有关联ID，一次性并发批量查询
@@ -413,14 +413,14 @@ async def search_cases(
             if is_public_api_query or instance_type == AutoTestCaseType.PUBLIC_API.value:
                 serialize["step_type"] = _protocol_from_step_type(case_step_type_map.get(case_id))
             case_serializes.append(serialize)
-        LOGGER.info(f"按条件查询用例成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件分页查询用例列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=case_serializes, total=total)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按条件查询用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件分页查询用例列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -444,14 +444,15 @@ async def get_request_step_selected_project_ids(
             case_code=case_code,
         )
         project_ids_len: int = len(project_ids)
-        LOGGER.info(f"获取步骤树请求步骤应用ID列表成功, case_id={case_id}, case_code={case_code}, 数量={project_ids_len}, 数据={project_ids}")
+        LOGGER.info(
+            f"根据id或code获取步骤树中请求步骤选择的应用ID列表成功, case_id={case_id}, case_code={case_code}, 数量={project_ids_len}, 数据={project_ids}")
         return SuccessResponse(message="查询成功", data=project_ids, total=project_ids_len)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"获取步骤树请求步骤应用ID列表失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code获取步骤树中请求步骤选择的应用ID列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -492,7 +493,7 @@ async def export_case_datagram_sync(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"导出公共接口报文失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"导出公共接口用例请求头与请求体为xlsx(同步)失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
@@ -533,7 +534,7 @@ async def export_case_datagram_async(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"下发异步导出任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"异步导出公共接口用例请求头与请求体为xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"下发导出任务失败，异常描述: {e}")
 
 
@@ -574,7 +575,7 @@ async def export_case_scripts_sync(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"导出公共接口脚本失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"导出公共接口脚本为模板xlsx(同步)失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
@@ -615,7 +616,7 @@ async def export_case_scripts_async(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"下发异步导出脚本任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"异步导出公共接口脚本为模板xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"下发导出任务失败，异常描述: {e}")
 
 
@@ -651,5 +652,5 @@ async def import_case_scripts(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"导入公共接口脚本失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"从模板xlsx导入公共接口脚本失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"导入失败，异常描述: {e}")

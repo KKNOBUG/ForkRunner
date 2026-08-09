@@ -91,14 +91,14 @@ async def delete_report(
             },
             replace_fields={"id": "report_id"}
         )
-        LOGGER.info(f"根据id或code删除报告成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code删除报告信息成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code删除报告失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除报告信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
@@ -125,7 +125,7 @@ async def update_report(
             },
             replace_fields={"id": "report_id"}
         )
-        LOGGER.info(f"根据id或code更新报告成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新报告信息成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -134,7 +134,7 @@ async def update_report(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code更新报告失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新报告信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {str(e)}")
 
 
@@ -166,14 +166,14 @@ async def get_report(
             },
             replace_fields={"id": "report_id"}
         )
-        LOGGER.info(f"根据id或code查询报告成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询报告信息成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code查询报告失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询报告信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -202,6 +202,7 @@ async def search_reports(
                 state__not=1,
             ).values_list("id", flat=True)
             if not matched_case_ids:
+                LOGGER.info(f"根据条件分页查询报告列表信息成功, 结果数量: 0")
                 return SuccessResponse(message="查询成功", data=[], total=0)
             q &= Q(case_id__in=list(matched_case_ids))
         if report_in.report_id:
@@ -276,18 +277,18 @@ async def search_reports(
                 item["step_pass_ratio"] = "0.0%"
             item["case_name"] = case_name_map.get(item["case_id"], "")
             data.append(item)
-        LOGGER.info(f"根据条件查询报告成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件分页查询报告列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="报告列表查询成功", data=data, total=total)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件查询报告失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件分页查询报告列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_report.post("/search_batches", summary="查询任务执行历史", description="按task_code聚合batch_code，计算成功/部分成功/失败状态")
+@autotest_report.post("/search_batches", summary="查询任务执行历史", description="按task_code聚合batch_code计算成功/部分成功/失败状态")
 async def search_report_batches(
         batch_in: AutoTestApiReportBatchSelect = Body(..., description="批次查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
@@ -303,8 +304,8 @@ async def search_report_batches(
         total, batches = await services.report_curd.search_batches(batch_in)
         data = [item.model_dump(mode="json") for item in batches]
         LOGGER.info(
-            f"按批次查询任务执行历史成功, task_code={batch_in.task_code}, "
-            f"批次总数={total}, 本页={len(data)}"
+            f"按task_code聚合batch_code计算成功/部分成功/失败状态成功, "
+            f"task_code={batch_in.task_code}, 批次总数={total}, 本页={len(data)}"
         )
         return SuccessResponse(message="查询成功", data=data, total=total)
     except NotFoundException as e:
@@ -312,5 +313,5 @@ async def search_report_batches(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按批次查询任务执行历史失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"按task_code聚合batch_code计算成功/部分成功/失败状态失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

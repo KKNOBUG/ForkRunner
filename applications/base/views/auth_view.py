@@ -144,7 +144,7 @@ async def get_user_info(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@auth_secure.post("/getUserRouters", summary="查询当前用户路由")
+@auth_secure.post("/get_user_routers", summary="查询当前用户路由")
 async def get_user_router():
     """
     查看当前用户路由。

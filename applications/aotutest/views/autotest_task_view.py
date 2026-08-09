@@ -100,14 +100,14 @@ async def delete_task(
             },
             replace_fields={"id": "task_id"}
         )
-        LOGGER.info(f"根据id或code删除任务成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code删除任务信息成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code删除任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code删除任务信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
@@ -134,7 +134,7 @@ async def update_task(
             },
             replace_fields={"id": "task_id"}
         )
-        LOGGER.info(f"根据id或code更新任务成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code更新任务信息成功, 结果明细: {data}")
         return SuccessResponse(data=data, message="更新成功", total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -145,7 +145,7 @@ async def update_task(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code更新任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code更新任务信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {str(e)}")
 
 
@@ -177,14 +177,14 @@ async def get_task(
             },
             replace_fields={"id": "task_id"}
         )
-        LOGGER.info(f"根据id或code查询任务成功, 结果明细: {data}")
+        LOGGER.info(f"根据id或code查询任务信息成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code查询任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据id或code查询任务信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -242,12 +242,12 @@ async def search_tasks(
                 replace_fields={"id": "task_id"}
             ) for obj in instances
         ]
-        LOGGER.info(f"根据条件查询任务成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件分页查询任务列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件查询任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件分页查询任务列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -283,7 +283,7 @@ async def run_task(
             queue="autotest_queue",
             __task_id=task_id
         )
-        LOGGER.info(f"已下发执行任务 task_id={task_id}")
+        LOGGER.info(f"下发执行任务成功，task_id={task_id}")
         return SuccessResponse(message="已下发执行，请稍后在报告中查看结果", data={"task_id": task_id}, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -320,14 +320,14 @@ async def start_task(
             },
             replace_fields={"id": "task_id"},
         )
-        LOGGER.info(f"已启动任务 task_id={task_id}")
+        LOGGER.info(f"启用任务调度成功，task_id={task_id}")
         return SuccessResponse(message="任务已启动，将根据调度执行", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"启动任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"启用任务调度失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"启动失败，异常描述: {e}")
 
 
@@ -357,14 +357,14 @@ async def stop_task(
             },
             replace_fields={"id": "task_id"},
         )
-        LOGGER.info(f"已停止任务 task_id={task_id}")
+        LOGGER.info(f"关闭任务调度成功，task_id={task_id}")
         return SuccessResponse(message="任务已停止，将不再根据调度执行", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"停止任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"关闭任务调度失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"停止失败，异常描述: {e}")
 
 
@@ -389,12 +389,12 @@ async def search_task_records(
             )
             for obj in instances
         ]
-        LOGGER.info(f"根据条件查询任务执行记录成功, 结果数量: {total}")
+        LOGGER.info(f"根据条件分页查询任务执行记录成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"查询任务执行记录失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据条件分页查询任务执行记录失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -429,7 +429,7 @@ async def download_task_record_attachment(
             return ParameterResponse(message="附件文件不存在或已过期清理")
         file_name = str(item.get("name") or os.path.basename(file_path))
         LOGGER.info(
-            f"下载执行记录附件: record_id={record_id}, key={want}, "
+            f"根据记录id与附件key下载附件成功: record_id={record_id}, key={want}, "
             f"storage_key={item['storage_key']}, file_name={file_name}"
         )
         return FileResponse(
@@ -440,5 +440,5 @@ async def download_task_record_attachment(
     except ValueError as e:
         return ParameterResponse(message=str(e))
     except Exception as e:
-        LOGGER.error(f"下载执行记录附件失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"根据记录id与附件key下载附件失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"下载失败，异常描述: {str(e)}")
