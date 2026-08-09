@@ -188,7 +188,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         user_if: dict = user_in.model_dump(exclude_none=True)
         try:
             instance = await self.update(id=user_id, obj_in=user_if)
-        except DoesNotExist as e:
+        except DoesNotExist:
             error_message: str = f"更新用户信息失败, 记录[id={user_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)

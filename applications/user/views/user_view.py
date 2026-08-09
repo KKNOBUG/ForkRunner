@@ -115,7 +115,6 @@ async def update_user(
     :param user_crud: 用户CRUD服务
     :return: 统一HTTP响应
     """
-    user_id: int = user_in.user_id
     try:
         instance = await user_crud.update_user(user_in=user_in)
         await user_crud.update_roles(instance, user_in.role_ids)
