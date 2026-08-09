@@ -85,7 +85,9 @@ class LowerStr(str):
 
 
 class UpperCharField(fields.CharField):
-    """大写字符串字段，写入/读出时自动转大写（与UpperStr行为一致）。"""
+    """
+    大写字符串字段，写入/读出时自动转大写。
+    """
 
     def to_db_value(self, value: Any, instance) -> Optional[str]:
         if isinstance(value, str):
@@ -101,7 +103,7 @@ class UpperCharField(fields.CharField):
 
 class LowerCharField(fields.CharField):
     """
-    小写字符串字段，写入/读出时自动转小写（与LowerStr行为一致）。
+    小写字符串字段，写入/读出时自动转小写。
     """
 
     def to_db_value(self, value: Any, instance) -> Optional[str]:
@@ -118,14 +120,7 @@ class LowerCharField(fields.CharField):
 
 class JSONTextField(JSONField):
     """
-    以TEXT类型存储JSON格式的数据字段。
-
-    与JSONField的唯一区别在于SQL_TYPE：使用LONGTEXT而非MySQL的JSON列。
-    MySQL的JSON列在落库时会对对象键做归一化(根据键长度、字节值排序)，导致字段顺序丢失；
-    改用TEXT列原样存储JSON文本即可保留插入顺序。
-    Python侧依旧表现为dict/list：继承JSONField的dict ↔ str透明转换
-    (安装了orjson时默认使用orjson，序列化/反序列化均保持顺序)，
-    空值约定：None → 落库NULL；空dict {} → 落库 "{}"。
+    以TEXT类型存储JSON格式的数据字段，避免MySQL的JSON列在落库时会对对象键做归一化（根据键长度、字节值排序），导致字段顺序丢失；。
     """
 
     SQL_TYPE = "LONGTEXT"
@@ -193,7 +188,7 @@ class ScaffoldModel(models.Model):
         fk_exclude_fields = fk_exclude_fields or []
 
         d = {}
-        # 获取本表字段并根据 include_fields 参数确定要处理的字段列表
+        # 获取本表字段并根据include_fields参数确定要处理的字段列表
         db_fields_process = self._meta.db_fields
         if include_fields:
             db_fields_process = include_fields
@@ -207,7 +202,7 @@ class ScaffoldModel(models.Model):
                 field = replace_fields.get(field, field)
             d[field] = await self.__format_value(value)
 
-        # 如果 fk 为 True，异步获取外键字段关联的数据
+        # 如果fk为True，异步获取外键字段关联的数据
         if fk:
             tasks = [
                 self.__fetch_fk_field(field, fk_include_fields, fk_exclude_fields, cache)
@@ -218,7 +213,7 @@ class ScaffoldModel(models.Model):
             for field, values in results:
                 d[field] = values
 
-        # 如果 m2m 为 True，异步获取多对多关系字段的数据
+        # 如果m2m为True，异步获取多对多关系字段的数据
         if m2m:
             tasks = [
                 self.__fetch_m2m_field(field, m2m_include_fields, m2m_exclude_fields, cache)
@@ -239,10 +234,12 @@ class ScaffoldModel(models.Model):
         格式化字段值为可序列化的类型。
 
         支持的类型转换：
-        - Decimal -> str(避免JSON序列化错误)
-        - datetime/date/time -> str(根据全局配置格式化)
-        - bytes -> str(UTF-8 解码)
-        - timedelta -> str
+        - Decimal: str
+        - datetime: str
+        - date: str
+        - time: str
+        - bytes: str
+        - timedelta: str
         """
         if isinstance(value, Decimal):
             return str(value)
@@ -411,13 +408,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     def _fill_created_user(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
         """
-        创建时自动写入created_user。
+        创建时自动写入created_user；有登录上下文时以服务端当前用户为准，无登录上下文时保留显式传入值。
 
-        有登录上下文时以服务端当前用户为准（覆盖入参）；
-        无上下文时保留显式传入值（如初始化/Celery）。
-
-        :param obj_dict: 待写入字段字典（原地修改）
-        :param model: 目标模型；默认 self.model（关联表写入时可传入关联模型）
+        :param obj_dict: 待写入字段字典
+        :param model: 目标模型；默认self.model
         """
         target = model or self.model
         if not hasattr(target, "created_user"):
@@ -434,12 +428,9 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     def _fill_updated_user(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
         """
-        更新时自动写入updated_user。
+        更新时自动写入updated_user；有登录上下文时以服务端当前用户为准，无登录上下文时保留显式传入值。
 
-        有登录上下文时以服务端当前用户为准（覆盖入参）；
-        无上下文时保留显式传入值（如初始化/Celery）。
-
-        :param obj_dict: 待写入字段字典（原地修改）
+        :param obj_dict: 待写入字段字典
         :param model: 目标模型；默认 self.model
         """
         target = model or self.model
@@ -456,10 +447,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     def soft_delete_values(self, updated_user: Optional[str] = None) -> Dict[str, Any]:
         """
-        构造软删除更新字典（state=1 + 按统一规则填充 updated_user）。
+        构造软删除更新字典: state=1 + 按统一规则填充updated_user字段。
 
-        :param updated_user: 无登录上下文时的回落更新人
-        :return: 可直接用于 filter().update(**values) 的字段字典
+        :param updated_user: 无登录上下文时的回落更新人员字段
+        :return: 可直接用于filter().update(**values)的字段字典
         """
         values: Dict[str, Any] = {"state": 1}
         if updated_user is not None and str(updated_user).strip():
@@ -471,10 +462,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     def soft_restore_values(self, updated_user: Optional[str] = None) -> Dict[str, Any]:
         """
-        构造软删除恢复更新字典（state=0 + 按统一规则填充 updated_user）。
+        构造软删除恢复更新字典: state=0 + 按统一规则填充updated_user字段。
 
-        :param updated_user: 无登录上下文时的回落更新人
-        :return: 可直接用于 filter().update(**values) 的字段字典
+        :param updated_user: 无登录上下文时的回落更新人员字段
+        :return: 可直接用于filter().update(**values)的字段字典
         """
         values: Dict[str, Any] = {"state": 0}
         if updated_user is not None and str(updated_user).strip():
@@ -542,7 +533,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         规范化排序字段列表：过滤None/空串，拒绝非字符串元素。
 
         :param order: 原始排序字段列表
-        :return: 可用于 order_by 的字段列表
+        :return: 可用于order_by的字段列表
         """
         if not order:
             return []
@@ -551,9 +542,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             if item is None:
                 continue
             if not isinstance(item, str):
-                raise ParameterException(
-                    message=f"排序字段必须为字符串, 收到: {type(item).__name__}"
-                )
+                raise ParameterException(message=f"排序字段必须为字符串, 收到: {type(item).__name__}")
             field = item.strip()
             if not field or field in ("-", "+"):
                 continue
