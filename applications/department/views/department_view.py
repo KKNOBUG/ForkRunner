@@ -29,7 +29,7 @@ from core.responses import (
 dept = APIRouter()
 
 
-@dept.post("/create", summary="新增部门")
+@dept.post("/create", summary="新增部门", description="新增部门信息")
 async def create_department(
         department_in: DepartmentCreate = Body(..., description="部门信息"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
