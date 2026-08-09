@@ -132,7 +132,7 @@ async def update_user(
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
-@user_secure.get("/get", summary="查询用户信息", description="根据id查询用户信息")
+@user_secure.get("/get", summary="查询用户", description="根据id查询用户信息")
 async def get_user(
         user_id: int = Query(..., description="用户ID"),
         user_crud: UserCrud = Depends(get_user_crud),
@@ -154,13 +154,13 @@ async def get_user(
         dept_id = data.pop("dept_id", None)
         data["dept"] = await (await dept_crud.get_or_error(id=dept_id)).to_dict() if dept_id else {}
         LOGGER.info(f"根据id查询用户成功, 结果明细: {data}")
-        return SuccessResponse(message="查询成功", data=data)
+        return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"根据id查询用户失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@user_secure.get("/by_username", summary="查询用户信息", description="根据username查询用户信息")
+@user_secure.get("/by_username", summary="查询用户", description="根据username查询用户信息")
 async def get_user_by_username(
         username: str = Query(..., description="用户名称"),
         user_crud: UserCrud = Depends(get_user_crud),

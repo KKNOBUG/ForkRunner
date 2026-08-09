@@ -6,7 +6,7 @@ from tortoise.expressions import Q
 
 from applications.base.services.scaffold import ScaffoldCrud
 from applications.department.models.dept_model import Department, DeptStruct
-from applications.department.schemas.department_schema import DepartmentCreate, DepartmentUpdate
+from applications.department.schemas.department_schema import DepartmentCreate, DepartmentUpdate, DepartmentBatchDelete
 from configure import LOGGER
 from core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 
@@ -161,9 +161,8 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         :param name: 可选，根据名称模糊过滤后再建树
         :return: 顶级部门节点列表，每节点含children
         """
-        q = Q()
         # 获取所有未被软删除的部门
-        q &= Q(state=0)
+        q = Q(state=0)
         if name:
             q &= Q(name__contains=name)
         all_dept = await self.model.filter(q).order_by("order")
@@ -218,20 +217,22 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         # 创建关系
         await DeptStruct.bulk_create(dept_struct_objs)
 
-    async def delete_departments(self, department_ids: Optional[List[int]]) -> int:
+    async def delete_departments(self, department_in: DepartmentBatchDelete) -> List[int]:
         """
         根据ID列表软删除部门。
 
-        :param department_ids: 部门ID列表
+        :param department_in: 含department_ids的批量删除入参
         :return: 实际删除成功的条数
         """
+        department_ids: Optional[List[int]] = department_in.user_ids
         if not department_ids:
-            return 0
-        n = 0
-        for did in department_ids:
+            return []
+
+        deleted_ids: List[int] = []
+        for did in deleted_ids:
             try:
                 await self.delete_department(int(did))
-                n += 1
+                deleted_ids.append(int(did))
             except NotFoundException:
                 continue
-        return n
+        return deleted_ids

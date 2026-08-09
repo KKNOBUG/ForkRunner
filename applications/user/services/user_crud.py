@@ -178,6 +178,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         user_ids: Optional[List[int]] = user_in.user_ids
         if not user_ids:
             return []
+
         deleted_ids: List[int] = []
         for uid in user_ids:
             try:
