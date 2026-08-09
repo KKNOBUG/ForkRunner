@@ -84,7 +84,7 @@ async def get_login_access_token(
         return FailureResponse(message=f"登录失败，异常描述: {e}")
 
 
-@auth_secure.post("/usermenu", summary="查询当前用户菜单")
+@auth_secure.post("/usermenu", summary="查询当前用户菜单", description="查询当前登录用户的菜单信息")
 async def get_user_menu():
     """
     查看当前用户菜单。
@@ -122,7 +122,7 @@ async def get_user_menu():
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@auth_secure.post("/userinfo", summary="查询当前用户信息")
+@auth_secure.post("/userinfo", summary="查询当前用户信息", description="查询当前登录用户的基本信息")
 async def get_user_info(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
@@ -142,7 +142,7 @@ async def get_user_info(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@auth_secure.post("/get_user_routers", summary="查询当前用户路由")
+@auth_secure.post("/get_user_routers", summary="查询当前用户路由", description="查询当前登录用户的路由权限")
 async def get_user_router():
     """
     查看当前用户路由。
