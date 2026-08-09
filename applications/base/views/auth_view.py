@@ -75,7 +75,6 @@ async def get_login_access_token(
             phone=user.phone,
             avatar=user.avatar,
             state=user.state,
-            is_active=user.is_active,
             is_superuser=user.is_superuser,
             last_login=user.last_login
         )

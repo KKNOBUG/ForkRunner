@@ -3,7 +3,6 @@ from datetime import datetime
 from typing import Optional, Union, List
 
 from tortoise.exceptions import DoesNotExist
-from tortoise.expressions import F
 
 from applications.base.schemas.token_schema import CredentialsSchema
 from applications.base.services.role_crud import RoleCrud
@@ -163,12 +162,9 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :raises NotFoundException: 用户不存在
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True, **kwargs)
-        values = self.soft_delete_values()
-        for key, value in values.items():
-            setattr(instance, key, value)
-        instance.is_active = 0
+        instance = await self.soft_delete(id=instance.id)
         instance.token_version += 1  # 吊销用户所有Token
-        await instance.save(update_fields=[*values.keys(), "is_active", "token_version"])
+        await instance.save(update_fields=["token_version"])
         return instance
 
     async def delete_users(self, user_in: UserBatchDelete) -> List[int]:
@@ -179,15 +175,15 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :return: 实际删除的用户ID列表
         """
         user_ids: Optional[List[int]] = user_in.user_ids
-        if user_ids:
-            deleted_ids = await self.model.filter(id__in=user_ids).exclude(state=1).values_list("id", flat=True)
-            if deleted_ids:
-                update_fields = self.soft_delete_values()
-                update_fields["is_active"] = 0
-                update_fields["token_version"] = F('token_version') + 1
-                await self.model.filter(id__in=deleted_ids).update(**update_fields)
-        else:
-            deleted_ids = []
+        if not user_ids:
+            return []
+        deleted_ids: List[int] = []
+        for uid in user_ids:
+            try:
+                await self.delete_user(int(uid))
+                deleted_ids.append(int(uid))
+            except NotFoundException:
+                continue
         return deleted_ids
 
     async def update_user(self, user_in: UserUpdate) -> User:

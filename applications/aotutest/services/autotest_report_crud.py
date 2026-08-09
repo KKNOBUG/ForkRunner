@@ -154,9 +154,10 @@ class AutoTestApiReportCrud(ScaffoldCrud[AutoTestApiReportInfo, AutoTestApiRepor
             report_code = instance.report_code
             from applications.aotutest.services.autotest_detail_crud import AutoTestApiDetailCrud
             detail_crud = AutoTestApiDetailCrud()
-            count = await detail_crud.model.filter(report_code=report_code, state__not=1).update(
-                **detail_crud.soft_delete_values()
-            )
+            detail_ids = await detail_crud.model.filter(
+                report_code=report_code, state__not=1
+            ).values_list("id", flat=True)
+            count = await detail_crud.soft_delete_batch(ids=list(detail_ids))
             LOGGER.warning(f"成功删除报告[report_code={report_code}]关联的{count}条明细信息")
 
         return await self.soft_delete(id=instance.id)

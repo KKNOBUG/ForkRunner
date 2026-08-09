@@ -754,7 +754,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             results = await crud.query().filter(age__gte=18).exclude(state=1).order_by("-created_time").limit(10).all()
 
             # 分页查询
-            total, items = await crud.query().filter(is_active=True).paginate(page=1, page_size=20)
+            total, items = await crud.query().filter(state=0).paginate(page=1, page_size=20)
 
             # 条件组合
             results = await crud.query().filter(
@@ -1086,18 +1086,18 @@ class QueryBuilder(Generic[ModelType]):
         results = await crud.query().filter(age__gte=18).all()
 
         # 链式条件
-        results = await crud.query().filter(state=0).exclude(is_deleted=True).order_by("-created_time").limit(10).all()
+        results = await crud.query().filter(state=0).exclude(state=1).order_by("-created_time").limit(10).all()
 
         # 分页
-        total, items = await crud.query().filter(is_active=True).paginate(page=1, page_size=20)
+        total, items = await crud.query().filter(state=0).paginate(page=1, page_size=20)
 
         # 预加载关联
         results = await crud.query().prefetch("roles", "permissions").all()
 
         # 安全复用(使用clone)
         base = crud.query().filter(state=0)
-        active_users = await base.clone().filter(is_active=True).all()
-        inactive_users = await base.clone().filter(is_active=False).all()
+        active_users = await base.clone().filter(state=0).all()
+        inactive_users = await base.clone().filter(state=1).all()
     """
 
     def __init__(self, model: Type[ModelType]):

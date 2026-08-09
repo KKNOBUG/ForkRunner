@@ -1113,11 +1113,10 @@ class AutoTestApiStepCrud(ScaffoldCrud[AutoTestApiStepInfo, AutoTestApiStepCreat
                             if getattr(child, "step_id", None):
                                 retained_child_ids.add(child.step_id)
                     stale_children_qs = self.model.filter(parent_step_id=step_id, state__not=1)
-                    stale_values = self.soft_delete_values()
                     if retained_child_ids:
-                        await stale_children_qs.exclude(id__in=retained_child_ids).update(**stale_values)
-                    else:
-                        await stale_children_qs.update(**stale_values)
+                        stale_children_qs = stale_children_qs.exclude(id__in=retained_child_ids)
+                    stale_ids = await stale_children_qs.values_list("id", flat=True)
+                    await self.soft_delete_batch(ids=list(stale_ids))
                     for bi, branch in enumerate(step_data.branch_items):
                         if branch.branch_children:
                             child_result = await self.batch_update_or_create_steps(

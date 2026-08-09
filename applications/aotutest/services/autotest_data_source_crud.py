@@ -390,7 +390,8 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestApiDataSourceInfo, AutoTestDat
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        deleted_count: int = await self.model.filter(case_id=case_id, state=0).update(**self.soft_delete_values())
+        source_ids = await self.model.filter(case_id=case_id, state=0).values_list("id", flat=True)
+        deleted_count: int = await self.soft_delete_batch(ids=list(source_ids))
         from applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
         step_crud = AutoTestApiStepCrud()
         step_vals: Dict[str, Any] = {
@@ -784,8 +785,14 @@ async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
     """
     data_source_crud = AutoTestDataSourceCrud()
     data_create_crud = AutoTestApiDataCreateCrud()
-    await data_source_crud.model.filter(step_code__in=step_code_list).update(**data_source_crud.soft_delete_values())
-    await data_create_crud.model.filter(step_code__in=step_code_list, state__not=1).update(**data_create_crud.soft_delete_values())
+    source_ids = await data_source_crud.model.filter(
+        step_code__in=step_code_list, state__not=1
+    ).values_list("id", flat=True)
+    create_ids = await data_create_crud.model.filter(
+        step_code__in=step_code_list, state__not=1
+    ).values_list("id", flat=True)
+    await data_source_crud.soft_delete_batch(ids=list(source_ids))
+    await data_create_crud.soft_delete_batch(ids=list(create_ids))
     instance_list = await data_source_crud.model.filter(step_code__in=step_code_list).all()
     for instance in instance_list:
         if instance.file_hash and not instance.file_hash.endswith("X"):

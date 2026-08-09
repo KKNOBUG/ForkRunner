@@ -195,7 +195,7 @@ async def search_users(
         phone: str = Query(default=None, description="用户电话"),
         gender: int = Query(default=None, description="用户性别: 0未知 1男 2女"),
         user_type: int = Query(default=None, description="用户类型：0xx 1xx 2xx"),
-        is_active: bool = Query(default=None, description="是否激活"),
+        state: int = Query(default=None, description="状态(0:启用, 1:禁用)"),
         is_superuser: bool = Query(default=None, description="是否为超级管理员"),
         dept_id: int = Query(default=None, description="部门ID"),
         user_crud: UserCrud = Depends(get_user_crud),
@@ -213,7 +213,7 @@ async def search_users(
     :param phone: 查询参数
     :param gender: 查询参数
     :param user_type: 查询参数
-    :param is_active: 查询参数
+    :param state: 状态(0:启用, 1:禁用)；不传则仅查启用
     :param is_superuser: 查询参数
     :param dept_id: 主键 ID
     :param user_crud: 用户CRUD服务
@@ -234,13 +234,14 @@ async def search_users(
             q &= Q(gender=gender)
         if user_type is not None:
             q &= Q(user_type=user_type)
-        if is_active is not None:
-            q &= Q(is_active=is_active)
+        if state is not None:
+            q &= Q(state=state)
+        else:
+            q &= Q(state=0)
         if is_superuser is not None:
             q &= Q(is_superuser=is_superuser)
         if dept_id is not None:
             q &= Q(dept_id=dept_id)
-        q &= Q(state=0)
         total, user_objs = await user_crud.list(
             page=page, page_size=page_size, order=order, search=q
         )
@@ -297,8 +298,6 @@ async def list_users(
             q &= Q(emergency_name__contains=user_in.emergency_name)
         if user_in.emergency_phone:
             q &= Q(emergency_phone__contains=user_in.emergency_phone)
-        if user_in.is_active is not None:
-            q &= Q(is_active=user_in.is_active)
         if user_in.is_superuser is not None:
             q &= Q(is_superuser=user_in.is_superuser)
         if user_in.dept_id is not None:

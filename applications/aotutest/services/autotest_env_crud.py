@@ -633,11 +633,12 @@ class AutoTestApiEnvEnumCrud(ScaffoldCrud[AutoTestApiEnvEnumInfo, AutoTestApiEnv
 
             from applications.aotutest.services.autotest_env_config_crud import AutoTestApiEnvConfigCrud
             config_crud = AutoTestApiEnvConfigCrud()
-            await AutoTestApiEnvConfigInfo.filter(
+            config_ids = await AutoTestApiEnvConfigInfo.filter(
                 env_id=env_id,
                 config_type=config_type,
                 state=0,
-            ).update(**config_crud.soft_delete_values())
+            ).values_list("id", flat=True)
+            await config_crud.soft_delete_batch(ids=list(config_ids))
 
             existing = await self.soft_delete(id=env_id)
 
