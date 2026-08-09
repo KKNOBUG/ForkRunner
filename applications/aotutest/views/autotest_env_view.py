@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query, Depends, Body
 
 from applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
 from applications.aotutest.schemas.autotest_env_schema import (
-    EnvListQuery,
+    AutoTestApiEnvListQuery,
     EnvCreate,
     EnvEditRequest,
     EnvDeleteRequest, AutoTestApiEnvConfigQueryByProjectsIn,
@@ -136,7 +136,7 @@ async def classify_environment_configs(
 
 @autotest_env.post("/list", summary="查询环境列表", description="按节点类型/应用聚合环境名称")
 async def list_environments(
-        env_in: EnvListQuery = Body(..., description="查询条件"),
+        env_in: AutoTestApiEnvListQuery = Body(..., description="查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
