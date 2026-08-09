@@ -270,7 +270,7 @@ class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, 
     loop_timeout: Optional[float] = Field(default=None, ge=0, description="本次执行条件循环超时")
     database_searched: Optional[bool] = Field(default=None, description="本次执行是否启用数据库查到即止")
     redis_searched: Optional[bool] = Field(default=None, description="本次执行是否启用Redis查到即止")
-    state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
     # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照，记录在明细中
     dataset_name: Optional[str] = Field(default=None, max_length=255, description="本步骤执行对应的数据集名称")

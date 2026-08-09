@@ -354,7 +354,7 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     branch_items: Optional[List[BranchItem]] = Field(None, description="条件分支列表(仅条件分支步骤使用)")
     branch_index: Optional[int] = Field(None, ge=0, description="所属分支序号(后端推断, 前端无需传递)")
 
-    state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
     @field_validator("conditions", mode="before")
     @classmethod
@@ -428,7 +428,7 @@ class AutoTestApiStepSelect(BaseModel):
     quote_case_id: Optional[int] = Field(None, description="引用公共脚本ID")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
-    state: Optional[int] = Field(default=0, description="状态(0:未删除, 1:删除, 2:执行成功, 3:执行失败)")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
 class AutoTestStepTreeUpdateItem(AutoTestApiStepBase):
