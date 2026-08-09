@@ -36,7 +36,7 @@ from services import DependAuth
 role = APIRouter()
 
 
-@role.post("/create", summary="新增角色")
+@role.post("/create", summary="新增角色", description="新增角色信息")
 async def create_role(
         role_in: RoleCreate = Body(..., description="角色信息"),
         role_crud: RoleCrud = Depends(get_role_crud),
