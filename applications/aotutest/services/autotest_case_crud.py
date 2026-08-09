@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-import traceback
+# -*- coding: utf-8 -*-
 import traceback
 from typing import Optional, Dict, Any, List, Set, Tuple
 
@@ -267,11 +267,11 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
 
     async def delete_case(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestApiCaseInfo:
         """
-        删除用例，先硬删关联步骤，再删除用例；公共脚本需无引用。
+        软删除用例，并软删除该用例下所有步骤；公共脚本需无引用。
 
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
-        :return: 删除后的用例实例
+        :return: 软删除后的用例实例
         :raises ParameterException: case_id与case_code均未传
         :raises NotFoundException: 用例不存在
         :raises DataAlreadyExistsException: 公共脚本仍被引用
@@ -294,9 +294,11 @@ class AutoTestApiCaseCrud(ScaffoldCrud[AutoTestApiCaseInfo, AutoTestApiCaseCreat
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
-        await AutoTestApiStepInfo.filter(case_id=case_id, state__not=1).delete()
-        await instance.delete()
-        return instance
+        from applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+        step_crud = AutoTestApiStepCrud()
+        step_ids = await step_crud.model.filter(case_id=case_id, state__not=1).values_list("id", flat=True)
+        await step_crud.soft_delete_batch(ids=list(step_ids))
+        return await self.soft_delete(id=instance.id)
 
     async def select_cases(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiCaseInfo]]:
         """

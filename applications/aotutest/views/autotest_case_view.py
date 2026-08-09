@@ -91,14 +91,14 @@ async def create_case(
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
-@autotest_case.delete("/delete", summary="删除用例", description="根据id或code删除用例信息")
+@autotest_case.delete("/delete", summary="删除用例", description="根据id或code软删除用例及其步骤")
 async def delete_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据id或code删除用例。
+    根据id或code软删除用例及其下属步骤。
 
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
