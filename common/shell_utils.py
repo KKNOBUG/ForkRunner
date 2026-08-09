@@ -24,10 +24,12 @@ class ShellUtils:
         :param command: cmd命令
         :return: 命令输出结果
         """
-        output, errors = subprocess.Popen(command,
-                                          shell=True,
-                                          stdout=subprocess.PIPE,
-                                          stderr=subprocess.PIPE).communicate()
+        output, errors = subprocess.Popen(
+            command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        ).communicate()
         try:
             output_message: str = output.decode("utf-8")
         except UnicodeDecodeError as e:
