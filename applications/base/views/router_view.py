@@ -20,7 +20,7 @@ from core.responses import (
 router = APIRouter()
 
 
-@router.post("/create", summary="新增路由")
+@router.post("/create", summary="新增路由", description="新增路由信息")
 async def create_router(
         router_in: RouterCreate = Body(..., description="路由信息"),
         router_crud: RouterCrud = Depends(get_router_crud),
