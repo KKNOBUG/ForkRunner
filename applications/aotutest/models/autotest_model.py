@@ -39,7 +39,6 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
     project_testers = fields.JSONField(default=list, null=True, description="应用测试人员列表")
     project_current_month_env = fields.CharField(max_length=64, null=True, description="应用当前月版环境")
     project_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="应用标识代码")
-    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "tbx_autotest_api_project"
@@ -61,7 +60,6 @@ class AutoTestApiEnvEnumInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
     project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
     env_type = fields.SmallIntField(default=1, index=True, description="节点类型：1:APP,2:FILE,3:DB")
-    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "tbx_autotest_api_env"
@@ -122,7 +120,6 @@ class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
     tag_mode = fields.CharField(max_length=64, null=True, description="标签大类")
     tag_name = fields.CharField(max_length=64, null=True, description="标签名称")
     tag_desc = fields.CharField(max_length=2048, null=True, description="标签描述")
-    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "tbx_autotest_api_tag"
@@ -156,7 +153,6 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     case_last_time = fields.DatetimeField(null=True, description="用例执行时间")
     # session_variables 存储为List[Dict[str, Any]]格式，每个元素包含 key、value、desc 项；空池统一落NULL，不使用空数组占位
     session_variables = fields.JSONField(default=None, null=True, description="会话变量(初始变量池)")
-    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "tbx_autotest_api_case"
@@ -249,8 +245,6 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     redis_operates = fields.JSONField(null=True, description="Redis请求操作列表")
     redis_searched = fields.BooleanField(null=True, description="Redis请求查到即止开关(多个配置时, 某一配置返回有效结果时停止后续请求)")
 
-    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
-
     class Meta:
         table = "tbx_autotest_api_step"
         table_description = "自动化测试-步骤明细表"
@@ -288,7 +282,6 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     report_type = fields.CharEnumField(AutoTestReportType, description="报告类型")
     task_code = fields.CharField(max_length=64, null=True, description="任务标识代码")
     dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本次执行使用的数据集/场景名称(参数化)")
-    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "tbx_autotest_api_report"
@@ -375,7 +368,6 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本步骤执行对应的数据集名称")
     dataset_snapshot = fields.JSONField(null=True, description="本步骤执行使用的数据快照")
     num_cycles = fields.IntField(null=True, description="循环执行次数(第几次)")
-    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "tbx_autotest_api_details"
@@ -425,7 +417,6 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     task_notify = fields.JSONField(default=None, null=True, description="任务执行明细反馈(预留)")
     task_notifier = fields.JSONField(default=None, null=True, description="任务执行通知人员(预留)")
     task_enabled = fields.BooleanField(default=False, index=True, description="是否启动调度(True/False)")
-    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "tbx_autotest_api_task"
@@ -496,7 +487,6 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     dataframe = fields.JSONField(default=list, null=True, description="数据驱动文件解析前的二维矩阵")
     axis = fields.SmallIntField(default=0, validators=[MinValueValidator(0), MaxValueValidator(1)], description="数据矩阵(0:水平模式, 1:垂直模式)")
     data_source_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="数据驱动文件标识代码")
-    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "tbx_autotest_api_data_source"
@@ -527,7 +517,6 @@ class AutoTestApiDataCreateInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     file_path = fields.CharField(max_length=1024, description="接口文件存储路径")
     file_desc = fields.CharField(max_length=2048, null=True, description="接口文件场景描述")
     dataset = fields.JSONField(description="接口文件解析后的数据集")
-    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
     class Meta:
         table = "tbx_autotest_api_data_create"
