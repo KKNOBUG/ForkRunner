@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 import random
 import string
 from dataclasses import dataclass
