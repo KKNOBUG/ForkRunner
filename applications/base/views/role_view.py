@@ -39,14 +39,12 @@ role = APIRouter()
 @role.post("/create", summary="新增角色")
 async def create_role(
         role_in: RoleCreate = Body(..., description="角色信息"),
-        _current_user: User = DependAuth,
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
     创建角色。
 
     :param role_in: 角色入参
-    :param _current_user: 当前登录用户（写入请求上下文供自动填充创建人）
     :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
@@ -113,14 +111,12 @@ async def batch_delete_roles(
 @role.post("/update", summary="更新角色", description="根据id更新角色信息")
 async def update_role(
         role_in: RoleUpdate = Body(..., description="角色信息"),
-        _current_user: User = DependAuth,
         role_crud: RoleCrud = Depends(get_role_crud),
 ):
     """
     更新角色。
 
     :param role_in: 角色入参
-    :param _current_user: 当前登录用户（写入请求上下文供自动填充更新人）
     :param role_crud: 角色CRUD服务
     :return: 统一HTTP响应
     """
