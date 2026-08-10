@@ -6,13 +6,13 @@ from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
 from applications.aotutest.dependencies import AutoTestApiServices, get_autotest_api_services
+from applications.aotutest.schemas.autotest_env_config_schema import AutoTestApiEnvConfigQueryByProjectsIn
 from applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
     AutoTestApiEnvUpdate,
     AutoTestApiEnvSelect,
     AutoTestApiEnvDelete,
     AutoTestApiEnvListQuery,
-    AutoTestApiEnvConfigQueryByProjectsIn
 )
 from configure import LOGGER
 from core.exceptions import (
@@ -49,6 +49,10 @@ async def create_environment(
         data = await services.env_curd.serialize_env(instance)
         LOGGER.info(f"新增环境成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
@@ -282,7 +286,7 @@ async def list_environments(
 
 
 @autotest_env.get("/page", summary="查询环境分页列表", description="按应用/环境/节点类型聚合后分页查询")
-async def search_environments(
+async def page_environments(
         project_id: Optional[int] = Query(None, description="应用ID", ge=1),
         env_name: Optional[str] = Query(None, description="环境名称"),
         env_type: Optional[AutoTestConfigNodeType] = Query(None, description="节点类型(api/file/database/redis)"),
