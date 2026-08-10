@@ -91,11 +91,11 @@ class DBConnPoolFromConfig:
 
         try:
             # 必须与Tortoise初始化时注册的模块路径一致，否则模型无default_connection
-            from backend.applications.aotutest.models.autotest_model import (
+            from applications.aotutest.models.autotest_model import (
                 AutoTestApiEnvInfo,
                 AutoTestApiEnvBindInfo,
             )
-            from backend.enums import AutoTestConfigNodeType
+            from enums import AutoTestConfigNodeType
         except ImportError as e:
             self.logger.error(f"无法导入自动化测试环境模型或枚举: {e}")
             return None
