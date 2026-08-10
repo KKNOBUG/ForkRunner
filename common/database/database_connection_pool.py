@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import traceback
+from datetime import date, time, datetime, timedelta
+from decimal import Decimal
 from typing import Dict, Optional, Any, Type, Set, Tuple
 
 import aiomysql
@@ -170,8 +172,8 @@ class DBConnPoolFromConfig:
             env_id=env_instance.id,
             state__not=1,
         )
-        if "config_type" in field_names:
-            config_query = config_query.filter(config_type=AutoTestConfigNodeType.DB.value)
+        if "env_type" in field_names:
+            config_query = config_query.filter(env_type=AutoTestConfigNodeType.DB.value)
         config_obj = await config_query.filter(
             config_name__iexact=config_name,
             database_name__iexact=database_name,
@@ -534,6 +536,158 @@ class DBConnPoolFromConfig:
         :param result_as_dict: 查询结果是否转为字典列表
         :return: {"sql_data": ..., "sql_count": int}
         """
+
+        def _run_oracle_sql():
+            connection = pool.acquire()
+            try:
+                cursor = connection.cursor()
+                try:
+                    cursor.execute(sql)
+                    if cursor.description:
+                        columns = [desc[0] for desc in cursor.description]
+                        fetched_rows = cursor.fetchall()
+                        if result_as_dict:
+                            mapped_rows = [dict(zip(columns, row)) for row in fetched_rows]
+                            sql_data = orjson.loads(
+                                orjson.dumps(
+                                    mapped_rows,
+                                    default=self.serialize_db_value,
+                                    option=orjson.OPT_PASSTHROUGH_DATETIME,
+                                )
+                            )
+                        else:
+                            sql_data = fetched_rows
+                        affected_rows = len(fetched_rows)
+                    else:
+                        connection.commit()
+                        sql_data = {"count": cursor.rowcount}
+                        affected_rows = cursor.rowcount
+                    return sql_data, affected_rows
+                finally:
+                    cursor.close()
+            except Exception:
+                try:
+                    connection.rollback()
+                except Exception:
+                    pass
+                raise
+            finally:
+                pool.release(connection)
+
+        try:
+            sql_data, sql_count = await asyncio.get_running_loop().run_in_executor(
+                None, _run_oracle_sql
+            )
+            return {"sql_data": sql_data, "sql_count": sql_count}
+        except Exception as e:
+            error_message = f"执行sql失败，{e}"
+            self.logger.error(f"{error_message}\n{traceback.format_exc()}")
+            raise RuntimeError(error_message) from e
+
+    @staticmethod
+    def serialize_db_value(obj: Any) -> Any:
+        """
+        orjson default回调：序列化Decimal/日期时间/bytes等数据库字段。
+
+        :param obj: 待序列化对象
+        :return: 可被orjson处理的基础类型
+        """
+        if isinstance(obj, Decimal):
+            return str(obj)
+        if isinstance(obj, datetime):
+            return obj.strftime("%Y-%m-%d %H:%M:%S")
+        if isinstance(obj, date):
+            return obj.strftime("%Y-%m-%d")
+        if isinstance(obj, time):
+            return obj.strftime("%H:%M:%S")
+        if isinstance(obj, bytes):
+            return obj.decode("utf-8", errors="replace")
+        if isinstance(obj, timedelta):
+            return str(obj)
+        raise TypeError(f"数据{obj}类型[{type(obj)}]无法完成序列化")
+
+    async def _close_pool(self, pool: Any) -> None:
+        """
+        关闭单个连接池（兼容 aiomysql 异步关闭与 Oracle 同步关闭）。
+
+        :param pool: 连接池对象
+        :return: None
+        """
+        if hasattr(pool, "close") and hasattr(pool, "wait_closed"):
+            pool.close()
+            await pool.wait_closed()
+        elif hasattr(pool, "close"):
+            await asyncio.get_running_loop().run_in_executor(None, pool.close)
+
+    async def close(self, project_id: Optional[str] = None) -> None:
+        """
+        关闭指定应用或全部连接池，并清理对应错误记录。
+
+        :param project_id: 应用ID；为空则关闭全部
+        :return: None
+        """
+        if project_id:
+            project_id_key = project_id.strip()
+            if project_id_key not in self.pools:
+                return
+            for env_key in list(self.pools[project_id_key].keys()):
+                for config_key in list(self.pools[project_id_key][env_key].keys()):
+                    for db_key, pool in list(self.pools[project_id_key][env_key][config_key].items()):
+                        await self._close_pool(pool)
+                        self.logger.info(
+                            f"连接池已关闭 [{project_id_key}/{env_key}/{config_key}/{db_key}]"
+                        )
+            del self.pools[project_id_key]
+            self.errors.pop(project_id_key, None)
+            return
+
+        for project_id_key in list(self.pools.keys()):
+            for env_key in list(self.pools[project_id_key].keys()):
+                for config_key in list(self.pools[project_id_key][env_key].keys()):
+                    for db_key, pool in list(self.pools[project_id_key][env_key][config_key].items()):
+                        await self._close_pool(pool)
+                        self.logger.info(
+                            f"连接池已关闭 [{project_id_key}/{env_key}/{config_key}/{db_key}]"
+                        )
+        self.pools.clear()
+        self.errors.clear()
+
+    async def get_or_create_pool(
+            self,
+            project_id: str,
+            env_name: str,
+            config_name: str,
+            database_name: str,
+    ) -> Any:
+        """
+        获取已有连接池；不存在则按配置表创建后返回。
+
+        :param project_id: 应用主键ID（Autotest=project_id）
+        :param env_name: 环境名称
+        :param config_name: 配置名称
+        :param database_name: 数据库名
+        :return: 连接池对象
+        """
+        project_id_key, env_key, config_key, db_key = self._normalize_pool_keys(
+            project_id, env_name, config_name, database_name
+        )
+
+        pool = self._get_pool(project_id_key, env_key, config_key, db_key)
+        if pool:
+            return pool
+
+        await self.create_pool(project_id, env_name, config_name, database_name)
+        pool = self._get_pool(project_id_key, env_key, config_key, db_key)
+        if pool:
+            return pool
+
+        error_message = (
+            self.errors.get(project_id_key, {})
+            .get(env_key, {})
+            .get(config_key, {})
+            .get(db_key)
+        )
+        raise ConnectionError(f"连接池创建失败，错误信息：{error_message}")
 
 
 def get_app_database_pool() -> "DBConnPoolFromConfig":
