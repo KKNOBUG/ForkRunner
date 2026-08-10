@@ -25,10 +25,8 @@ from applications.aotutest.schemas.autotest_env_config_schema import (
 from applications.aotutest.schemas.autotest_env_schema import AutoTestApiEnvCreate
 from applications.aotutest.services.autotest_env_crud import (
     AutoTestApiEnvCrud,
-    CONFIG_TYPE_TO_ENV_TYPE,
     enum_field_value,
     format_datetime,
-    resolve_config_type,
 )
 from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
 from applications.base.services.scaffold import ScaffoldCrud
@@ -40,9 +38,6 @@ from core.exceptions import (
     DataAlreadyExistsException,
 )
 from enums import AutoTestConfigNodeType, AutoTestDataBaseType
-
-# 前端Redis节点类型编码（与环境绑定env_type=4一致）
-REDIS_ENV_TYPE: int = 4
 
 
 class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestApiConfigCreate, AutoTestApiConfigUpdate]):
@@ -63,7 +58,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             error_message: str = f"参数[config_type]枚举值[{config_type}]不被允许"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        if type_value == AutoTestConfigNodeType.API.value:
+        if type_value == AutoTestConfigNodeType.APP.value:
             if not getattr(payload, "config_host", None):
                 error_message: str = "参数[config_type]枚举值为API时, 参数[config_host]不允许为空"
                 LOGGER.error(error_message)
@@ -137,8 +132,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :return: 配置响应字典
         """
         try:
-            env_type = self._env_type_from_schema(config_in)
-            config_type = resolve_config_type(env_type)
+            config_type = self._env_type_from_schema(config_in)
             data_dict = config_in.model_dump()
             project_id = int(data_dict["env_info_id"])
             config_name = data_dict["config_name"]
@@ -150,10 +144,10 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             env_bind = await self._get_or_create_env_bind(
                 project_id=project_id,
                 env_name=env_name,
-                env_type=env_type,
+                env_type=config_type,
                 user=operator,
             )
-            mapped = self._map_typed_config_fields(env_type, payload)
+            mapped = self._map_typed_config_fields(config_type, payload)
 
             existing = await self.model.filter(
                 project_id=project_id,
@@ -168,13 +162,12 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                     )
                 update_dict = {**mapped, "state": 0, "config_type": config_type}
                 instance = await self.update(id=existing.id, obj_in=update_dict)
-                return self._serialize_typed_config(instance, env_name, env_type)
+                return self._serialize_typed_config(instance, env_name, config_type)
 
             await self._assert_host_unique(
                 project_id=project_id,
                 env_id=env_bind.id,
                 config_type=config_type,
-                env_type=env_type,
                 mapped=mapped,
             )
             instance = await self.create(
@@ -186,7 +179,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                     **mapped,
                 }
             )
-            return self._serialize_typed_config(instance, env_name, env_type)
+            return self._serialize_typed_config(instance, env_name, config_type)
         except (DataAlreadyExistsException, ParameterException, NotFoundException):
             raise
         except Exception as e:
@@ -214,7 +207,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             env_bind = await self._get_or_create_env_bind(
                 project_id=project_id,
                 env_name=env_name,
-                env_type=REDIS_ENV_TYPE,
+                env_type=config_type,
                 user=operator,
             )
             mapped = {
@@ -287,7 +280,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             env_bind = await self._get_or_create_env_bind(
                 project_id=int(existing.project_id),
                 env_name=env_name,
-                env_type=REDIS_ENV_TYPE,
+                env_type=AutoTestConfigNodeType.REDIS.value,
                 user=operator,
             )
             mapped = {
@@ -328,8 +321,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :return: 配置响应字典
         """
         try:
-            env_type = self._env_type_from_schema(config_in)
-            config_type = resolve_config_type(env_type)
+            config_type = self._env_type_from_schema(config_in)
             data_dict = config_in.model_dump()
             record_id = data_dict.get("id")
             if not record_id:
@@ -357,11 +349,11 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             env_bind = await self._get_or_create_env_bind(
                 project_id=int(existing.project_id),
                 env_name=env_name,
-                env_type=env_type,
+                env_type=config_type,
                 user=operator,
             )
             mapped = self._map_typed_config_fields(
-                env_type,
+                config_type,
                 {**data_dict, "env": env_name, "maintainer": data_dict.get("maintainer") or operator},
             )
             # 更新不改写创建人
@@ -381,14 +373,13 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 project_id=existing.project_id,
                 env_id=env_bind.id,
                 config_type=config_type,
-                env_type=env_type,
                 mapped=mapped,
                 exclude_id=record_id,
             )
 
             update_dict = {**mapped, "env_id": env_bind.id}
             instance = await self.update(id=record_id, obj_in=update_dict)
-            return self._serialize_typed_config(instance, env_name, env_type)
+            return self._serialize_typed_config(instance, env_name, config_type)
         except (DataAlreadyExistsException, ParameterException, NotFoundException):
             raise
         except Exception as e:
@@ -405,20 +396,21 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         """
         try:
             record_id = config_in.id
-            env_type = config_in.env_type
-            config_type = (
-                AutoTestConfigNodeType.REDIS.value if env_type == REDIS_ENV_TYPE else resolve_config_type(env_type)
-            )
+            config_type = enum_field_value(config_in.env_type)
             existing = await self.model.filter(id=record_id).first()
             if not existing:
                 raise NotFoundException(message=f"未找到ID为{record_id}的配置记录")
             expected_type = enum_field_value(existing.config_type)
             if expected_type != config_type:
-                raise ParameterException(message=f"类型不匹配，记录类型为{expected_type}，请求类型为{env_type}")
+                raise ParameterException(
+                    message=f"类型不匹配，记录类型为{expected_type}，请求类型为{config_type}"
+                )
             env_name_map = await AutoTestApiEnvCrud().get_env_name_map([existing.env_id])
             env_name = env_name_map.get(existing.env_id, "")
             instance = await self.soft_delete(id=record_id, updated_user=config_in.updated_user)
-            return self._serialize_typed_config(instance, env_name, env_type)
+            if config_type == AutoTestConfigNodeType.REDIS.value:
+                return self._serialize_redis_config(instance, env_name)
+            return self._serialize_typed_config(instance, env_name, config_type)
         except (ParameterException, NotFoundException):
             raise
         except Exception as e:
@@ -490,9 +482,13 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             project_id: {}
             for project_id in distinct_project_ids
         }
-        # 响应桶标签与 get_envs / 前端约定一致（非库内 api/file/database）
-        env_type_to_label: Dict[int, str] = {1: "APP", 2: "FILE", 3: "DB"}
-        empty_type_buckets: Dict[str, Dict[str, Any]] = {label: {} for label in env_type_to_label.values()}
+        # 响应桶标签与 get_envs 约定一致（展示名 APP/FILE/DB，非协议值）
+        config_type_to_label: Dict[str, str] = {
+            AutoTestConfigNodeType.APP.value: "APP",
+            AutoTestConfigNodeType.FILE.value: "FILE",
+            AutoTestConfigNodeType.DB.value: "DB",
+        }
+        empty_type_buckets: Dict[str, Dict[str, Any]] = {label: {} for label in config_type_to_label.values()}
 
         env_config_instances: List[AutoTestApiEnvConfigInfo] = await self.model.filter(
             project_id__in=distinct_project_ids,
@@ -517,8 +513,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 continue
 
             config_type_value: str = enum_field_value(cfg_instance.config_type)
-            env_type: Optional[int] = CONFIG_TYPE_TO_ENV_TYPE.get(config_type_value)
-            type_label: Optional[str] = env_type_to_label.get(env_type) if env_type is not None else None
+            type_label: Optional[str] = config_type_to_label.get(config_type_value)
             if not type_label:
                 LOGGER.warning(
                     f"跳过未知配置类型: project_id={project_id}, env={env_name}, config_type={config_type_value}"
@@ -567,19 +562,19 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 APPEnvConfigCreate, FILEEnvConfigCreate, DBEnvConfigCreate,
                 APPEnvConfigUpdate, FILEEnvConfigUpdate, DBEnvConfigUpdate,
             ],
-    ) -> int:
+    ) -> str:
         """
         根据typed schema推断节点类型。
 
         :param config_in: APP/FILE/DB 创建或更新入参
-        :return: 1=APP, 2=FILE, 3=DB
+        :return: api/file/database
         """
         if isinstance(config_in, (APPEnvConfigCreate, APPEnvConfigUpdate)):
-            return 1
+            return AutoTestConfigNodeType.APP.value
         if isinstance(config_in, (FILEEnvConfigCreate, FILEEnvConfigUpdate)):
-            return 2
+            return AutoTestConfigNodeType.FILE.value
         if isinstance(config_in, (DBEnvConfigCreate, DBEnvConfigUpdate)):
-            return 3
+            return AutoTestConfigNodeType.DB.value
         raise ParameterException(message="不支持的环境配置入参类型")
 
     def _resolve_operator(self, config_in: Any) -> str:
@@ -589,7 +584,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :param config_in: 入参对象
         :return: 大写用户名（最多16位）
         """
-        from services.ctx import get_current_username
+        from backend.services.ctx import get_current_username
         username = get_current_username()
         if username:
             return username
@@ -599,11 +594,11 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 return val.strip().upper()[:16]
         return "ADMIN"
 
-    def _map_typed_config_fields(self, env_type: int, data_dict: dict) -> Dict[str, Any]:
+    def _map_typed_config_fields(self, env_type: str, data_dict: dict) -> Dict[str, Any]:
         """
         将按节点类型拆分的入参映射为EnvConfig落库字段。
 
-        :param env_type: 1=APP, 2=FILE, 3=DB
+        :param env_type: api/file/database
         :param data_dict: 创建/更新入参字典
         :return: 可写入 AutoTestApiEnvConfigInfo 的字段字典
         """
@@ -613,11 +608,11 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             "created_user": data_dict.get("created_user") or data_dict.get("maintainer"),
             "updated_user": data_dict.get("updated_user") or data_dict.get("maintainer"),
         }
-        if env_type == 1:
+        if env_type == AutoTestConfigNodeType.APP.value:
             fields["config_host"] = data_dict["env_host"]
             port = data_dict.get("env_port")
             fields["config_port"] = None if port is None else str(port).strip()[:8]
-        elif env_type == 2:
+        elif env_type == AutoTestConfigNodeType.FILE.value:
             fields["config_host"] = data_dict["server_ip"]
             port = data_dict.get("server_port")
             fields["config_port"] = None if port is None else str(port).strip()[:8]
@@ -661,32 +656,33 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             "redis_db": instance.database_name,
         }
 
-    def _serialize_typed_config(self, instance: AutoTestApiEnvConfigInfo, env_name: str, env_type: int) -> Dict[str, Any]:
+    def _serialize_typed_config(self, instance: AutoTestApiEnvConfigInfo, env_name: str, env_type: str) -> Dict[str, Any]:
         """
         将配置实例序列化为按节点类型拆分字段的响应结构。
 
         :param instance: 配置ORM实例
         :param env_name: 环境名称
-        :param env_type: 节点类型 1/2/3
+        :param env_type: 节点类型 api/file/database
         :return: 前端约定字段字典
         """
         host = instance.config_host
         port = instance.config_port
+        node_type = enum_field_value(env_type)
         return {
             "id": instance.id,
             "env_info_id": instance.project_id,
             "config_name": instance.config_name,
             "env": env_name,
-            "env_type": env_type,
+            "env_type": node_type,
             "state": instance.state,
             "updated_time": instance.updated_time or datetime.now(),
             "created_time": instance.created_time or datetime.now(),
-            "env_host": host if env_type == 1 else None,
-            "env_port": port if env_type == 1 else None,
-            "server_ip": host if env_type == 2 else None,
-            "server_port": port if env_type == 2 else None,
-            "db_host": host if env_type == 3 else None,
-            "db_port": port if env_type == 3 else None,
+            "env_host": host if node_type == AutoTestConfigNodeType.APP.value else None,
+            "env_port": port if node_type == AutoTestConfigNodeType.APP.value else None,
+            "server_ip": host if node_type == AutoTestConfigNodeType.FILE.value else None,
+            "server_port": port if node_type == AutoTestConfigNodeType.FILE.value else None,
+            "db_host": host if node_type == AutoTestConfigNodeType.DB.value else None,
+            "db_port": port if node_type == AutoTestConfigNodeType.DB.value else None,
             "remark": instance.config_desc,
         }
 
@@ -695,7 +691,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             *,
             project_id: int,
             env_name: str,
-            env_type: int,
+            env_type: Union[AutoTestConfigNodeType, str],
             user: str,
     ) -> AutoTestApiEnvBindInfo:
         """
@@ -703,7 +699,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
         :param project_id: 应用ID
         :param env_name: 环境名称（会规范化为大写）
-        :param env_type: 节点类型 1/2/3/4
+        :param env_type: 节点类型(api/file/database/redis)
         :param user: 操作人
         :return: 环境绑定实例
         """
@@ -714,7 +710,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             AutoTestApiEnvCreate(
                 env_name=name,
                 project_id=project_id,
-                env_type=env_type,
+                env_type=enum_field_value(env_type),
                 created_user=user,
                 env_desc="",
             )
@@ -726,7 +722,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             project_id: int,
             env_id: int,
             config_type: str,
-            env_type: int,
             mapped: Dict[str, Any],
             exclude_id: Optional[int] = None,
     ) -> None:
@@ -736,7 +731,6 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :param project_id: 应用ID
         :param env_id: 环境ID
         :param config_type: 配置类型枚举值
-        :param env_type: 节点类型编码
         :param mapped: 已映射的落库字段
         :param exclude_id: 更新时排除的配置ID
         :return: None
@@ -744,10 +738,11 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         host = mapped.get("config_host")
         if not host:
             return
+        node_type = enum_field_value(config_type)
         dup_q = self.model.filter(
             project_id=project_id,
             env_id=env_id,
-            config_type=config_type,
+            config_type=node_type,
             config_host=host,
             state=0,
         )
@@ -756,10 +751,10 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         port = mapped.get("config_port")
         if port is not None:
             dup_q = dup_q.filter(config_port=port)
-        if env_type == 3 and mapped.get("database_name"):
+        if node_type == AutoTestConfigNodeType.DB.value and mapped.get("database_name"):
             dup_q = dup_q.filter(database_name=mapped["database_name"])
         if await dup_q.exists():
-            if env_type == 3:
+            if node_type == AutoTestConfigNodeType.DB.value:
                 raise DataAlreadyExistsException(
                     message="当前应用+环境下，数据库名称+IP+端口重复，不能重复新增"
                 )
@@ -769,7 +764,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
             self,
             env_info_id: Optional[int] = None,
             env_name: Optional[str] = None,
-            env_type: Optional[int] = None,
+            env_type: Optional[Union[AutoTestConfigNodeType, str]] = None,
             page: int = 1,
             page_size: int = 10,
     ) -> Tuple[int, List[Dict[str, Any]]]:
@@ -778,17 +773,19 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
         :param env_info_id: 应用ID
         :param env_name: 环境名称
-        :param env_type: 节点类型
+        :param env_type: 节点类型(api/file/database/redis)
         :param page: 页码
         :param page_size: 每页条数
         :return: (总条数, 当前页列表)
         """
         try:
-            query = self.model.filter(state=0, config_type__in=list(CONFIG_TYPE_TO_ENV_TYPE.keys()))
+            allowed_types = AutoTestConfigNodeType.get_values()
+            node_type = enum_field_value(env_type) if env_type is not None else None
+            query = self.model.filter(state=0, config_type__in=allowed_types)
             if env_info_id is not None:
                 query = query.filter(project_id=env_info_id)
-            if env_type is not None:
-                query = query.filter(config_type=resolve_config_type(env_type))
+            if node_type is not None:
+                query = query.filter(config_type=node_type)
             if env_name:
                 dict_ids = await AutoTestApiEnvCrud().get_dict_ids_by_name(env_name, exact=True)
                 if not dict_ids:
@@ -799,8 +796,8 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
                 )
                 if env_info_id is not None:
                     bind_filter = bind_filter.filter(project_id=env_info_id)
-                if env_type is not None:
-                    bind_filter = bind_filter.filter(env_type=resolve_config_type(env_type))
+                if node_type is not None:
+                    bind_filter = bind_filter.filter(env_type=node_type)
                 matched_env_ids = await bind_filter.values_list("id", flat=True)
                 if not matched_env_ids:
                     return 0, []
@@ -814,34 +811,35 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
 
             result: List[Dict[str, Any]] = []
             for obj in instances:
-                etype = CONFIG_TYPE_TO_ENV_TYPE.get(enum_field_value(obj.config_type), 1)
+                etype = enum_field_value(obj.config_type)
                 db_type_val = obj.database_type
                 if db_type_val is not None and hasattr(db_type_val, "value"):
                     db_type_val = db_type_val.value
                 is_no_password = None
-                if etype == 2 and obj.is_authorization is not None:
+                if etype == AutoTestConfigNodeType.FILE.value and obj.is_authorization is not None:
                     is_no_password = 0 if obj.is_authorization else 1
 
                 result.append({
                     "id": obj.id,
                     "config_name": obj.config_name,
                     "env_name": env_name_map.get(obj.env_id, ""),
+                    "env_type": etype,
                     "ip": obj.config_host or "",
                     "port": str(obj.config_port) if obj.config_port is not None else "",
                     "remark": obj.config_desc,
                     "maintainer": obj.updated_user or obj.created_user or "",
                     "created_time": format_datetime(obj.created_time or datetime.now()),
                     "updated_time": format_datetime(obj.updated_time or datetime.now()),
-                    "db_name": obj.database_name if etype == 3 else None,
-                    "db_type": str(db_type_val) if etype == 3 and db_type_val else None,
-                    "server_account": obj.config_username if etype == 2 else None,
-                    "server_password": obj.config_password if etype == 2 else None,
-                    "db_user": obj.config_username if etype == 3 else None,
-                    "db_password": obj.config_password if etype == 3 else None,
+                    "db_name": obj.database_name if etype == AutoTestConfigNodeType.DB.value else None,
+                    "db_type": str(db_type_val) if etype == AutoTestConfigNodeType.DB.value and db_type_val else None,
+                    "server_account": obj.config_username if etype == AutoTestConfigNodeType.FILE.value else None,
+                    "server_password": obj.config_password if etype == AutoTestConfigNodeType.FILE.value else None,
+                    "db_user": obj.config_username if etype == AutoTestConfigNodeType.DB.value else None,
+                    "db_password": obj.config_password if etype == AutoTestConfigNodeType.DB.value else None,
                     "is_no_password": is_no_password,
-                    "redis_db": obj.database_name if etype == 4 else None,
-                    "redis_username": obj.config_username if etype == 4 else None,
-                    "redis_password": obj.config_password if etype == 4 else None,
+                    "redis_db": obj.database_name if etype == AutoTestConfigNodeType.REDIS.value else None,
+                    "redis_username": obj.config_username if etype == AutoTestConfigNodeType.REDIS.value else None,
+                    "redis_password": obj.config_password if etype == AutoTestConfigNodeType.REDIS.value else None,
                 })
             return total, result
         except ParameterException:
@@ -882,7 +880,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         env_row = await AutoTestApiEnvCrud().get_bind_by_env_name(
             project_id=project_id_int,
             env_name=env_name,
-            env_type=3,
+            env_type=AutoTestConfigNodeType.DB,
         )
         if not env_row:
             return {

@@ -71,7 +71,7 @@ class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
 
 class AutoTestApiEnvBindInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     env_id = fields.BigIntField(ge=1, index=True, description="环境ID")
-    env_type = fields.CharEnumField(AutoTestConfigNodeType, default=AutoTestConfigNodeType.API, index=True, description="节点类型")
+    env_type = fields.CharEnumField(AutoTestConfigNodeType, default=AutoTestConfigNodeType.APP, index=True, description="节点类型")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="绑定标识代码")
     project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
 

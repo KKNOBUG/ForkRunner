@@ -101,7 +101,7 @@ class StepVariablesBase(BaseModel):
 
 # 前端固定传 APP/FILE/DB；归一为本项目枚举 api/file/database。REDIS 为本项目扩展。
 _STEPS_EXECUTE_CONFIG_TYPE_ALIASES: Dict[str, str] = {
-    "APP": AutoTestConfigNodeType.API.value,
+    "APP": AutoTestConfigNodeType.APP.value,
     "FILE": AutoTestConfigNodeType.FILE.value,
     "DB": AutoTestConfigNodeType.DB.value,
     "REDIS": AutoTestConfigNodeType.REDIS.value,
