@@ -169,7 +169,7 @@ class APPEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
     """修改APP(api)类型环境配置入参。"""
 
     config_id: int = Field(..., ge=1, description="配置主键ID")
-    config_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.API, description="配置类型")
+    config_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.APP, description="配置类型")
     config_name: str = Field(..., max_length=128, description="配置名称")
     env_name: str = Field(..., max_length=64, description="环境名称(用于解析env_id)")
     config_host: str = Field(..., max_length=128, description="主机地址")
