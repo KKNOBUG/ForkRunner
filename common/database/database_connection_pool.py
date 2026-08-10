@@ -42,16 +42,16 @@ class DBConnPoolFromConfig:
         self.__private_initialized = True
         self.logger = logger
         self.config_model = config_model
-        self.pools: Dict[str, Dict[str, Dict[str, Dict[str, Any]]]] = {}
-        self.errors: Dict[str, Dict[str, Dict[str, Dict[str, str]]]] = {}
+        self.pools: Dict[int, Dict[str, Dict[str, Dict[str, Any]]]] = {}
+        self.errors: Dict[int, Dict[str, Dict[str, Dict[str, str]]]] = {}
 
     @staticmethod
     def _normalize_pool_keys(
-            project_id: str,
+            project_id: int,
             env_name: str,
             config_name: str,
             database_name: str,
-    ) -> Tuple[str, str, str, str]:
+    ) -> Tuple[int, str, str, str]:
         """
         规范化四层缓存键：project_id去空白，其余转小写。
 
@@ -62,7 +62,7 @@ class DBConnPoolFromConfig:
         :return: (project_id, env_name, config_name, database_name)
         """
         return (
-            project_id.strip(),
+            project_id,
             env_name.lower().strip(),
             config_name.lower().strip(),
             database_name.lower().strip(),
@@ -70,7 +70,7 @@ class DBConnPoolFromConfig:
 
     async def _get_db_config_from_orm(
             self,
-            project_id: str,
+            project_id: int,
             env_name: str,
             config_name: str,
             database_name: str,
@@ -88,12 +88,6 @@ class DBConnPoolFromConfig:
         """
         if not self.config_model:
             raise ValueError("未提供ORM模型，请通过config_model参数传入")
-
-        try:
-            project_id_int = int(str(project_id).strip())
-        except (TypeError, ValueError) as e:
-            self.logger.error(f"project_id无法解析为整数: {project_id!r}, {e}")
-            return None
 
         try:
             # 必须与Tortoise初始化时注册的模块路径一致，否则模型无default_connection
@@ -116,20 +110,20 @@ class DBConnPoolFromConfig:
 
         # 必须带project_id与env_type，避免多应用同名环境或跨节点类型串库
         env_bind = await AutoTestApiEnvBindInfo.filter(
-            project_id=project_id_int,
+            project_id=project_id,
             env_id__in=list(dict_ids),
             env_type=AutoTestConfigNodeType.DB,
             state__not=1,
         ).first()
         if not env_bind:
             self.logger.warning(
-                f"未找到环境绑定 project_id={project_id_int}, "
+                f"未找到环境绑定 project_id={project_id}, "
                 f"env_name(忽略大小写)={env_name!r}, env_type={AutoTestConfigNodeType.DB.value}"
             )
             return None
 
         config_obj = await self.config_model.filter(
-            project_id=project_id_int,
+            project_id=project_id,
             env_id=env_bind.id,
             env_type=AutoTestConfigNodeType.DB,
             state__not=1,
@@ -160,7 +154,7 @@ class DBConnPoolFromConfig:
 
     def _set_pool(
             self,
-            project_id: str,
+            project_id: int,
             env_name: str,
             config_name: str,
             database_name: str,
@@ -186,7 +180,7 @@ class DBConnPoolFromConfig:
 
     def _set_error(
             self,
-            project_id: str,
+            project_id: int,
             env_name: str,
             config_name: str,
             database_name: str,
@@ -212,7 +206,7 @@ class DBConnPoolFromConfig:
 
     def _clear_error(
             self,
-            project_id: str,
+            project_id: int,
             env_name: str,
             config_name: str,
             database_name: str,
@@ -233,7 +227,7 @@ class DBConnPoolFromConfig:
 
     def _get_pool(
             self,
-            project_id: str,
+            project_id: int,
             env_name: str,
             config_name: str,
             database_name: str,
@@ -254,7 +248,7 @@ class DBConnPoolFromConfig:
 
     async def create_pool(
             self,
-            project_id: str,
+            project_id: int,
             env_name: str,
             config_name: str,
             database_name: str,
@@ -573,7 +567,7 @@ class DBConnPoolFromConfig:
 
     async def get_or_create_pool(
             self,
-            project_id: str,
+            project_id: int,
             env_name: str,
             config_name: str,
             database_name: str,
@@ -581,7 +575,7 @@ class DBConnPoolFromConfig:
         """
         获取已有连接池；不存在则按配置表创建后返回。
 
-        :param project_id: 应用主键ID（Autotest=project_id）
+        :param project_id: 应用主键ID
         :param env_name: 环境名称
         :param config_name: 配置名称
         :param database_name: 数据库名
