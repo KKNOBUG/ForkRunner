@@ -126,7 +126,7 @@ class AutoTestDataBaseType(StringEnum):
 
 
 class AutoTestConfigNodeType(StringEnum):
-    APP = "app"
-    DB = "database"
-    REDIS = "redis"
-    FILE = "file"
+    APP = "APP"
+    DB = "DB"
+    REDIS = "REDIS"
+    FILE = "FILE"

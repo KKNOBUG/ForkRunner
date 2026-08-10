@@ -584,7 +584,7 @@ class AutoTestApiEnvConfigCrud(ScaffoldCrud[AutoTestApiEnvConfigInfo, AutoTestAp
         :param config_in: 入参对象
         :return: 大写用户名（最多16位）
         """
-        from backend.services.ctx import get_current_username
+        from services.ctx import get_current_username
         username = get_current_username()
         if username:
             return username
