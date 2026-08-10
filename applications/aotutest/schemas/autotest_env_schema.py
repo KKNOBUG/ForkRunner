@@ -34,6 +34,13 @@ class AutoTestApiEnvUpdate(AutoTestApiEnvBase):
 
 
 class AutoTestApiEnvDelete(BaseModel):
+    """删除环境绑定入参。"""
+
+    env_id: Optional[int] = Field(None, description="环境绑定主键ID")
+    env_code: Optional[str] = Field(None, description="环境绑定标识代码")
+
+
+class AutoTestApiEnvDeletes(BaseModel):
     """批量删除环境绑定入参。"""
 
     env_ids: Optional[List[int]] = Field(None, description="环境绑定主键ID列表")

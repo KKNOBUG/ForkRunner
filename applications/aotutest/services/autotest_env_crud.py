@@ -16,7 +16,7 @@ from applications.aotutest.models.autotest_model import (
 from applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
     AutoTestApiEnvUpdate,
-    AutoTestApiEnvDelete,
+    AutoTestApiEnvDeletes,
 )
 from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
 from applications.base.services.scaffold import ScaffoldCrud
@@ -328,7 +328,7 @@ class AutoTestApiEnvCrud(ScaffoldCrud[AutoTestApiEnvBindInfo, AutoTestApiEnvCrea
 
         return await self.soft_delete(id=instance.id)
 
-    async def delete_envs(self, env_in: AutoTestApiEnvDelete) -> int:
+    async def delete_envs(self, env_in: AutoTestApiEnvDeletes) -> int:
         """
         根据ID或code列表批量软删除环境绑定；逐条复用单删校验。
 

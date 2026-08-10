@@ -11,8 +11,8 @@ from applications.aotutest.schemas.autotest_env_schema import (
     AutoTestApiEnvCreate,
     AutoTestApiEnvUpdate,
     AutoTestApiEnvSelect,
-    AutoTestApiEnvDelete,
-    AutoTestApiEnvListQuery,
+    AutoTestApiEnvDeletes,
+    AutoTestApiEnvListQuery, AutoTestApiEnvDelete,
 )
 from configure import LOGGER
 from core.exceptions import (
@@ -60,21 +60,21 @@ async def create_environment(
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
-@autotest_env.delete("/delete", summary="删除环境", description="根据id或code删除环境信息")
+@autotest_env.post("/delete", summary="删除环境", description="根据id或code删除环境信息")
 async def delete_environment(
-        env_id: Optional[int] = Query(None, description="环境ID"),
-        env_code: Optional[str] = Query(None, description="环境标识代码"),
+        env_in: AutoTestApiEnvDelete = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code删除环境。
 
-    :param env_id: 环境主键ID
-    :param env_code: 环境业务标识
+    :param env_in: 环境入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
+        env_id: Optional[int] = env_in.env_id
+        env_code: Optional[str] = env_in.env_code
         instance = await services.env_curd.delete_env(env_id=env_id, env_code=env_code)
         data = await services.env_curd.serialize_env(instance)
         LOGGER.info(f"根据id或code删除环境成功, 结果明细: {data}")
@@ -90,7 +90,7 @@ async def delete_environment(
 
 @autotest_env.post("/deletes", summary="批量删除环境", description="根据id或code列表删除环境信息")
 async def delete_environments(
-        env_in: AutoTestApiEnvDelete = Body(..., description="环境信息"),
+        env_in: AutoTestApiEnvDeletes = Body(..., description="环境信息"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
