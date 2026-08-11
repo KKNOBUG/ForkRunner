@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple
 
 from fastapi import APIRouter
 
-from applications.aotutest.schemas.autotest_diff_schema import (
+from applications.aotutest.schemas.autotest_datagram_diff_schema import (
     AlignedDiffRow,
     CharHighlight,
     DiffLineItem,

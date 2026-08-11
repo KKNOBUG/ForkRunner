@@ -17,7 +17,7 @@ import httpx
 import orjson
 from aiomysql import Pool
 
-from applications.aotutest.views.autotest_diff_view import compare_messages
+from applications.aotutest.views.autotest_datagram_diff_view import compare_messages
 
 if TYPE_CHECKING:
     from applications.aotutest.dependencies import AutoTestApiServices
