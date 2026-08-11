@@ -14,7 +14,7 @@ class AutoTestCaseType(StringEnum):
 
 
 # 公共标识：不可引用其他脚本、不可绑定数据源、不允许打标签
-PUBLIC_CASE_TYPES = (AutoTestCaseType.PUBLIC_SCRIPT, AutoTestCaseType.PUBLIC_API)
+PUBLIC_CASE_TYPES = (AutoTestCaseType.PUBLIC_API, )
 
 
 class AutoTestReportType(StringEnum):
