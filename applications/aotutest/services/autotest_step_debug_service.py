@@ -383,7 +383,7 @@ class StepDebugService:
                 project_id=request_project_id,
                 env_name=env_name,
                 config_name=request_config_name,
-                config_type=AutoTestConfigNodeType.APP,
+                config_type=AutoTestConfigNodeType.API,
                 label="HTTP请求调试失败",
             )
             host = (endpoint.config_host or "").strip()
@@ -624,7 +624,7 @@ class StepDebugService:
                 project_id=request_project_id,
                 env_name=env_name,
                 config_name=request_config_name,
-                config_type=AutoTestConfigNodeType.APP,
+                config_type=AutoTestConfigNodeType.API,
                 label="TCP请求调试失败",
                 config_not_found_template="{label}, 环境配置[{config_name}]不存在",
             )
@@ -782,7 +782,10 @@ class StepDebugService:
                     session_lookup_map: Dict[str, Any] = {}
                     session_lookup_map.update(AutoTestToolService.list_to_dict(defined_variables))
                     session_lookup_map.update(AutoTestToolService.list_to_dict(session_variables))
-                    session_lookup_map.update(executive_result or {})
+                    if isinstance(executive_result, list):
+                        session_lookup_map["result"] = executive_result
+                    elif isinstance(executive_result, dict):
+                        session_lookup_map.update(executive_result)
                     # 与改造前调试接口保持一致：仅跑断言管线（不做提取）
                     validator_result = AutoTestToolService.run_assert_validators(
                         assert_validators=assert_validators,
