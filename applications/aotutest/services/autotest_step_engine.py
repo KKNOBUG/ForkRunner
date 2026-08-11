@@ -17,10 +17,20 @@ import httpx
 import orjson
 from aiomysql import Pool
 
-from applications.aotutest.views.autotest_datagram_diff_view import compare_messages
-
 if TYPE_CHECKING:
     from applications.aotutest.dependencies import AutoTestApiServices
+
+from applications.aotutest.services.autotest_runtime.protocol_http import (
+    build_httpx_request_kwargs,
+    assemble_http_body_payloads
+)
+from applications.aotutest.services.autotest_runtime.protocol_tcp import (
+    select_tcp_payload,
+    parse_tcp_response,
+    parse_tcp_timeouts,
+    resolve_tcp_request_extract_sources,
+    tcp_body_source_for_assert
+)
 
 from applications.aotutest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from applications.aotutest.schemas.autotest_report_schema import AutoTestApiReportCreate
@@ -29,10 +39,11 @@ from applications.aotutest.schemas.autotest_step_schema import (
     ConditionsBase,
     DataBaseOperates,
     RedisOperates,
-    StepAssertValidatorItem,
     StepVariablesBase,
+    StepAssertValidatorItem,
     StepsExecuteConfigBase,
-    prepare_step_tree_item_for_execution, StepExtractVariableItem,
+    StepExtractVariableItem,
+    prepare_step_tree_item_for_execution,
 )
 from applications.aotutest.services.autotest_runtime.sandbox import (
     RE_PLACEHOLDER,
@@ -41,17 +52,6 @@ from applications.aotutest.services.autotest_runtime.sandbox import (
     USER_CODE_ALLOWED_IMPORT_ROOTS,
     USER_CODE_EXTRA_BUILTINS,
     safe_user_code_import,
-)
-from applications.aotutest.services.autotest_runtime.protocol_http import (
-    assemble_http_body_payloads,
-    build_httpx_request_kwargs,
-)
-from applications.aotutest.services.autotest_runtime.protocol_tcp import (
-    parse_tcp_response,
-    parse_tcp_timeouts,
-    resolve_tcp_request_extract_sources,
-    select_tcp_payload,
-    tcp_body_source_for_assert,
 )
 from applications.aotutest.services.autotest_tool_service import AutoTestToolService
 from applications.base.services.scaffold import unique_identify
