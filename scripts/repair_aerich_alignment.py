@@ -20,8 +20,8 @@
     4. 校验修复结果: aerich 表记录与磁盘文件一一对应, 且 id 最大记录为最高版本号。
 
 用法:
-    backend/.venv/bin/python backend/scripts/repair_aerich_alignment.py            # dry-run
-    backend/.venv/bin/python backend/scripts/repair_aerich_alignment.py --execute  # 实际执行
+    .venv/bin/python backend/scripts/repair_aerich_alignment.py            # dry-run
+    .venv/bin/python backend/scripts/repair_aerich_alignment.py --execute  # 实际执行
 """
 import argparse
 import asyncio

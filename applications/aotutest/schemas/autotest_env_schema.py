@@ -13,7 +13,7 @@ class AutoTestApiEnvBase(BaseModel):
     env_name: Optional[UpperStr] = Field(None, max_length=64, description="环境名称")
     project_id: Optional[int] = Field(None, ge=1, description="应用ID")
     env_type: Optional[AutoTestConfigNodeType] = Field(None, description="节点类型(api/file/database/redis)")
-    env_desc: Optional[str] = Field(None, max_length=2048, description="环境描述")
+    env_desc: Optional[str] = Field(None, max_length=2048, description="绑定描述(按节点类型独立)")
 
 
 class AutoTestApiEnvCreate(AutoTestApiEnvBase):
@@ -34,13 +34,6 @@ class AutoTestApiEnvUpdate(AutoTestApiEnvBase):
 
 
 class AutoTestApiEnvDelete(BaseModel):
-    """删除环境绑定入参。"""
-
-    env_id: Optional[int] = Field(None, description="环境绑定主键ID")
-    env_code: Optional[str] = Field(None, description="环境绑定标识代码")
-
-
-class AutoTestApiEnvDeletes(BaseModel):
     """批量删除环境绑定入参。"""
 
     env_ids: Optional[List[int]] = Field(None, description="环境绑定主键ID列表")

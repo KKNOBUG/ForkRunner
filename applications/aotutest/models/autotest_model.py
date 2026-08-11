@@ -41,7 +41,7 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
     project_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="应用标识代码")
 
     class Meta:
-        table = "tbx_autotest_project"
+        table = "krun_autotest_project"
         table_description = "自动化测试-应用信息表"
         indexes = (
             ("project_name", "project_state"),
@@ -55,12 +55,13 @@ class AutoTestApiProjectInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
 
 
 class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
+    """环境枚举主数据；主键对外语义为env_enum_id；仅存全局环境名。"""
+
     env_name = fields.CharField(max_length=128, unique=True, description="环境名称")
-    env_desc = fields.CharField(max_length=2048, null=True, description="环境描述")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
 
     class Meta:
-        table = "tbx_autotest_env"
+        table = "krun_autotest_env"
         table_description = "自动化测试-环境枚举表"
         ordering = ["-updated_time"]
 
@@ -70,20 +71,32 @@ class AutoTestApiEnvInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
 
 
 class AutoTestApiEnvBindInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    env_id = fields.BigIntField(ge=1, index=True, description="环境ID")
+    """应用×环境枚举×节点类型的挂载点；主键对外语义为env_bind_id。"""
+
+    env_enum = fields.ForeignKeyField(
+        "models.AutoTestApiEnvInfo",
+        related_name="env_binds",
+        on_delete=fields.RESTRICT,
+        db_constraint=True,
+        index=True,
+        description="环境枚举",
+    )
     env_type = fields.CharEnumField(AutoTestConfigNodeType, default=AutoTestConfigNodeType.APP, index=True, description="节点类型")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="绑定标识代码")
+    env_desc = fields.CharField(max_length=2048, null=True, description="绑定描述")
     project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
 
     class Meta:
-        table = "tbx_autotest_env_bind"
+        table = "krun_autotest_env_bind"
         table_description = "自动化测试-环境绑定表"
         unique_together = (
-            ("env_id", "project_id", "env_type"),
+            ("env_enum", "project_id", "env_type"),
         )
         indexes = (
             ("project_id", "state"),
             ("env_type", "state"),
+            ("env_enum", "state"),
+            ("project_id", "env_type", "state"),
         )
         ordering = ["-updated_time"]
 
@@ -93,9 +106,16 @@ class AutoTestApiEnvBindInfo(ScaffoldModel, MaintainMixin, TimestampMixin, State
 
 
 class AutoTestApiEnvConfigInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    env_id = fields.BigIntField(ge=1, index=True, description="环境ID")
-    env_type = fields.CharEnumField(AutoTestConfigNodeType, description="节点类型")
-    project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
+    """挂载点下的连接明细；主键对外语义为env_config_id；project_id/env_type由绑定派生。"""
+
+    env_bind = fields.ForeignKeyField(
+        "models.AutoTestApiEnvBindInfo",
+        related_name="env_configs",
+        on_delete=fields.RESTRICT,
+        db_constraint=True,
+        index=True,
+        description="环境绑定",
+    )
     config_name = fields.CharField(max_length=128, description="配置名称")
     config_desc = fields.CharField(max_length=2048, null=True, description="配置描述")
     config_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="配置标识代码")
@@ -112,15 +132,15 @@ class AutoTestApiEnvConfigInfo(ScaffoldModel, MaintainMixin, TimestampMixin, Sta
     is_no_password = fields.BooleanField(default=None, null=True, description="是否免密")
 
     class Meta:
-        table = "tbx_autotest_env_config"
+        table = "krun_autotest_env_config"
         table_description = "自动化测试-环境配置表"
         unique_together = (
-            ("env_id", "project_id", "config_name"),
+            ("env_bind", "config_name"),
         )
         indexes = (
-            ("env_id", "state"),
-            ("project_id", "state"),
+            ("env_bind", "state"),
             ("config_code", "state"),
+            ("config_host", "config_port"),
         )
         ordering = ["-updated_time"]
 
@@ -136,7 +156,7 @@ class AutoTestApiTagInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMode
     tag_desc = fields.CharField(max_length=2048, null=True, description="标签描述")
 
     class Meta:
-        table = "tbx_autotest_tag"
+        table = "krun_autotest_tag"
         table_description = "自动化测试-标签信息表"
         unique_together = (
             ("tag_project", "tag_mode", "tag_name"),
@@ -169,7 +189,7 @@ class AutoTestApiCaseInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     session_variables = fields.JSONField(default=None, null=True, description="会话变量(初始变量池)")
 
     class Meta:
-        table = "tbx_autotest_case"
+        table = "krun_autotest_case"
         table_description = "自动化测试-用例信息表"
         unique_together = (
             ("case_name", "case_project", "created_user"),
@@ -260,7 +280,7 @@ class AutoTestApiStepInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     redis_searched = fields.BooleanField(null=True, description="Redis请求查到即止开关(多个配置时, 某一配置返回有效结果时停止后续请求)")
 
     class Meta:
-        table = "tbx_autotest_step"
+        table = "krun_autotest_step"
         table_description = "自动化测试-步骤明细表"
         unique_together = (
             ("case_id", "step_no", "step_code"),
@@ -298,7 +318,7 @@ class AutoTestApiReportInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本次执行使用的数据集/场景名称(参数化)")
 
     class Meta:
-        table = "tbx_autotest_report"
+        table = "krun_autotest_report"
         table_description = "自动化测试-报告信息表"
         indexes = (
             ("case_id", "case_code"),
@@ -384,7 +404,7 @@ class AutoTestApiDetailInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     num_cycles = fields.IntField(null=True, description="循环执行次数(第几次)")
 
     class Meta:
-        table = "tbx_autotest_details"
+        table = "krun_autotest_details"
         table_description = "自动化测试-明细信息表"
         unique_together = (
             ("report_code", "case_code", "step_code", "num_cycles"),
@@ -433,7 +453,7 @@ class AutoTestApiTaskInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     task_enabled = fields.BooleanField(default=False, index=True, description="是否启动调度(True/False)")
 
     class Meta:
-        table = "tbx_autotest_task"
+        table = "krun_autotest_task"
         table_description = "自动化测试-任务信息表"
         unique_together = (
             ("task_name", "task_project"),
@@ -468,7 +488,7 @@ class AutoTestApiRecordInfo(ScaffoldModel, MaintainMixin, TimestampMixin, StateM
     celery_duration = fields.CharField(max_length=64, null=True, description="耗时")
 
     class Meta:
-        table = "tbx_autotest_record"
+        table = "krun_autotest_record"
         table_description = "自动化测试-任务执行观测记录表"
         indexes = (
             ("celery_status",),
@@ -503,7 +523,7 @@ class AutoTestApiDataSourceInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     data_source_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="数据驱动文件标识代码")
 
     class Meta:
-        table = "tbx_autotest_data_source"
+        table = "krun_autotest_data_source"
         table_description = "自动化测试-数据驱动文件存储表"
         unique_together = (
             ("case_id", "step_code"),
@@ -533,7 +553,7 @@ class AutoTestApiDataCreateInfo(ScaffoldModel, MaintainMixin, TimestampMixin, St
     dataset = fields.JSONField(description="接口文件解析后的数据集")
 
     class Meta:
-        table = "tbx_autotest_data_generator"
+        table = "krun_autotest_data_create"
         table_description = "自动化测试-接口文件生成记录表"
         unique_together = (
             ("case_id", "step_code", "create_code"),
