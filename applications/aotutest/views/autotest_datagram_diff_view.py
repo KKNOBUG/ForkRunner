@@ -2,14 +2,14 @@
 from fastapi import APIRouter
 
 from applications.aotutest.schemas.autotest_datagram_diff_schema import RepDiffRequest
-from applications.aotutest.services.autotest_runtime.datagram.message_diff import compare_messages
+from applications.aotutest.services.autotest_runtime.datagram.datagram_diff import compare_messages
 from configure import LOGGER
 from core.responses import FailureResponse, SuccessResponse
 
-rep_diff_router = APIRouter()
+datagram_diff_router = APIRouter()
 
 
-@rep_diff_router.post(
+@datagram_diff_router.post(
     "/compare",
     summary="报文比对",
     description="比对左右报文并返回对齐后的逐行差异结果",
@@ -25,7 +25,7 @@ async def compare_datagram(body: RepDiffRequest):
         result = compare_messages(
             left_text=body.left_text,
             right_text=body.right_text,
-            order_control=body.datagram_field_sorted,
+            order_control=body.datagram_field_ordered,
         )
         return SuccessResponse(message="比对成功", data=result.model_dump(), total=1)
     except Exception as e:
