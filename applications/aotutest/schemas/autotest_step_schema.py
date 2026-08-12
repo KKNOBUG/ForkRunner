@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import Optional, List, Dict, Any, Type
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-
 from applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from applications.aotutest.schemas.autotest_datagram_diff_schema import DatagramFieldCompareItem
 from applications.base.services.scaffold import UpperStr
@@ -15,6 +13,7 @@ from enums import (
     AutoTestConfigNodeType,
 )
 from enums import HTTPMethod
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
 NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]
@@ -52,7 +51,6 @@ class ConditionsBase(BaseModel):
     condition_expr: str = Field(..., max_length=128, description="条件表达式")
     condition_compare: str = Field(..., max_length=128, description="条件比较符")
     condition_value: Optional[Any] = Field(None, description="条件比对值")
-    condition_desc: Optional[str] = Field(None, max_length=2048, description="条件描述")
 
     @field_validator("condition_compare", mode="before")
     @classmethod
