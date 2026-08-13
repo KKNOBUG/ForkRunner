@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from typing import Optional, List, Dict, Any, Type
 
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
 from applications.aotutest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
 from applications.aotutest.schemas.autotest_datagram_diff_schema import DatagramFieldCompareItem
 from applications.base.services.scaffold import UpperStr
@@ -13,7 +15,6 @@ from enums import (
     AutoTestConfigNodeType,
 )
 from enums import HTTPMethod
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 NON_DICT_TYPE: Type = Optional[Dict[str, Any]]
 NON_LIST_DICT_TYPE: Type = Optional[List[Dict[str, Any]]]
@@ -167,7 +168,11 @@ class AutoTestApiStepReqBase(BaseModel):
     tcp_response_type: Optional[str] = Field(None, max_length=16, description="响应解析：json|xml|text|bytes")
 
     @field_validator(
-        "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file",
+        "request_header",
+        "request_params",
+        "request_form_data",
+        "request_form_urlencoded",
+        "request_form_file",
         mode="before"
     )
     @classmethod
@@ -332,12 +337,9 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     branch_items: Optional[List[BranchItem]] = Field(None, description="条件分支列表(仅条件分支步骤使用)")
     branch_index: Optional[int] = Field(None, ge=0, description="所属分支序号(后端推断, 前端无需传递)")
 
-    # 报文比对步骤：左右报文引用列表与默认字段顺序控制
+    # 报文比对步骤：左右报文引用列表(每项自带datagram_field_ordered)
     datagram_field_compare: Optional[List[DatagramFieldCompareItem]] = Field(
         None, description="报文比对配置列表(每项含left_text/right_text/datagram_field_ordered)"
-    )
-    datagram_field_ordered: Optional[int] = Field(
-        None, ge=0, le=1, description="报文比对默认字段顺序控制(0忽略顺序,1控制顺序)"
     )
 
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
@@ -346,7 +348,7 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
     @classmethod
     def _normalize_loop_maximums(cls, v: Any) -> Any:
         """
-        规范化loop_maximums：兼容历史整数入参，统一存为字符串；字面量整数校验1-100，占位符交由执行期解析。
+        规范化loop_maximums：整数入参，统一存为字符串；字面量整数校验1-100，占位符交由执行期解析。
 
         :param v: 原始值（int/str/None）
         :return: 规范化后的字符串或None
