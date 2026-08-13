@@ -48,7 +48,7 @@ async def create_user(
     """
     try:
         instance = await user_crud.create_user(user_in=user_in)
-        data = await instance.to_dict(exclude_fields=["password"])
+        data = await instance.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -71,7 +71,7 @@ async def delete_user(
     """
     try:
         instance = await user_crud.delete_user(user_id)
-        data = await instance.to_dict(exclude_fields=["password"])
+        data = await instance.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
         return SuccessResponse(message="删除成功", data=data, total=1)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -118,7 +118,7 @@ async def update_user(
     try:
         instance = await user_crud.update_user(user_in=user_in)
         await user_crud.update_roles(instance, user_in.role_ids)
-        data = await instance.to_dict(exclude_fields=["password"])
+        data = await instance.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -145,7 +145,7 @@ async def get_user(
         instance = await user_crud.get_by_id(user_id=user_id, state__not=1)
         if not instance:
             return NotFoundResponse(message=f"用户(id={user_id})信息不存在")
-        data: dict = await instance.to_dict(m2m=True, exclude_fields=["password"])
+        data: dict = await instance.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"})
         dept_id = data.pop("dept_id", None)
         data["dept"] = await (await dept_crud.get_or_error(id=dept_id)).to_dict() if dept_id else {}
         return SuccessResponse(message="查询成功", data=data, total=1)
@@ -170,7 +170,7 @@ async def get_user_by_username(
         instance = await user_crud.get_by_username(username=username)
         if not instance:
             return NotFoundResponse(message=f"用户[username={username}]信息不存在")
-        data: dict = await instance.to_dict(exclude_fields=["password"])
+        data: dict = await instance.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"根据username查询用户失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -238,7 +238,7 @@ async def search_users(
         total, user_objs = await user_crud.list(
             page=page, page_size=page_size, order=order, search=q
         )
-        data = [await obj.to_dict(m2m=True, exclude_fields=["password"]) for obj in user_objs]
+        data = [await obj.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"}) for obj in user_objs]
         for item in data:
             dept_id = item.pop("dept_id", None)
             item["dept"] = await (await dept_crud.get_or_error(id=dept_id)).to_dict() if dept_id else {}
@@ -295,7 +295,7 @@ async def list_users(
         total, instances = await user_crud.list(
             page=user_in.page, page_size=user_in.page_size, search=q, order=user_in.order
         )
-        data = [await obj.to_dict(m2m=True, exclude_fields=["password"]) for obj in instances]
+        data = [await obj.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"}) for obj in instances]
         for item in data:
             dept_id = item.pop("dept_id", None)
             item["dept"] = await (await dept_crud.get_or_error(id=dept_id)).to_dict() if dept_id else {}
@@ -325,7 +325,7 @@ async def update_user_password(
             return FailureResponse(message="旧密码验证错误")
         instance.password = get_password_hash(req_in.new_password)
         await instance.save()
-        data = await instance.to_dict(exclude_fields=["password"])
+        data = await instance.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
         return SuccessResponse(message="更新成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"根据当前登录用户ID修改密码失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -365,7 +365,7 @@ async def logout(
     user_id = CTX_USER_ID.get()
     try:
         instance = await user_crud.logout(user_id=user_id)
-        data = await instance.to_dict(exclude_fields=["id", "password"])
+        data = await instance.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
         return SuccessResponse(message="登出成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"签退当前登录用户的所有会话信息失败，异常描述: {e}\n{traceback.format_exc()}")
