@@ -779,7 +779,7 @@ celery = create_celery()
 #   celery -A celery_scheduler.celery_worker worker -Q default,autotest_queue -c 4 -l INFO
 # Beat：
 #   celery -A celery_scheduler.celery_worker beat -l INFO
-# 日志默认写入：backend/output/logs/celery_logs/celery_worker.log | celery_beat.log
+# 日志默认写入：output/logs/celery_logs/celery_worker.log | celery_beat.log
 # 也可显式指定：--logfile=/path/to/xxx.log  或  export CELERY_LOGFILE=/path/to/xxx.log
 
 if __name__ == '__main__':
