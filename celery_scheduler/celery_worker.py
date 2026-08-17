@@ -31,7 +31,7 @@ from .celery_base import (
 _async_event_loop_pool = None
 # 扫描任务不写执行记录、不走终态更新
 _SCAN_TASK_NAME = (
-    "celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
+    "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
 )
 # setup_logging 写入 celery 专用日志文件时登记的 Loguru sink id，避免重复添加
 _celery_logfile_sink_id = None
@@ -179,8 +179,8 @@ async def _create_task_record(
     :param request_kwargs: Celery任务入参快照
     :return: None
     """
-    from applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
-    from applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
+    from applications.aotutest.models.autotest_task_model import AutoTestTaskModel
+    from applications.aotutest.services.autotest_record_crud import AutoTestRecordCrud
     from celery_scheduler.celery_task_contract import resolve_task_meta
     from enums import AutoTestTaskStatus
 
@@ -217,7 +217,7 @@ async def _create_task_record(
         data["case_ids"] = [req_kwargs.get("case_id")]
 
     if task_id is not None and celery_task_name and "run_autotest_task" in celery_task_name:
-        task_instance = await AutoTestApiTaskInfo.filter(id=task_id).first()
+        task_instance = await AutoTestTaskModel.filter(id=task_id).first()
         if task_instance:
             kwargs = getattr(task_instance, "task_kwargs", None) or {}
             if not isinstance(kwargs, dict):
@@ -265,7 +265,7 @@ async def _create_task_record(
         })
     if username:
         data["created_user"] = username
-    await AutoTestApiTaskRecordCrud().create_record(data)
+    await AutoTestRecordCrud().create_record(data)
     LOGGER.info(
         f"{_LOG_PREFIX}【span_id={get_span_id()}】创建执行记录成功: "
         f"celery_id={celery_id}, task_id={task_id}, "
@@ -295,7 +295,7 @@ async def _update_task_record_on_end(
     """
     if not celery_id:
         return
-    from applications.aotutest.services.autotest_record_crud import AutoTestApiTaskRecordCrud
+    from applications.aotutest.services.autotest_record_crud import AutoTestRecordCrud
     from celery_scheduler.celery_task_contract import normalize_task_summary
     from enums import AutoTestTaskStatus
 
@@ -331,7 +331,7 @@ async def _update_task_record_on_end(
     if resolved_batch:
         data["batch_code"] = resolved_batch
         summary_obj["batch_code"] = resolved_batch
-    record_crud = AutoTestApiTaskRecordCrud()
+    record_crud = AutoTestRecordCrud()
     record = await record_crud.get_by_celery_id(celery_id=celery_id, state__not=1)
     if not record:
         LOGGER.error(
@@ -776,10 +776,10 @@ celery = create_celery()
 
 # ========== 启动命令（在仓库根目录执行，保证 PYTHONPATH 可 import backend）==========
 # Worker：
-#   celery -A celery_scheduler.celery_worker worker -Q default,autotest_queue -c 4 -l INFO
+#   celery -A backend.celery_scheduler.celery_worker worker -Q default,autotest_queue -c 4 -l INFO
 # Beat：
-#   celery -A celery_scheduler.celery_worker beat -l INFO
-# 日志默认写入：output/logs/celery_logs/celery_worker.log | celery_beat.log
+#   celery -A backend.celery_scheduler.celery_worker beat -l INFO
+# 日志默认写入：backend/output/logs/celery_logs/celery_worker.log | celery_beat.log
 # 也可显式指定：--logfile=/path/to/xxx.log  或  export CELERY_LOGFILE=/path/to/xxx.log
 
 if __name__ == '__main__':

@@ -6,7 +6,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
-from applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+from applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
 from celery_scheduler.celery_base import run_async
 from celery_scheduler.celery_worker import celery
 from configure import LOGGER
@@ -71,7 +71,7 @@ async def _execute_step_tree_impl(
     if not batch_code:
         batch_code = _new_batch_code()
 
-    step_crud = AutoTestApiStepCrud()
+    step_crud = AutoTestStepCrud()
     if not selected_dataset_names:
         result = await step_crud.execute_single_case(
             case_id=case_id,
@@ -122,7 +122,7 @@ async def _execute_step_tree_impl(
     }
 
 
-@celery.task(name="celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task")
+@celery.task(name="backend.celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task")
 def execute_step_tree_task(
         case_id: int,
         initial_variables: Optional[List[Dict[str, Any]]] = None,
@@ -143,6 +143,7 @@ def execute_step_tree_task(
     :param steps_execute_config: 步骤执行环境配置
     :param created_user: 提交用户账号
     :return: 执行结果字典
+    :raises Exception: 执行失败时向上抛出，供Celery on_failure处理
     """
     try:
         rt = AutoTestReportType.SCHEDULE_EXEC

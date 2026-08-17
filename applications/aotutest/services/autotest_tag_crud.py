@@ -5,7 +5,7 @@ from typing import Optional, Dict, Any, List, Union, Set, Tuple
 from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
 
-from applications.aotutest.models.autotest_model import AutoTestApiTagInfo
+from applications.aotutest.models.autotest_tag_model import AutoTestTagModel
 from applications.aotutest.schemas.autotest_tag_schema import (
     AutoTestApiTagCreate,
     AutoTestApiTagUpdate,
@@ -21,12 +21,12 @@ from core.exceptions import (
 )
 
 
-class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, AutoTestApiTagUpdate]):
+class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestApiTagCreate, AutoTestApiTagUpdate]):
 
     def __init__(self):
-        super().__init__(model=AutoTestApiTagInfo)
+        super().__init__(model=AutoTestTagModel)
 
-    async def get_by_id(self, tag_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTagInfo]:
+    async def get_by_id(self, tag_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestTagModel]:
         """
         根据主键ID查询标签。
 
@@ -47,7 +47,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_ids(self, tag_ids: List[int], on_error: bool = False, **kwargs) -> Union[bool, List[AutoTestApiTagInfo]]:
+    async def get_by_ids(self, tag_ids: List[int], on_error: bool = False, **kwargs) -> Union[bool, List[AutoTestTagModel]]:
         """
         校验一批标签ID是否均存在；全部存在时返回实例列表。
 
@@ -75,7 +75,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             return False
         return await self.model.filter(id__in=tag_ids, **kwargs).all()
 
-    async def get_by_code(self, tag_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestApiTagInfo]:
+    async def get_by_code(self, tag_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestTagModel]:
         """
         根据标签标识代码查询标签。
 
@@ -96,7 +96,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_tag(self, tag_in: AutoTestApiTagCreate) -> AutoTestApiTagInfo:
+    async def create_tag(self, tag_in: AutoTestApiTagCreate) -> AutoTestTagModel:
         """
         创建标签；同应用下同大类/名称已存在则恢复并更新。
 
@@ -108,8 +108,8 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         tag_project: int = tag_in.tag_project
 
         # 业务层验证：检查应用是否存在
-        from applications.aotutest.services.autotest_project_crud import AutoTestApiProjectCrud
-        await AutoTestApiProjectCrud().get_by_id(project_id=tag_project, on_error=True, state__not=1)
+        from applications.aotutest.services.autotest_project_crud import AutoTestProjectCrud
+        await AutoTestProjectCrud().get_by_id(project_id=tag_project, on_error=True, state__not=1)
         # 业务层验证：同应用下相同大类及名称仅允许一条记录（含已禁用，命中则恢复启用）
         tag_dict: Dict[str, Any] = tag_in.model_dump(exclude_none=True, exclude_unset=True)
         existing_tag = await self.model.filter(
@@ -119,7 +119,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         ).first()
         if not existing_tag:
             try:
-                instance: AutoTestApiTagInfo = await self.create(obj_in=tag_dict)
+                instance: AutoTestTagModel = await self.create(obj_in=tag_dict)
                 return instance
             except IntegrityError as e:
                 error_message: str = f"新增标签信息失败, 违反约束规则: {e}"
@@ -128,14 +128,14 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
         try:
             tag_dict["state"] = 0
-            instance: AutoTestApiTagInfo = await self.update(id=existing_tag.id, obj_in=tag_dict)
+            instance: AutoTestTagModel = await self.update(id=existing_tag.id, obj_in=tag_dict)
             return instance
         except (DoesNotExist, IntegrityError) as e:
             error_message: str = f"新增(更新)标签信息异常, 违反约束规则或空指针异常: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_tag(self, tag_in: AutoTestApiTagUpdate) -> AutoTestApiTagInfo:
+    async def update_tag(self, tag_in: AutoTestApiTagUpdate) -> AutoTestTagModel:
         """
         更新标签，根据tag_id或tag_code定位并校验(tag_project, tag_mode, tag_name)唯一。
 
@@ -184,7 +184,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def delete_tag(self, tag_id: Optional[int] = None, tag_code: Optional[str] = None) -> AutoTestApiTagInfo:
+    async def delete_tag(self, tag_id: Optional[int] = None, tag_code: Optional[str] = None) -> AutoTestTagModel:
         """
         软删除标签；需无用例关联该标签。
 
@@ -201,8 +201,8 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
         else:
             instance = await self.get_by_code(tag_code=tag_code, on_error=True, state__not=1)
 
-        from applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud
-        cases_count = await AutoTestApiCaseCrud().model.filter(case_tags__contains=[instance.id], state__not=1).count()
+        from applications.aotutest.services.autotest_case_crud import AutoTestCaseCrud
+        cases_count = await AutoTestCaseCrud().model.filter(case_tags__contains=[instance.id], state__not=1).count()
         if cases_count > 0:
             error_message: str = f"删除标签信息失败, 记录[id={instance.id}]被{cases_count}个用例关联"
             LOGGER.error(error_message)
@@ -224,7 +224,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        targets: List[AutoTestApiTagInfo] = []
+        targets: List[AutoTestTagModel] = []
         if tag_ids:
             for tid in tag_ids:
                 targets.append(await self.get_by_id(tag_id=tid, on_error=True, state__not=1))
@@ -237,7 +237,7 @@ class AutoTestApiTagCrud(ScaffoldCrud[AutoTestApiTagInfo, AutoTestApiTagCreate, 
 
         return len(targets)
 
-    async def select_tags(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestApiTagInfo]]:
+    async def select_tags(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestTagModel]]:
         """
         根据条件分页查询标签列表。
 

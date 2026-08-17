@@ -10,16 +10,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from xml.etree import ElementTree
 
-from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, PatternFill
-from openpyxl.utils import get_column_letter
-from tortoise.transactions import in_transaction
-
-from applications.aotutest.models.autotest_model import (
-    AutoTestApiCaseInfo,
-    AutoTestApiProjectInfo,
-    AutoTestApiStepInfo,
-)
+from applications.aotutest.models.autotest_case_model import AutoTestCaseModel
+from applications.aotutest.models.autotest_project_model import AutoTestProjectModel
+from applications.aotutest.models.autotest_step_model import AutoTestStepModel
 from configure import LOGGER, PROJECT_CONFIG
 from enums import (
     AutoTestAssertionOperation,
@@ -29,6 +22,11 @@ from enums import (
     AutoTestStepType,
     HTTPMethod,
 )
+from services import get_current_username
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment, PatternFill
+from openpyxl.utils import get_column_letter
+from tortoise.transactions import in_transaction
 
 # ---------------------------------------------------------------------------
 # 常量
@@ -763,19 +761,19 @@ async def import_script_rows(
         errors: List[str] = []
         project_name = row["project_name"]
         if project_name not in project_cache:
-            project = await AutoTestApiProjectInfo.filter(project_name=project_name, state__not=1).first()
+            project = await AutoTestProjectModel.filter(project_name=project_name, state__not=1).first()
             project_cache[project_name] = project.id if project else None
         project_id = project_cache[project_name]
         if project_id is None:
             errors.append(f"所属应用({project_name})不存在")
 
-        existing_case: Optional[AutoTestApiCaseInfo] = None
-        existing_step: Optional[AutoTestApiStepInfo] = None
+        existing_case: Optional[AutoTestCaseModel] = None
+        existing_step: Optional[AutoTestStepModel] = None
         if project_id is not None:
             if not owner_user:
                 errors.append("当前登录账号为空, 无法按所属人员定位公共接口")
             else:
-                matched_cases = await AutoTestApiCaseInfo.filter(
+                matched_cases = await AutoTestCaseModel.filter(
                     case_project=project_id,
                     case_name=row["case_name"],
                     case_type=AutoTestCaseType.PUBLIC_API,
@@ -788,11 +786,11 @@ async def import_script_rows(
                 elif matched_cases:
                     existing_case = matched_cases[0]
                     if existing_case.state != 1:
-                        root_steps = await AutoTestApiStepInfo.filter(
+                        root_steps = await AutoTestStepModel.filter(
                             case_id=existing_case.id, parent_step_id=None, state__not=1
                         ).all()
                     else:
-                        root_steps = await AutoTestApiStepInfo.filter(
+                        root_steps = await AutoTestStepModel.filter(
                             case_id=existing_case.id, parent_step_id=None
                         ).all()
                     if len(root_steps) != 1:

@@ -5,8 +5,8 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from applications.aotutest.models.autotest_model import AutoTestApiTaskInfo
-from applications.aotutest.services.autotest_step_crud import AutoTestApiStepCrud
+from applications.aotutest.models.autotest_task_model import AutoTestTaskModel
+from applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
 from celery_scheduler.celery_base import (
     check_task_expired,
     get_scheduled_tasks,
@@ -44,9 +44,10 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
     :param task_id: 自动化任务主键ID
     :param report_type: 报告类型；为ASYNC_EXEC或异步执行时根据手动执行处理
     :return: 含success、task_id及批次执行汇总的字典
+    :raises Exception: 执行过程异常时重新抛出，供Celery on_failure更新记录
     """
     span_id = get_span_id_for_log()
-    task = await AutoTestApiTaskInfo.get_or_none(id=task_id)
+    task = await AutoTestTaskModel.get_or_none(id=task_id)
     if not task:
         LOGGER.warning(f"{_LOG_PREFIX}【span_id={span_id}】任务不存在: task_id={task_id}")
         return {"success": False, "error": "任务不存在", "task_id": task_id}
@@ -87,7 +88,7 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
         if not cases_execute_config and isinstance(task_kwargs, dict):
             cases_execute_config = task_kwargs.get("cases_execute_config") or {}
         started = datetime.now()
-        result = await AutoTestApiStepCrud().batch_execute_cases(
+        result = await AutoTestStepCrud().batch_execute_cases(
             case_ids=case_ids,
             report_type=exec_report_type,
             initial_variables=(task_kwargs.get("initial_variables") or []) if isinstance(task_kwargs, dict) else [],
@@ -186,7 +187,7 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
     return {"scanned": len(tasks), "dispatched": dispatched}
 
 
-@celery.task(name="celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks")
+@celery.task(name="backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks")
 def scan_and_dispatch_autotest_tasks():
     """
     Beat入口，扫描启用中的Cron任务，到期则下发run_autotest_task。
@@ -196,7 +197,7 @@ def scan_and_dispatch_autotest_tasks():
     return run_async(_scan_and_dispatch_impl())
 
 
-@celery.task(name="celery_scheduler.tasks.task_autotest_case.run_autotest_task")
+@celery.task(name="backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task")
 def run_autotest_task(
         task_id: int,
         report_type: Optional[AutoTestReportType] = None,

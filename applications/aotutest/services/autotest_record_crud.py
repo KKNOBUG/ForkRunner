@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any, Union, List, Tuple
 from tortoise.exceptions import FieldError
 from tortoise.expressions import Q
 
-from applications.aotutest.models.autotest_model import AutoTestApiRecordInfo
+from applications.aotutest.models.autotest_record_model import AutoTestRecordModel
 from applications.aotutest.schemas.autotest_record_schema import (
     AutoTestApiRecordCreate,
     AutoTestApiRecordUpdate,
@@ -17,12 +17,12 @@ from configure import LOGGER
 from core.exceptions import ParameterException, NotFoundException
 
 
-class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiRecordCreate, AutoTestApiRecordUpdate]):
+class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestApiRecordCreate, AutoTestApiRecordUpdate]):
 
     def __init__(self):
-        super().__init__(model=AutoTestApiRecordInfo)
+        super().__init__(model=AutoTestRecordModel)
 
-    async def get_by_id(self, record_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestApiRecordInfo]:
+    async def get_by_id(self, record_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestRecordModel]:
         """
         根据主键ID查询执行记录。
 
@@ -43,7 +43,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_celery_id(self, celery_id: str, **kwargs) -> Optional[AutoTestApiRecordInfo]:
+    async def get_by_celery_id(self, celery_id: str, **kwargs) -> Optional[AutoTestRecordModel]:
         """
         根据Celery任务ID查询执行记录。
 
@@ -55,7 +55,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
             return None
         return await self.model.filter(celery_id=celery_id, **kwargs).first()
 
-    async def create_record(self, data: Union[AutoTestApiRecordCreate, Dict[str, Any]]) -> AutoTestApiRecordInfo:
+    async def create_record(self, data: Union[AutoTestApiRecordCreate, Dict[str, Any]]) -> AutoTestRecordModel:
         """
         创建一条任务执行记录。
 
@@ -74,7 +74,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
             *,
             record_id: Optional[int] = None,
             celery_id: Optional[str] = None,
-    ) -> AutoTestApiRecordInfo:
+    ) -> AutoTestRecordModel:
         """
         更新一条任务执行记录（按主键或celery_id定位）。
 
@@ -123,7 +123,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
             self,
             celery_id: str,
             data: Union[AutoTestApiRecordUpdate, Dict[str, Any]],
-    ) -> Optional[AutoTestApiRecordInfo]:
+    ) -> Optional[AutoTestRecordModel]:
         """
         根据celery_id更新执行记录；仅写入模型已有字段，部分键允许置空。
 
@@ -139,7 +139,7 @@ class AutoTestApiTaskRecordCrud(ScaffoldCrud[AutoTestApiRecordInfo, AutoTestApiR
         except NotFoundException:
             return None
 
-    async def select_records(self, record_in: AutoTestApiRecordSelect) -> Tuple[int, List[AutoTestApiRecordInfo]]:
+    async def select_records(self, record_in: AutoTestApiRecordSelect) -> Tuple[int, List[AutoTestRecordModel]]:
         """
         根据条件分页查询任务执行记录。
 

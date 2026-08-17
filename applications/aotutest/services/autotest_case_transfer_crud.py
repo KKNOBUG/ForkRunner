@@ -6,9 +6,9 @@ from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from applications.aotutest.models.autotest_model import AutoTestApiCaseTransferInfo
+from applications.aotutest.models.autotest_case_transfer_model import AutoTestCaseTransferModel
 from applications.aotutest.schemas.autotest_case_transfer_schema import AutoTestApiCaseTransferCreate
-from applications.aotutest.services.autotest_case_crud import AutoTestApiCaseCrud, _duplicate_case_message
+from applications.aotutest.services.autotest_case_crud import AutoTestCaseCrud, _duplicate_case_message
 from applications.base.services.scaffold import ScaffoldCrud
 from configure import LOGGER
 from core.exceptions import (
@@ -20,17 +20,17 @@ from core.exceptions import (
 from services import get_current_username
 
 
-class AutoTestApiCaseTransferCrud(ScaffoldCrud[AutoTestApiCaseTransferInfo, AutoTestApiCaseTransferCreate, AutoTestApiCaseTransferCreate]):
+class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestApiCaseTransferCreate, AutoTestApiCaseTransferCreate]):
 
     def __init__(self):
-        super().__init__(model=AutoTestApiCaseTransferInfo)
+        super().__init__(model=AutoTestCaseTransferModel)
 
     async def get_by_id(
             self,
             transfer_id: int,
             on_error: bool = False,
             **kwargs,
-    ) -> Optional[AutoTestApiCaseTransferInfo]:
+    ) -> Optional[AutoTestCaseTransferModel]:
         """
         根据主键ID查询转让记录。
 
@@ -51,7 +51,7 @@ class AutoTestApiCaseTransferCrud(ScaffoldCrud[AutoTestApiCaseTransferInfo, Auto
             raise NotFoundException(message=error_message)
         return instance
 
-    async def transfer_case(self, transfer_in: AutoTestApiCaseTransferCreate) -> AutoTestApiCaseTransferInfo:
+    async def transfer_case(self, transfer_in: AutoTestApiCaseTransferCreate) -> AutoTestCaseTransferModel:
         """
         转让用例所属人：仅当前所属人可操作，写入转让记录并改owner_user，不改created_user。
 
@@ -71,7 +71,7 @@ class AutoTestApiCaseTransferCrud(ScaffoldCrud[AutoTestApiCaseTransferInfo, Auto
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        case_crud = AutoTestApiCaseCrud()
+        case_crud = AutoTestCaseCrud()
         case_instance = await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
         prev_owner_user = (case_instance.owner_user or "").strip().upper()
         if not prev_owner_user:
@@ -132,7 +132,7 @@ class AutoTestApiCaseTransferCrud(ScaffoldCrud[AutoTestApiCaseTransferInfo, Auto
             page: int,
             page_size: int,
             order: List[str],
-    ) -> Tuple[int, List[AutoTestApiCaseTransferInfo]]:
+    ) -> Tuple[int, List[AutoTestCaseTransferModel]]:
         """
         根据条件分页查询转让记录。
 
