@@ -68,6 +68,7 @@ class AutoTestAssertionOperation(StringEnum):
     LESS_THAN = "小于"
     LESS_OR_EQUAL = "小于等于"
     LENGTH_EQUAL = "长度等于"
+    ARRAY_LENGTH_EQUAL = "数组长度等于"
     CONTAINS = "包含"
     NOT_CONTAINS = "不包含"
     IN_SET = "属于集合"
