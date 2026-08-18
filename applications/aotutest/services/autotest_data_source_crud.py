@@ -373,8 +373,8 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
 
         source_ids = await self.model.filter(case_id=case_id, state=0).values_list("id", flat=True)
         deleted_count: int = await self.soft_delete_batch(ids=list(source_ids))
-        from backend.applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
-        from backend.enums import AutoTestStepType
+        from applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
+        from enums import AutoTestStepType
         step_crud = AutoTestStepCrud()
         step_vals: Dict[str, Any] = {
             "data_source_id": None,
@@ -484,7 +484,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        from backend.applications.aotutest.services.autotest_data_source_parser import normalize_dataset_record
+        from applications.aotutest.services.autotest_data_source_parser import normalize_dataset_record
 
         # 每个场景强制补齐 head/body/assert_head/assert_body 四键
         normalized_dataset = {

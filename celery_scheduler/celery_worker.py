@@ -31,7 +31,7 @@ from .celery_base import (
 _async_event_loop_pool = None
 # 扫描任务不写执行记录、不走终态更新
 _SCAN_TASK_NAME = (
-    "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
+    "celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
 )
 # setup_logging 写入 celery 专用日志文件时登记的 Loguru sink id，避免重复添加
 _celery_logfile_sink_id = None
@@ -776,10 +776,10 @@ celery = create_celery()
 
 # ========== 启动命令（在仓库根目录执行，保证 PYTHONPATH 可 import backend）==========
 # Worker：
-#   celery -A backend.celery_scheduler.celery_worker worker -Q default,autotest_queue -c 4 -l INFO
+#   celery -A celery_scheduler.celery_worker worker -Q default,autotest_queue -c 4 -l INFO
 # Beat：
-#   celery -A backend.celery_scheduler.celery_worker beat -l INFO
-# 日志默认写入：backend/output/logs/celery_logs/celery_worker.log | celery_beat.log
+#   celery -A celery_scheduler.celery_worker beat -l INFO
+# 日志默认写入：output/logs/celery_logs/celery_worker.log | celery_beat.log
 # 也可显式指定：--logfile=/path/to/xxx.log  或  export CELERY_LOGFILE=/path/to/xxx.log
 
 if __name__ == '__main__':
