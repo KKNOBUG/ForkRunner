@@ -32,6 +32,7 @@ from applications.aotutest.services.autotest_runtime.protocol_tcp import (
     parse_tcp_response,
     parse_tcp_timeouts,
     resolve_tcp_debug_request_extract_sources,
+    build_tcp_debug_request_info_body,
     select_tcp_debug_payload,
 )
 from applications.aotutest.services.autotest_tool_service import AutoTestToolService
@@ -727,8 +728,14 @@ class StepDebugService:
                 "method": "TCP",
                 "headers": {},
                 "params": {},
-                "body_type": request_args_type,
-                "body": payload,
+                "body_type": (
+                    request_args_type.value
+                    if hasattr(request_args_type, "value")
+                    else request_args_type
+                ),
+                "body": build_tcp_debug_request_info_body(
+                    request_args_type, request_text=request_text, request_body=request_body
+                ),
             },
         )
         LOGGER.info(f"TCP请求调试完成: 耗时: {duration}ms")
@@ -842,7 +849,7 @@ class StepDebugService:
         :param services: CRUD依赖聚合
         :return: 调试结果字典
         """
-        from backend.applications.aotutest.services.autotest_step_engine import RedisStepExecutor
+        from applications.aotutest.services.autotest_step_engine import RedisStepExecutor
 
         env_name = (debug_in.env_name or "").strip()
         step_name = debug_in.step_name
