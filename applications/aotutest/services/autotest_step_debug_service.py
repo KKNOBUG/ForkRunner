@@ -842,7 +842,7 @@ class StepDebugService:
         :param services: CRUD依赖聚合
         :return: 调试结果字典
         """
-        from applications.aotutest.services.autotest_step_engine import RedisStepExecutor
+        from backend.applications.aotutest.services.autotest_step_engine import RedisStepExecutor
 
         env_name = (debug_in.env_name or "").strip()
         step_name = debug_in.step_name
