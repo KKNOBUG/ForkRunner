@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 from xml.etree import ElementTree
 
+from applications.aotutest.services.autotest_runtime.datagram.json_replace import _as_wire_string
 from common.xpath_utils import XPathUtils
 
 
@@ -31,7 +32,7 @@ class XmlDatagram:
             if not xpath_expr:
                 continue
             try:
-                request_text = XPathUtils.update(request_text, xpath_expr, xpath_value)
+                request_text = XPathUtils.update(request_text, xpath_expr, _as_wire_string(xpath_value))
             except ElementTree.ParseError as e:
                 raise ValueError(f"【XML报文替换】请求报文不是有效的XML格式, 错误描述: {e}") from e
             except ValueError:
