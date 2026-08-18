@@ -315,7 +315,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
         )
         data = [
             {
-                "id": row["id"],
+                "env_id": row["id"],
                 "project_name": row["project_name"],
                 "project_mark": row["project_code"],
             }
