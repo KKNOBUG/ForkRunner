@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing_extensions import Self
 
-from common import FileUtils
+from common import FileUtils, ShellUtils
 
 _PROJECT_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 _PROJECT_CONF: str = os.path.join(_PROJECT_ROOT, ".env")
