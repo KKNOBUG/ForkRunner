@@ -46,7 +46,7 @@ class ProjectConfig(BaseSettings):
     # 调试配置
     SERVER_APP: str = "backend_main:app"
     # SERVER_HOST: str = ShellUtils.acquire_localhost()
-    SERVER_HOST: str = '192.168.83.72'
+    SERVER_HOST: str = "192.168.83.72"
     SERVER_SYSTEM: str = platform.system()
     SERVER_PORT: int = 8518
     SERVER_DEBUG: bool = SERVER_SYSTEM != "Linux"  # Windows | Linux | Darwin
@@ -223,10 +223,14 @@ class ProjectConfig(BaseSettings):
         return self.assemble_connection_urls()
 
     def assemble_connection_urls(self) -> Self:
-        db_user = quote_plus(self.DATABASE_USERNAME)
-        db_password = quote_plus(self.DATABASE_PASSWORD)
+        database_username: str = quote_plus(self.DATABASE_USERNAME)
+        database_password: str = quote_plus(self.DATABASE_PASSWORD)
+        database_host: str = self.DATABASE_HOST
+        if self.SERVER_DEBUG:
+            # 添加测试环境数据库连接地址
+            ...
         self.DATABASE_URL = (
-            f"mysql://{db_user}:{db_password}@{self.DATABASE_HOST}:"
+            f"mysql://{database_username}:{database_password}@{database_host}:"
             f"{self.DATABASE_PORT}/{self.DATABASE_NAME}"
             f"?charset=utf8mb4&time_zone=+08:00"
         )
@@ -235,7 +239,7 @@ class ProjectConfig(BaseSettings):
                 "engine": "tortoise.backends.mysql",
                 "db_url": self.DATABASE_URL,
                 "credentials": {
-                    "host": self.DATABASE_HOST,
+                    "host": database_host,
                     "port": self.DATABASE_PORT,
                     "user": self.DATABASE_USERNAME,
                     "password": self.DATABASE_PASSWORD,
