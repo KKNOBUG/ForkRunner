@@ -8,17 +8,17 @@ from common.xpath_utils import XPathUtils
 from configure import LOGGER
 
 
-def _as_wire_string(value: Any) -> str:
-    """XML 文本节点写出：bool 为 true/false，None 为空串。"""
-    if value is None:
-        return ""
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    return str(value)
-
-
 class XmlDatagram:
     """根据XPath映射更新XML请求报文。"""
+
+    @staticmethod
+    def _as_wire_string(value: Any) -> str:
+        """XML 文本节点写出：bool 为 true/false，None 为空串。"""
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
 
     @staticmethod
     def replace_xml_datagram(
@@ -44,7 +44,7 @@ class XmlDatagram:
             if XPathUtils.query(request_text, xpath_expr) is None:
                 missed_paths.append(xpath_expr)
             try:
-                request_text = XPathUtils.update(request_text, xpath_expr, _as_wire_string(xpath_value))
+                request_text = XPathUtils.update(request_text, xpath_expr, XmlDatagram._as_wire_string(xpath_value))
             except ElementTree.ParseError as e:
                 raise ValueError(f"【XML报文替换】请求报文不是有效的XML格式, 错误描述: {e}") from e
             except ValueError:
