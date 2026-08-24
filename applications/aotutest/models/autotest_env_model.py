@@ -18,7 +18,7 @@ class AutoTestEnvModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel,
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
 
     class Meta:
-        table = "krun_autotest_env"
+        table = "tbx_autotest_env"
         table_description = "自动化测试-环境枚举表"
         ordering = ["-updated_time"]
 

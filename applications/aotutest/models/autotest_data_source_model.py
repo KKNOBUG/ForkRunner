@@ -36,7 +36,7 @@ class AutoTestDataSourceModel(ScaffoldModel, MaintainMixin, TimestampMixin, Stat
     data_source_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="数据驱动文件标识代码")
 
     class Meta:
-        table = "krun_autotest_data_source"
+        table = "tbx_autotest_data_source"
         table_description = "自动化测试-数据驱动文件存储表"
         unique_together = (
             ("case_id", "step_code"),

@@ -33,7 +33,7 @@ class AutoTestReportModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     involve_envs = fields.JSONField(default=list, null=True, description="脚本执行时涉及应用环境列表")
 
     class Meta:
-        table = "krun_autotest_report"
+        table = "tbx_autotest_report"
         table_description = "自动化测试-报告信息表"
         indexes = (
             ("case_id", "case_code"),

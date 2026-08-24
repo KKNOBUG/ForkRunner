@@ -32,7 +32,7 @@ class AutoTestCaseModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     owner_user = UpperCharField(max_length=16, default=None, null=True, index=True, description="用例所属人员")
 
     class Meta:
-        table = "krun_autotest_case"
+        table = "tbx_autotest_case"
         table_description = "自动化测试-用例信息表"
         unique_together = (
             ("case_project", "case_name", "case_type", "owner_user"),

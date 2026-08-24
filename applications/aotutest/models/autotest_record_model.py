@@ -38,7 +38,7 @@ class AutoTestRecordModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     celery_duration = fields.CharField(max_length=64, null=True, description="耗时")
 
     class Meta:
-        table = "krun_autotest_record"
+        table = "tbx_autotest_record"
         table_description = "自动化测试-任务执行观测记录表"
         indexes = (
             ("celery_status",),

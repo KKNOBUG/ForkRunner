@@ -100,7 +100,7 @@ class AutoTestStepModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     datagram_field_compare = fields.JSONField(null=True, description="报文比对配置列表")
 
     class Meta:
-        table = "krun_autotest_step"
+        table = "tbx_autotest_step"
         table_description = "自动化测试-步骤明细表"
         unique_together = (
             ("case_id", "step_no", "step_code"),

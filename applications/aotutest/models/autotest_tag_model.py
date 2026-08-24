@@ -19,7 +19,7 @@ class AutoTestTagModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel,
     tag_desc = fields.CharField(max_length=2048, null=True, description="标签描述")
 
     class Meta:
-        table = "krun_autotest_tag"
+        table = "tbx_autotest_tag"
         table_description = "自动化测试-标签信息表"
         unique_together = (
             ("tag_project", "tag_mode", "tag_name"),

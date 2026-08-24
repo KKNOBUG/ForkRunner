@@ -46,7 +46,7 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     task_enabled = fields.BooleanField(default=False, index=True, description="是否启动调度(True/False)")
 
     class Meta:
-        table = "krun_autotest_task"
+        table = "tbx_autotest_task"
         table_description = "自动化测试-任务信息表"
         unique_together = (
             ("task_name", "task_project"),

@@ -29,7 +29,7 @@ class AutoTestEnvBindModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMo
     project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
 
     class Meta:
-        table = "krun_autotest_env_bind"
+        table = "tbx_autotest_env_bind"
         table_description = "自动化测试-环境绑定表"
         unique_together = (
             ("env_enum", "project_id", "env_type"),
@@ -74,7 +74,7 @@ class AutoTestEnvConfigModel(ScaffoldModel, MaintainMixin, TimestampMixin, State
     is_no_password = fields.BooleanField(default=None, null=True, description="是否免密")
 
     class Meta:
-        table = "krun_autotest_env_config"
+        table = "tbx_autotest_env_config"
         table_description = "自动化测试-环境配置表"
         unique_together = (
             ("env_bind", "config_name"),

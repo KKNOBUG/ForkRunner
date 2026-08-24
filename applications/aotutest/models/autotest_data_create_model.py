@@ -24,7 +24,7 @@ class AutoTestDataCreateModel(ScaffoldModel, MaintainMixin, TimestampMixin, Stat
     dataset = fields.JSONField(description="接口文件解析后的数据集")
 
     class Meta:
-        table = "krun_autotest_data_create"
+        table = "tbx_autotest_data_create"
         table_description = "自动化测试-接口文件生成记录表"
         unique_together = (
             ("case_id", "step_code", "create_code"),

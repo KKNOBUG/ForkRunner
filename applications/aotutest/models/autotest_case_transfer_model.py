@@ -13,7 +13,7 @@ class AutoTestCaseTransferModel(ScaffoldModel):
     transfer_desc = fields.CharField(max_length=2048, null=True, description="操作描述")
 
     class Meta:
-        table = "krun_autotest_case_transfer"
+        table = "tbx_autotest_case_transfer"
         table_description = "自动化测试-用例转让记录表"
         indexes = (
             ("case_id", "created_time"),

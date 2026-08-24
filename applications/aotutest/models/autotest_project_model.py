@@ -25,7 +25,7 @@ class AutoTestProjectModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMo
     project_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="应用标识代码")
 
     class Meta:
-        table = "krun_autotest_project"
+        table = "tbx_autotest_project"
         table_description = "自动化测试-应用信息表"
         unique_together = (
             "project_name", "project_mark"
