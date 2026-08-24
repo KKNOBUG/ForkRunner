@@ -22,7 +22,7 @@ from core.exceptions import NotFoundException, ParameterException
 from enums import AutoTestReqArgsType, AutoTestStepType, PUBLIC_CASE_TYPES
 from services import get_current_username
 
-DEFAULT_SCENE_NAMES = ("场景1名称", "场景2名称", "场景3名称")
+DEFAULT_SCENE_NAMES = ("场景1名称", )
 _REQUEST_STEP_TYPES = (AutoTestStepType.HTTP, AutoTestStepType.TCP)
 
 
