@@ -8,7 +8,7 @@ from tortoise.transactions import in_transaction
 
 from applications.aotutest.models.autotest_case_transfer_model import AutoTestCaseTransferModel
 from applications.aotutest.schemas.autotest_case_transfer_schema import AutoTestApiCaseTransferCreate
-from applications.aotutest.services.autotest_case_crud import AutoTestCaseCrud, _duplicate_case_message
+from applications.aotutest.services.autotest_case_crud import AutoTestCaseCrud
 from applications.base.services.scaffold import ScaffoldCrud
 from configure import LOGGER
 from core.exceptions import (
@@ -94,12 +94,17 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestA
             owner_user=next_owner_user,
         )
         if existing_case:
-            error_message: str = (
-                f"转让用例失败, "
-                f"{_duplicate_case_message(case_instance.case_project, case_instance.case_name, case_instance.case_type, next_owner_user)}"
+            message_error: str = "转让用例失败"
+            LOGGER.error(
+                f"{message_error}, "
+                f"查询条件: ["
+                f"case_project={case_instance.case_project}, "
+                f"case_name={case_instance.case_name}, "
+                f"case_type={case_instance.case_type}, "
+                f"owner_user={next_owner_user}"
+                f"]"
             )
-            LOGGER.error(error_message)
-            raise DataAlreadyExistsException(message=error_message)
+            raise DataAlreadyExistsException(message=message_error)
 
         try:
             async with in_transaction():
