@@ -23,7 +23,7 @@ from applications.aotutest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceUpdate,
     AutoTestDataSourceSaveOrUpdate,
     AutoTestDataSourceSelect,
-    AutoTestDataSourceUnbindCase,
+    AutoTestDataSourceUnbindCase, AutoTestDataSourceUpdateFields,
 )
 from applications.aotutest.services.autotest_case_excel_service import style_data_source_sheet
 from applications.aotutest.services.autotest_data_source_parser import (
@@ -44,7 +44,7 @@ from applications.aotutest.services.autotest_data_source_service import (
     resolve_case,
     resolve_case_and_step,
     resolve_enabled_data_source,
-    sync_step_data_source_meta,
+    sync_step_data_source_meta, sync_data_source_fields,
 )
 from configure import LOGGER, PROJECT_CONFIG
 from core.exceptions import (
@@ -448,6 +448,56 @@ async def _unbind_empty_data_source(
         )
         LOGGER.info(f"数据源[id={instance.id}, case_id={instance.case_id}, step_id={instance.step_id}]解绑成功")
     return True
+
+
+@autotest_data_source.post("/update_fields", summary="同步数据源字段", description="按步骤当前报文同步数据源矩阵字段")
+async def update_data_source_fields(
+        data_in: AutoTestDataSourceUpdateFields = Body(..., description="数据源定位"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    按步骤当前报文同步数据源矩阵字段。
+
+    以报文展平后的字段路径为准：新增字段补空值，删除字段剔除，保留字段场景值不动；
+    ASSERT分区原样保留，方向以矩阵实际结构为准。
+
+    :param data_in: 数据源定位入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        case, step = await resolve_case_and_step(
+            services,
+            case_id=data_in.case_id,
+            case_code=data_in.case_code,
+            step_id=data_in.step_id,
+            step_code=data_in.step_code,
+        )
+        ensure_request_step(step)
+        instance = await resolve_enabled_data_source(
+            services,
+            data_source_id=data_in.data_source_id,
+            data_source_code=data_in.data_source_code,
+            case_id=case.id,
+            step_code=step.step_code,
+            on_error=False,
+        )
+        if instance is None:
+            return BadReqResponse(message="当前步骤无数据源, 无法完成更新字段")
+        if not isinstance(instance.dataframe, list) or not instance.dataframe:
+            return BadReqResponse(message="数据源矩阵为空, 无法完成更新字段")
+        updates = await sync_data_source_fields(step, instance.dataframe, instance.axis)
+        async with in_transaction():
+            await services.data_source_curd.update(id=instance.id, obj_in=updates)
+        LOGGER.info(f"数据源[id={instance.id}]字段同步完成")
+        return SuccessResponse(message="字段同步成功", data={"data_source_id": instance.id}, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"同步数据源字段失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"同步失败，异常描述: {e}")
 
 
 @autotest_data_source.get("/build", summary="构建数据源矩阵", description="查询已有数据源矩阵或根据步骤报文构建垂直矩阵")
