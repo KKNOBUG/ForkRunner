@@ -486,11 +486,10 @@ class AutoTestStepTreeUpdateItem(AutoTestApiStepBase):
             return v
         quote_step_first = v[0]
         if isinstance(quote_step_first, dict):
-            step_id = quote_step_first.get("step_id")
             content = quote_step_first.get("content")
             step_type = quote_step_first.get("step_type")
             step_name = quote_step_first.get("step_name")
-            if content == step_type == step_name == "用户变量" and isinstance(step_id, str):
+            if content == step_type == step_name == "用户变量":
                 quote_step_first["step_id"] = None
                 quote_step_first["request_body"] = None
         return v
