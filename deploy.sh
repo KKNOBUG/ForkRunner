@@ -10,16 +10,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="${SCRIPT_DIR}"
 cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; }
 
-# 确保 Python 可导入项目模块
-export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}"
-
 # ==================== 环境检测与适配 ====================
-# CPU 核心数（8核 QEMU Virtual CPU）
 CPU_CORES=$(nproc 2>/dev/null || echo "4")
-# Gunicorn workers: 2 * CPU + 1 但不超过 4
 GUNICORN_WORKERS=$((CPU_CORES * 2 + 1))
-[ "$GUNICORN_WORKERS" -gt 4 ] && GUNICORN_WORKERS=4
-# Celery 默认并发数
+[ "$GUNICORN_WORKERS" -gt 8 ] && GUNICORN_WORKERS=8
 CELERY_DEFAULT_CONCURRENCY=$CPU_CORES
 
 # ==================== 路径配置 ====================
@@ -39,7 +33,7 @@ CELERY_WORKER_PID_FILE="${PROJECT_ROOT}/celery_worker.pid"
 CELERY_BEAT_PID_FILE="${PROJECT_ROOT}/celery_beat.pid"
 
 # 日志文件
-FASTAPI_LOG_FILE="${LOG_DIR}/fastapi.log"
+FASTAPI_LOG_FILE="${PROJECT_ROOT}/backend_main.log"
 CELERY_WORKER_LOG="${CELERY_LOG_DIR}/celery_worker.log"
 CELERY_BEAT_LOG="${CELERY_LOG_DIR}/celery_beat.log"
 
@@ -47,10 +41,12 @@ CELERY_BEAT_LOG="${CELERY_LOG_DIR}/celery_beat.log"
 GUNICORN_APP="backend_main:app"
 GUNICORN_CONFIG_FILE="${PROJECT_ROOT}/gunicorn.conf.py"
 CELERY_APP="celery_scheduler.celery_worker:celery"
-CELERY_WORKER_QUEUES="autotest_queue,default"
+CELERY_WORKER_POOL="solo"
 CELERY_BEAT_SCHEDULER="redbeat.schedulers:RedBeatScheduler"
+CELERY_WORKER_PREFETCH_MULTIPLIER=1
+CELERY_WORKER_MAX_TASKS_PER_CHILD=200
 
-# Git 配置（占位符，使用时替换）
+# Git 配置
 GIT_BRANCH="${GIT_BRANCH:-}"
 GIT_USERNAME="${GIT_USERNAME:-}"
 GIT_PASSWORD="${GIT_PASSWORD:-}"
@@ -73,11 +69,44 @@ check_command() {
 check_venv() {
     if [ ! -f "$PYTHON_BIN" ]; then
         print_error "虚拟环境不存在: $VENV_PATH"
-        print_info "请先创建虚拟环境: python3 -m venv .venv"
+        print_info "请创建虚拟环境..."
         return 1
     fi
     return 0
 }
+
+# 激活虚拟环境
+activate_venv() {
+    if [ -f "${VENV_PATH}/bin/activate" ]; then
+        source "${VENV_PATH}/bin/activate"
+        print_info "虚拟环境已激活: $VENV_PATH"
+    else
+        print_error "虚拟环境激活脚本不存在: ${VENV_PATH}/bin/activate"
+        return 1
+    fi
+}
+
+# 从 Python 配置获取 Celery 队列名
+get_celery_queues() {
+    local queues
+    queues=$("$PYTHON_BIN" -c "
+from configure.celery_config import CELERY_CONFIG
+# 从 CELERY_CONFIG 字典中提取队列名
+config = CELERY_CONFIG.CELERY_CONFIG
+queues = set()
+if 'task_default_queue' in config:
+    queues.add(config['task_default_queue'])
+if 'task_routes' in config:
+    for route in config['task_routes'].values():
+        if 'queue' in route:
+            queues.add(route['queue'])
+print(','.join(sorted(queues)))
+" 2>/dev/null || echo "default,autotest_queue")
+    echo "$queues"
+}
+
+# 动态获取 Celery 队列名（从 Python 配置）
+CELERY_WORKER_QUEUES=$(get_celery_queues)
 
 # 检查进程是否运行（通过 PID 文件）
 is_running() {
@@ -94,10 +123,37 @@ is_running() {
     return 1
 }
 
-# 通过进程名查找 PID（用于无 PID 文件的情况）
+# 通过进程名查找 PID
 find_pid_by_name() {
     local pattern=$1
     pgrep -f "$pattern" 2>/dev/null || true
+}
+
+# 精确匹配当前项目的进程（通过工作目录验证）
+pgrep_project() {
+    local pattern=$1
+    pgrep -f "$pattern" 2>/dev/null | while read -r pid; do
+        local cwd
+        cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || echo "")
+        if [ "$cwd" = "$PROJECT_ROOT" ]; then
+            echo "$pid"
+        fi
+    done
+}
+
+# 强制清理进程（精确匹配当前项目）
+force_kill() {
+    local pattern=$1
+    local name=$2
+    local pids
+    pids=$(pgrep_project "$pattern")
+    if [ -n "$pids" ]; then
+        print_warn "强制终止 ${name}: $pids"
+        echo "$pids" | xargs -r kill -9 2>/dev/null || true
+        sleep 1
+    else
+        print_info "${name} 无残留进程"
+    fi
 }
 
 # 停止进程（优雅 -> 强制）
@@ -147,19 +203,6 @@ stop_process() {
     fi
 }
 
-# 强制清理残留进程（通过进程名）
-force_cleanup() {
-    local pattern=$1
-    local name=$2
-    local pids
-    pids=$(find_pid_by_name "$pattern")
-    if [ -n "$pids" ]; then
-        print_warn "发现残留的 ${name} 进程: $pids"
-        echo "$pids" | xargs -r kill -9 2>/dev/null || true
-        sleep 1
-    fi
-}
-
 # ==================== FastAPI 服务控制 ====================
 fastapi_start() {
     print_step "启动 FastAPI 服务"
@@ -172,6 +215,7 @@ fastapi_start() {
     fi
 
     check_venv || return 1
+    activate_venv || return 1
     check_command "$GUNICORN_BIN" || { print_error "gunicorn 未安装"; return 1; }
 
     if [ ! -f "$GUNICORN_CONFIG_FILE" ]; then
@@ -182,20 +226,19 @@ fastapi_start() {
     print_info "Workers: $GUNICORN_WORKERS, 配置: $GUNICORN_CONFIG_FILE"
     print_info "日志: $FASTAPI_LOG_FILE"
 
-    # 使用 nohup + & 后台启动，避免阻塞终端
-    nohup "$GUNICORN_BIN" "$GUNICORN_APP" \
-        --config="$GUNICORN_CONFIG_FILE" \
-        --pid="$GUNICORN_PID_FILE" \
-        --workers="$GUNICORN_WORKERS" \
+    nohup "$GUNICORN_BIN" -c "$GUNICORN_CONFIG_FILE" "$GUNICORN_APP" \
         >> "$FASTAPI_LOG_FILE" 2>&1 &
+
+    # 记录 PID
+    local gunicorn_pid=$!
+    echo "$gunicorn_pid" > "$GUNICORN_PID_FILE"
+    print_info "Gunicorn 主进程 PID: $gunicorn_pid"
 
     # 等待启动
     local count=0
     while [ $count -lt 15 ]; do
         if is_running "$GUNICORN_PID_FILE"; then
-            local pid
-            pid=$(cat "$GUNICORN_PID_FILE")
-            print_info "FastAPI 启动成功 (PID: $pid)"
+            print_info "FastAPI 启动成功 (PID: $gunicorn_pid)"
             return 0
         fi
         sleep 1
@@ -208,9 +251,12 @@ fastapi_start() {
 
 fastapi_stop() {
     print_step "停止 FastAPI 服务"
+
+    # 先通过 PID 文件停止
     stop_process "$GUNICORN_PID_FILE" "FastAPI" 15
-    # 清理可能残留的 worker 进程
-    force_cleanup "gunicorn.*backend_main" "Gunicorn Worker"
+
+    # 强制清理残留
+    force_kill "backend_main:app" "Gunicorn"
 }
 
 fastapi_restart() {
@@ -228,14 +274,16 @@ fastapi_status() {
     echo "日志文件: $FASTAPI_LOG_FILE"
     echo ""
 
-    if is_running "$GUNICORN_PID_FILE"; then
-        local pid
-        pid=$(cat "$GUNICORN_PID_FILE")
-        print_info "[✓] FastAPI: 运行中 (PID: $pid)"
-        # 显示 worker 进程
-        local workers
-        workers=$(pgrep -P "$pid" 2>/dev/null | wc -l)
-        echo "    Worker 进程数: $workers"
+    # 检查进程（精确匹配当前项目）
+    local gunicorn_pids
+    gunicorn_pids=$(pgrep_project "gunicorn.*backend_main")
+
+    if [ -n "$gunicorn_pids" ]; then
+        print_info "[✓] FastAPI: 运行中"
+        echo "    进程列表:"
+        ps aux | grep -E "gunicorn.*backend_main" | grep -v grep | while read -r line; do
+            echo "      $line"
+        done
     else
         print_warn "[×] FastAPI: 未运行"
     fi
@@ -244,6 +292,7 @@ fastapi_status() {
     if [ -f "$FASTAPI_LOG_FILE" ]; then
         local size
         size=$(du -h "$FASTAPI_LOG_FILE" 2>/dev/null | cut -f1)
+        echo ""
         echo "    日志大小: $size"
     fi
 }
@@ -252,7 +301,7 @@ fastapi_pull() {
     print_step "拉取最新代码"
 
     check_command "git" || return 1
-    check_command "expect" || { print_error "expect 未安装，请先安装: yum install expect 或 apt-get install expect"; return 1; }
+    check_command "expect" || { print_error "expect 未安装，请先安装: yum install expect"; return 1; }
 
     if [ -z "$GIT_USERNAME" ] || [ -z "$GIT_PASSWORD" ]; then
         print_error "GIT_USERNAME 或 GIT_PASSWORD 未设置"
@@ -298,11 +347,45 @@ EOF
 }
 
 # ==================== Celery 服务控制 ====================
-celery_start() {
-    local concurrency=${1:-$CELERY_DEFAULT_CONCURRENCY}
-    print_step "启动 Celery 服务 (并发: $concurrency)"
-    celery_start_worker "$concurrency"
-    celery_start_beat
+celery_start_beat() {
+    print_info "启动 Celery Beat (调度器: $CELERY_BEAT_SCHEDULER)..."
+
+    if is_running "$CELERY_BEAT_PID_FILE"; then
+        local pid
+        pid=$(cat "$CELERY_BEAT_PID_FILE")
+        print_warn "Celery Beat 已在运行 (PID: $pid)"
+        return 0
+    fi
+
+    check_venv || return 1
+    activate_venv || return 1
+    check_command "$CELERY_BIN" || { print_error "celery 未安装"; return 1; }
+
+    export CELERY_LOGFILE="$CELERY_BEAT_LOG"
+    export CELERY_BEAT_LOGFILE="$CELERY_BEAT_LOG"
+
+    nohup "$CELERY_BIN" -A "$CELERY_APP" beat \
+        --loglevel="INFO" \
+        --scheduler="$CELERY_BEAT_SCHEDULER" \
+        --logfile="$CELERY_BEAT_LOG" \
+        --pidfile="$CELERY_BEAT_PID_FILE" \
+        >> "$CELERY_BEAT_LOG" 2>&1 &
+
+    local beat_pid=$!
+    echo "$beat_pid" > "$CELERY_BEAT_PID_FILE"
+
+    local count=0
+    while [ $count -lt 10 ]; do
+        if is_running "$CELERY_BEAT_PID_FILE"; then
+            print_info "Celery Beat 启动成功 (PID: $beat_pid)"
+            return 0
+        fi
+        sleep 1
+        count=$((count + 1))
+    done
+
+    print_error "Celery Beat 启动失败，查看日志: tail -n 50 $CELERY_BEAT_LOG"
+    return 1
 }
 
 celery_start_worker() {
@@ -317,28 +400,31 @@ celery_start_worker() {
     fi
 
     check_venv || return 1
+    activate_venv || return 1
     check_command "$CELERY_BIN" || { print_error "celery 未安装"; return 1; }
 
     export CELERY_LOGFILE="$CELERY_WORKER_LOG"
     export CELERY_WORKER_LOGFILE="$CELERY_WORKER_LOG"
 
-    # 使用 nohup + & 后台启动
+    # 后台启动
     nohup "$CELERY_BIN" -A "$CELERY_APP" worker \
-        --loglevel=INFO \
+        --loglevel="INFO" \
         --concurrency="$concurrency" \
+        --prefetch-multiplier="$CELERY_WORKER_PREFETCH_MULTIPLIER" \
+        --max-tasks-per-child="$CELERY_WORKER_MAX_TASKS_PER_CHILD" \
         --queues="$CELERY_WORKER_QUEUES" \
         --logfile="$CELERY_WORKER_LOG" \
         --pidfile="$CELERY_WORKER_PID_FILE" \
-        --pool=solo \
+        --pool="$CELERY_WORKER_POOL" \
         >> "$CELERY_WORKER_LOG" 2>&1 &
 
-    # 等待启动
+    local worker_pid=$!
+    echo "$worker_pid" > "$CELERY_WORKER_PID_FILE"
+
     local count=0
     while [ $count -lt 10 ]; do
         if is_running "$CELERY_WORKER_PID_FILE"; then
-            local pid
-            pid=$(cat "$CELERY_WORKER_PID_FILE")
-            print_info "Celery Worker 启动成功 (PID: $pid)"
+            print_info "Celery Worker 启动成功 (PID: $worker_pid)"
             return 0
         fi
         sleep 1
@@ -349,63 +435,27 @@ celery_start_worker() {
     return 1
 }
 
-celery_start_beat() {
-    print_info "启动 Celery Beat (调度器: $CELERY_BEAT_SCHEDULER)..."
+celery_start() {
+    local concurrency=${1:-$CELERY_DEFAULT_CONCURRENCY}
+    print_step "启动 Celery 服务 (并发: $concurrency)"
+    celery_start_worker "$concurrency"
+    celery_start_beat
+}
 
-    if is_running "$CELERY_BEAT_PID_FILE"; then
-        local pid
-        pid=$(cat "$CELERY_BEAT_PID_FILE")
-        print_warn "Celery Beat 已在运行 (PID: $pid)"
-        return 0
-    fi
+celery_stop_beat() {
+    stop_process "$CELERY_BEAT_PID_FILE" "Celery Beat" 10
+    force_kill "celery.*beat" "Celery Beat"
+}
 
-    check_venv || return 1
-    check_command "$CELERY_BIN" || { print_error "celery 未安装"; return 1; }
-
-    export CELERY_LOGFILE="$CELERY_BEAT_LOG"
-    export CELERY_BEAT_LOGFILE="$CELERY_BEAT_LOG"
-
-    # 使用 nohup + & 后台启动
-    nohup "$CELERY_BIN" -A "$CELERY_APP" beat \
-        --loglevel=INFO \
-        --scheduler="$CELERY_BEAT_SCHEDULER" \
-        --logfile="$CELERY_BEAT_LOG" \
-        --pidfile="$CELERY_BEAT_PID_FILE" \
-        >> "$CELERY_BEAT_LOG" 2>&1 &
-
-    # 等待启动
-    local count=0
-    while [ $count -lt 10 ]; do
-        if is_running "$CELERY_BEAT_PID_FILE"; then
-            local pid
-            pid=$(cat "$CELERY_BEAT_PID_FILE")
-            print_info "Celery Beat 启动成功 (PID: $pid)"
-            return 0
-        fi
-        sleep 1
-        count=$((count + 1))
-    done
-
-    print_error "Celery Beat 启动失败，查看日志: tail -n 50 $CELERY_BEAT_LOG"
-    return 1
+celery_stop_worker() {
+    stop_process "$CELERY_WORKER_PID_FILE" "Celery Worker" 15
+    force_kill "celery.*worker" "Celery Worker"
 }
 
 celery_stop() {
     print_step "停止 Celery 服务"
     celery_stop_beat
     celery_stop_worker
-}
-
-celery_stop_worker() {
-    stop_process "$CELERY_WORKER_PID_FILE" "Celery Worker" 15
-    # 清理可能残留的 worker 进程
-    force_cleanup "celery.*worker" "Celery Worker"
-}
-
-celery_stop_beat() {
-    stop_process "$CELERY_BEAT_PID_FILE" "Celery Beat" 10
-    # 清理可能残留的 beat 进程
-    force_cleanup "celery.*beat" "Celery Beat"
 }
 
 celery_restart() {
@@ -422,20 +472,28 @@ celery_status() {
     echo "日志目录: $CELERY_LOG_DIR"
     echo ""
 
-    # Worker 状态
-    if is_running "$CELERY_WORKER_PID_FILE"; then
-        local pid
-        pid=$(cat "$CELERY_WORKER_PID_FILE")
-        print_info "[✓] Celery Worker: 运行中 (PID: $pid)"
+    # 检查进程（精确匹配当前项目）
+    local worker_pids
+    worker_pids=$(pgrep_project "celery.*worker")
+    local beat_pids
+    beat_pids=$(pgrep_project "celery.*beat")
+
+    if [ -n "$worker_pids" ]; then
+        print_info "[✓] Celery Worker: 运行中"
+        ps aux | grep -E "celery.*worker" | grep -v grep | while read -r line; do
+            echo "      $line"
+        done
     else
         print_warn "[×] Celery Worker: 未运行"
     fi
 
-    # Beat 状态
-    if is_running "$CELERY_BEAT_PID_FILE"; then
-        local pid
-        pid=$(cat "$CELERY_BEAT_PID_FILE")
-        print_info "[✓] Celery Beat:  运行中 (PID: $pid)"
+    echo ""
+
+    if [ -n "$beat_pids" ]; then
+        print_info "[✓] Celery Beat:  运行中"
+        ps aux | grep -E "celery.*beat" | grep -v grep | while read -r line; do
+            echo "      $line"
+        done
     else
         print_warn "[×] Celery Beat:  未运行"
     fi
@@ -514,7 +572,7 @@ Celery 服务:
   full_deploy                完整部署 (停止 -> 拉取 -> 启动)
 
 环境变量:
-  GIT_BRANCH                 Git 分支
+  GIT_BRANCH                 Git 分支 (默认: master)
   GIT_USERNAME               Git 用户名
   GIT_PASSWORD               Git 密码
 
@@ -537,15 +595,12 @@ EOF
 # ==================== 主入口 ====================
 main() {
     case "${1:-}" in
-        # FastAPI
         fastapi_start)    fastapi_start ;;
         fastapi_stop)     fastapi_stop ;;
-        fastapi_restart)  fastapi_restart
- ;;
+        fastapi_restart)  fastapi_restart ;;
         fastapi_status)   fastapi_status ;;
         fastapi_pull)     fastapi_pull ;;
 
-        # Celery
         celery_start)        celery_start "${2:-}" ;;
         celery_start_worker) celery_start_worker "${2:-}" ;;
         celery_start_beat)   celery_start_beat ;;
@@ -555,10 +610,8 @@ main() {
         celery_restart)      celery_restart "${2:-}" ;;
         celery_status)       celery_status ;;
 
-        # 全流程
         full_deploy)      full_deploy ;;
 
-        # 帮助
         help|--help|-h|"") show_help ;;
 
         *)
