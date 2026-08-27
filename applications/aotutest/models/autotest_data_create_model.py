@@ -13,7 +13,6 @@ from applications.base.services.scaffold import (
 
 class AutoTestDataCreateModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     case_id = fields.BigIntField(ge=1, index=True, description="用例ID")
-    case_code = fields.CharField(max_length=64, description="用例标识代码")
     create_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="接口文件标识代码")
     create_status = fields.SmallIntField(default=0, index=True, description="创建状态(0提交, 1生成中, 2失败, 3成功)")
     step_code = fields.CharField(max_length=64, description="步骤标识代码")

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, Union, Dict
 from xml.etree import ElementTree
 
 
@@ -381,6 +381,90 @@ class XPathUtils:
         if len(element) > 0:
             return ElementTree.tostring(element, encoding="unicode")
         return element.text if element.text else ElementTree.tostring(element, encoding="unicode")
+
+    @classmethod
+    def generate_xpath_map(cls, xml_data: Union[str, ElementTree.Element]) -> Dict[str, str]:
+        """解析 XML 报文，生成 {标签名: XPath路径} 映射。
+
+        递归遍历所有叶子节点（无子元素的节点），同名标签出现在不同路径时
+        key 使用路径限定名避免冲突，同级重复标签使用位置谓词。
+        有命名空间时 key 去除前缀（用户友好），XPath 保留（匹配准确）。
+        """
+        root = cls._parse(xml_data)
+
+        def _strip_ns(tag: str) -> str:
+            idx = tag.find("}")
+            return tag[idx + 1:] if idx != -1 and tag.startswith("{") else tag
+
+        def _walk(elem: ElementTree.Element, path: str, tag_path: str,
+                  results: list, sibling_counts: dict):
+            local = _strip_ns(elem.tag)
+            current_path = f"{path}/{local}" if path else f"./{local}"
+            current_tag_path = f"{tag_path}/{local}" if tag_path else local
+
+            # 同级同名标签计数，用于位置谓词
+            count_key = (path, local)
+            sibling_counts[count_key] = sibling_counts.get(count_key, 0) + 1
+            position = sibling_counts[count_key]
+
+            parent_children = list(elem)
+            if not parent_children:
+                # 叶子节点
+                results.append((local, current_path, current_tag_path, position))
+            else:
+                # 非叶子节点：递归子元素
+                child_counts: dict = {}
+                for child in parent_children:
+                    _walk(child, current_path, current_tag_path, results, child_counts)
+
+        raw: list = []
+        root_counts: dict = {}
+        for child in list(root):
+            _walk(child, "", "", raw, root_counts)
+
+        # 处理同名冲突：如果同一 tag_path 有多个不同 XPath，key 改用 tag_path
+        tag_path_groups: Dict[str, list] = {}
+        for local, xp, tp, pos in raw:
+            tag_path_groups.setdefault(tp, []).append((local, xp, pos))
+
+        # 检查哪些 local 名有冲突（同一个 local 对应多个不同 tag_path）
+        local_to_tag_paths: Dict[str, set] = {}
+        for tp, items in tag_path_groups.items():
+            for local, xp, pos in items:
+                local_to_tag_paths.setdefault(local, set()).add(tp)
+
+        conflicted_locals = {l for l, tps in local_to_tag_paths.items() if len(tps) > 1}
+
+        result: Dict[str, str] = {}
+        for tp, items in tag_path_groups.items():
+            for local, xp, pos in items:
+                # 同级重复标签需位置谓词
+                needs_predicate = len(items) > 1
+                final_xp = f"{xp}[{pos}]" if needs_predicate else xp
+
+                # 决定 key：冲突时用 tag_path，否则用 local
+                key = tp if local in conflicted_locals else local
+                # 同级重复标签的 key 也加位置后缀
+                if needs_predicate:
+                    key = f"{key}[{pos}]"
+
+                result[key] = final_xp
+
+        return result
+
+    @staticmethod
+    def resolve_field_to_xpath(field_name: str, xpath_map: Dict[str, str]) -> str:
+        """将 Excel 中的字段名解析为 XPath 表达式。
+
+        - field_name 以 './' 开头 → 直接返回（用户显式写了 XPath）
+        - xpath_map 中找到 → 返回映射的 XPath
+        - 都不匹配 → 返回 './{field_name}' 兜底
+        """
+        if field_name.startswith("./"):
+            return field_name
+        if field_name in xpath_map:
+            return xpath_map[field_name]
+        return f"./{field_name}"
 
 
 if __name__ == '__main__':
