@@ -2,6 +2,7 @@
 .env
 .idea
 .vscode
+.DS_Store
 .pytest_cache
 *.pyc
 *.log
