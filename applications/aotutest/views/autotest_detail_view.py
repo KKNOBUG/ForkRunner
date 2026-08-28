@@ -220,11 +220,19 @@ async def search_step_details(
         if detail_in.updated_user:
             q &= Q(updated_user=detail_in.updated_user)
         q &= Q(state=detail_in.state)
+        # 确保按执行顺序排序：step_st_time + id
+        # 确保 step_st_time 和 id 在最前面
+        order = detail_in.order.copy()
+        if "step_st_time" in order:
+            order.remove("step_st_time")
+        if "id" in order:
+            order.remove("id")
+        order = ["step_st_time", "id"] + order
         total, instances = await services.detail_curd.select_details(
             search=q,
             page=detail_in.page,
             page_size=detail_in.page_size,
-            order=detail_in.order
+            order=order
         )
         detail_serializes: List[Dict[str, Any]] = []
         for instance in instances:
