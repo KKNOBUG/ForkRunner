@@ -4,8 +4,8 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
 
-from applications.aotutest.dependencies import get_autotest_api_services
-from applications.aotutest.services.autotest_case_excel_service import (
+from applications.autotest.dependencies import get_autotest_api_services
+from applications.autotest.services.autotest_case_excel_service import (
     prepare_export_cases,
     build_export_workbook,
     build_export_file_name,

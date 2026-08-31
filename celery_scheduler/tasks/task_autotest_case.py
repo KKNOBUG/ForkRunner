@@ -5,8 +5,8 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from applications.aotutest.models.autotest_task_model import AutoTestTaskModel
-from applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
+from applications.autotest.models.autotest_task_model import AutoTestTaskModel
+from applications.autotest.services.autotest_step_crud import AutoTestStepCrud
 from celery_scheduler.celery_base import (
     check_task_expired,
     get_scheduled_tasks,

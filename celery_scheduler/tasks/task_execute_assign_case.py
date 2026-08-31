@@ -5,8 +5,8 @@ import datetime
 import uuid
 from typing import Any, Dict, List, Optional
 
-from applications.aotutest.schemas.autotest_step_schema import StepVariablesBase
-from applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
+from applications.autotest.schemas.autotest_step_schema import StepVariablesBase
+from applications.autotest.services.autotest_step_crud import AutoTestStepCrud
 from celery_scheduler.celery_base import run_async
 from celery_scheduler.celery_worker import celery
 from configure import LOGGER

@@ -182,8 +182,8 @@ class DBConnPoolFromConfig:
 
         try:
             # 必须与Tortoise初始化时注册的模块路径一致，否则模型无default_connection
-            from applications.aotutest.models.autotest_env_config_model import AutoTestEnvBindModel
-            from applications.aotutest.models.autotest_env_model import AutoTestEnvModel
+            from applications.autotest.models.autotest_env_config_model import AutoTestEnvBindModel
+            from applications.autotest.models.autotest_env_model import AutoTestEnvModel
             from enums import AutoTestConfigNodeType
         except ImportError as e:
             error_message = f"无法导入自动化测试环境模型或枚举: {e}"
@@ -664,6 +664,6 @@ def get_app_database_pool() -> "DBConnPoolFromConfig":
 
     :return: DBConnPoolFromConfig单例
     """
-    from applications.aotutest.models.autotest_env_config_model import AutoTestEnvConfigModel
+    from applications.autotest.models.autotest_env_config_model import AutoTestEnvConfigModel
 
     return DBConnPoolFromConfig(config_model=AutoTestEnvConfigModel)

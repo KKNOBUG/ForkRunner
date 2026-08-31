@@ -215,7 +215,7 @@ def register_routers(app: FastAPI) -> None:
     from applications.department.views.department_view import dept
     from applications.user.views.user_view import user_public, user_secure
     from applications.toolbox.views import toolbox
-    from applications.aotutest.views import autotest, autotest_data_create
+    from applications.autotest.views import autotest, autotest_data_create
 
     # 挂在路由蓝图
     # tags 采用「一级目录:二级模块」，与侧边栏菜单对齐，便于角色权限按模块制定规则

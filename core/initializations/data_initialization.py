@@ -3,18 +3,18 @@ from typing import List
 
 from fastapi import FastAPI
 
-from applications.aotutest.models.autotest_tag_model import AutoTestTagModel
-from applications.aotutest.schemas.autotest_env_config_schema import (
+from applications.autotest.models.autotest_tag_model import AutoTestTagModel
+from applications.autotest.schemas.autotest_env_config_schema import (
     APPEnvConfigCreate,
     DBEnvConfigCreate,
     FILEEnvConfigCreate,
 )
-from applications.aotutest.schemas.autotest_project_schema import AutoTestApiProjectCreate
-from applications.aotutest.schemas.autotest_tag_schema import AutoTestApiTagCreate
-from applications.aotutest.services.autotest_env_config_crud import AutoTestEnvConfigCrud
-from applications.aotutest.services.autotest_env_crud import AutoTestEnvCrud
-from applications.aotutest.services.autotest_project_crud import AutoTestProjectCrud
-from applications.aotutest.services.autotest_tag_crud import AutoTestTagCrud
+from applications.autotest.schemas.autotest_project_schema import AutoTestApiProjectCreate
+from applications.autotest.schemas.autotest_tag_schema import AutoTestApiTagCreate
+from applications.autotest.services.autotest_env_config_crud import AutoTestEnvConfigCrud
+from applications.autotest.services.autotest_env_crud import AutoTestEnvCrud
+from applications.autotest.services.autotest_project_crud import AutoTestProjectCrud
+from applications.autotest.services.autotest_tag_crud import AutoTestTagCrud
 from applications.base.models.menu_model import Menu
 from applications.base.models.role_model import Role
 from applications.base.schemas.menu_schema import MenuCreate
