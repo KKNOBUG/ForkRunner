@@ -1,8 +1,26 @@
-# 技术栈：
+# ForkRunner 项目说明文档
+
+## 目录
+
+1. [技术栈确认](#技术栈确认)
+2. [项目结构确认](#项目结构确认)
+3. [核心架构与实现原理](#核心架构与实现原理)
+4. [任务中心架构实现原理](#任务中心架构实现原理)
+5. [调度机制](#调度机制)
+6. [任务调度模式](#任务调度模式)
+7. [配置文件说明](#配置文件说明)
+8. [安装依赖](#安装依赖)
+9. [手动部署项目](#手动部署项目)
+10. [自动部署项目](#自动部署项目)
+11. [启动Celery Worker服务](#启动celery-worker服务)
+12. [启动Celery Beat服务](#启动celery-beat服务)
+13. [API 接口 summary 编写规范](#api-接口-summary-编写规范)
+
+## 技术栈确认
 
 | 技术                 | 版本       | 作用                                                       |   
 |---------------------|------------|-----------------------------------------------------------|
-| Python              | 3.8.7      | 主要编程语言(Windos 7 最高支持Python 3.8.10)                  |  
+| Python              | 3.8.7      | 主要编程语言(Windows 7 最高支持Python 3.8.10)                  |  
 | fastapi             | 0.115.4    | 基于Starlette+Pydantic且支持OpenAPI文档的高性能异步Web开发框架   |
 | gunicorn            | 23.0.0     | WSGI进程管理器(用来管理Uvicorn工作进程，实现并发+协程组合)         |
 | uvicorn             | 0.32.0     | ASGI异步处理器(专门运行FastAPI&Starlette应用)                  |
@@ -16,13 +34,10 @@
 | flower              | 2.0.1      | 监控Celery异步任务执行                                        |
 | loguru              | 0.7.2      | 简化的日志收集器(替代内置的logging模块)                          |
 
-
---------------------
-
-# 项目结构
+## 项目结构确认
 
 ```
-┌─fastapi_toolbox
+┌─ForkRunner
 │  ├─applications               - 项目下所有子应用存储目录
 │  │  ├─子应用 1                 - 内置目录结构请参考base应用
 │  │  ├─子应用 2                 - ...
@@ -62,36 +77,308 @@
 │  ├─service                    - 总项目中的公共业务实现、场景实现、业务底座等
 │  ├─static                     - OpenAPI文档
 │  ├─celery_start.sh            - Celery Linux启动脚本
-│  ├─deploy.sh                  - fastapi_toolbox Linux部署脚本
-│  ├─fastapi_toolbox.py         - 项目的启动文件
-│  ├─gunicorn.configuration.py  - Gunicorn进程管理器的配置文件
+│  ├─deploy.sh                  - ForkRunner Linux部署脚本
+│  ├─backend_main.py            - 项目的启动文件
+│  ├─gunicorn.conf.py           - Gunicorn进程管理器的配置文件
 │  ├─README.md                  - 项目的说明文档
 └─ └─requirements.txt           - 项目的依赖清单
 ```
 
-# 安装依赖
+## 核心架构与实现原理
+
+### 1. 整体架构
+
+ForkRunner 采用分层架构设计，主要包括以下几个层次：
+
+1. **表现层（Presentation Layer）**：负责处理 HTTP 请求和响应，包括路由、视图、序列化等
+2. **业务逻辑层（Business Logic Layer）**：负责处理业务逻辑，包括服务、业务规则等
+3. **数据访问层（Data Access Layer）**：负责数据访问，包括模型、数据库操作等
+4. **基础设施层（Infrastructure Layer）**：负责基础设施，包括配置、日志、缓存等
+
+### 2. 核心组件
+
+#### 2.1 FastAPI 框架
+- **作用**：提供高性能的异步 Web 开发框架
+- **特点**：基于 Starlette 和 Pydantic，支持 OpenAPI 文档自动生成
+- **优势**：高性能、易用、类型安全
+
+#### 2.2 Tortoise ORM
+- **作用**：提供异步 ORM 框架
+- **特点**：纯异步实现，性能较高
+- **优势**：支持复杂的查询和事务
+
+#### 2.3 Celery
+- **作用**：提供分布式任务队列框架
+- **特点**：支持异步、定时、重试任务执行
+- **优势**：高可用、可扩展、易监控
+
+#### 2.4 Redis
+- **作用**：提供缓存数据库
+- **特点**：高性能、支持多种数据结构
+- **优势**：快速、可靠、易用
+
+### 3. 实现原理
+
+#### 3.1 请求处理流程
+1. **接收请求**：FastAPI 接收 HTTP 请求
+2. **路由匹配**：根据 URL 和 HTTP 方法匹配路由
+3. **中间件处理**：经过中间件处理（如认证、日志等）
+4. **视图处理**：调用视图函数处理请求
+5. **业务逻辑处理**：调用服务层处理业务逻辑
+6. **数据访问**：调用数据访问层访问数据库
+7. **响应返回**：返回 HTTP 响应
+
+#### 3.2 任务执行流程
+1. **任务提交**：将任务提交到 Celery 队列
+2. **任务调度**：Celery Beat 根据调度策略调度任务
+3. **任务执行**：Celery Worker 执行任务
+4. **结果存储**：将任务执行结果存储到数据库
+5. **状态更新**：更新任务状态
+
+## 任务中心架构实现原理
+
+### 1. 任务中心架构
+
+任务中心采用分布式架构设计，主要包括以下几个组件：
+
+1. **任务调度器（Celery Beat）**：负责定时任务调度
+2. **任务执行器（Celery Worker）**：负责执行任务
+3. **消息队列（Redis）**：负责任务消息传递
+4. **结果存储（数据库）**：负责存储任务执行结果
+
+### 2. 任务中心实现原理
+
+#### 2.1 任务调度
+1. **任务注册**：将任务注册到 Celery Beat
+2. **调度策略**：根据调度策略（如定时、间隔等）调度任务
+3. **任务分发**：将任务分发到 Celery Worker
+
+#### 2.2 任务执行
+1. **任务接收**：Celery Worker 接收任务
+2. **任务执行**：执行任务逻辑
+3. **结果存储**：将任务执行结果存储到数据库
+4. **状态更新**：更新任务状态
+
+#### 2.3 任务监控
+1. **任务状态监控**：监控任务执行状态
+2. **任务结果监控**：监控任务执行结果
+3. **任务性能监控**：监控任务执行性能
+
+## 调度机制
+
+### 1. 调度策略
+
+#### 1.1 定时调度
+- **作用**：按照固定时间执行任务
+- **实现**：使用 Celery Beat 的 `crontab` 调度器
+- **示例**：每天凌晨 2 点执行数据备份任务
+
+#### 1.2 间隔调度
+- **作用**：按照固定间隔执行任务
+- **实现**：使用 Celery Beat 的 `interval` 调度器
+- **示例**：每隔 5 分钟执行一次数据同步任务
+
+#### 1.3 事件调度
+- **作用**：根据事件触发任务执行
+- **实现**：使用 Celery 的 `task` 装饰器
+- **示例**：用户注册成功后发送欢迎邮件
+
+### 2. 调度实现
+
+#### 2.1 Celery Beat 配置
+```python
+# celery_base.py
+from celery import Celery
+from celery.schedules import crontab
+
+app = Celery('ForkRunner')
+app.config_from_object('configure.celery_config')
+
+# 定时任务配置
+app.conf.beat_schedule = {
+    'backup-database': {
+        'task': 'tasks.backup_database',
+        'schedule': crontab(hour=2, minute=0),  # 每天凌晨 2 点执行
+    },
+    'sync-data': {
+        'task': 'tasks.sync_data',
+        'schedule': 300.0,  # 每隔 5 分钟执行一次
+    },
+}
+```
+
+#### 2.2 Celery Worker 配置
+```python
+# celery_worker.py
+from celery import Celery
+
+app = Celery('ForkRunner')
+app.config_from_object('configure.celery_config')
+
+# 任务定义
+@app.task
+def backup_database():
+    """数据备份任务"""
+    # 任务逻辑
+    pass
+
+@app.task
+def sync_data():
+    """数据同步任务"""
+    # 任务逻辑
+    pass
+```
+
+## 任务调度模式
+
+### 1. 单机模式
+
+#### 1.1 特点
+- **简单**：部署简单，易于维护
+- **性能**：性能有限，适合小规模应用
+- **可用性**：单点故障，可用性较低
+
+#### 1.2 适用场景
+- 小规模应用
+- 开发和测试环境
+- 对可用性要求不高的场景
+
+### 2. 分布式模式
+
+#### 2.1 特点
+- **复杂**：部署复杂，需要维护多个节点
+- **性能**：性能高，适合大规模应用
+- **可用性**：高可用，无单点故障
+
+#### 2.2 适用场景
+- 大规模应用
+- 生产环境
+- 对可用性要求高的场景
+
+### 3. 混合模式
+
+#### 3.1 特点
+- **灵活**：根据需求选择单机或分布式模式
+- **性能**：性能可调，适合不同规模应用
+- **可用性**：可用性可调，适合不同可用性要求
+
+#### 3.2 适用场景
+- 不同规模应用
+- 不同可用性要求
+- 需要灵活部署的场景
+
+## 配置文件说明
+
+### 1. 配置文件结构
+
+```
+configure/
+├── __init__.py
+├── celery_config.py          # Celery 配置
+├── database_config.py        # 数据库配置
+├── global_config.py          # 全局配置
+├── logging_config.py         # 日志配置
+├── project_config.py         # 项目配置
+└── router_registry.py        # 路由注册配置
+```
+
+### 2. 配置文件说明
+
+#### 2.1 `celery_config.py`
+- **作用**：配置 Celery 相关参数
+- **内容**：包括 Broker、Backend、任务序列化、任务路由等
+- **示例**：
+```python
+# Celery 配置
+broker_url = 'redis://localhost:6379/0'
+result_backend = 'redis://localhost:6379/0'
+task_serializer = 'json'
+result_serializer = 'json'
+accept_content = ['json']
+timezone = 'Asia/Shanghai'
+enable_utc = True
+```
+
+#### 2.2 `database_config.py`
+- **作用**：配置数据库相关参数
+- **内容**：包括数据库连接、连接池、事务等
+- **示例**：
+```python
+# 数据库配置
+DATABASE_URL = 'mysql://user:password@localhost:3306/dbname'
+DATABASE_POOL_SIZE = 10
+DATABASE_MAX_OVERFLOW = 20
+DATABASE_POOL_TIMEOUT = 30
+```
+
+#### 2.3 `global_config.py`
+- **作用**：配置全局参数
+- **内容**：包括日志级别、缓存配置、安全配置等
+- **示例**：
+```python
+# 全局配置
+LOG_LEVEL = 'INFO'
+CACHE_EXPIRE = 3600
+SECRET_KEY = 'your-secret-key'
+```
+
+#### 2.4 `logging_config.py`
+- **作用**：配置日志相关参数
+- **内容**：包括日志格式、日志级别、日志输出等
+- **示例**：
+```python
+# 日志配置
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+LOG_LEVEL = 'INFO'
+LOG_FILE = 'logs/app.log'
+```
+
+#### 2.5 `project_config.py`
+- **作用**：配置项目相关参数
+- **内容**：包括项目名称、版本、描述等
+- **示例**：
+```python
+# 项目配置
+PROJECT_NAME = 'ForkRunner'
+PROJECT_VERSION = '1.0.0'
+PROJECT_DESCRIPTION = 'ForkRunner 项目'
+```
+
+#### 2.6 `router_registry.py`
+- **作用**：配置路由注册相关参数
+- **内容**：包括路由前缀、路由标签、路由权限等
+- **示例**：
+```python
+# 路由注册配置
+ROUTER_PREFIX = '/api/v1'
+ROUTER_TAGS = ['api', 'v1']
+ROUTER_PERMISSIONS = ['admin', 'user']
+```
+
+## 安装依赖
+
 ```shell script
-# 将项目中output\docx\fastapi_toolbox_modules.zip依赖源下载并解压
+# 将项目中output\docx\ForkRunner_modules.zip依赖源下载并解压
 # 全部安装
 pip install --no-index --find-links=本地依赖源路径 -r requirements.txt
 
 # 部分安装
 pip install --no-index --find-links=本地依赖源路径 [依赖名称(可指定版本号)]
-
 ```
 
-# 手动部署项目
+## 手动部署项目
+
 ```shell script
 # 服务器：10.208.24.12
 # 切换到项目根目录：
-cd /zdhgj/python_projects/fastapi-toolbox/
+cd /zdhgj/python_projects/ForkRunner/
 
 # 查询进程：
 ps aux | grep gunicorn
 ps aux | grep python
 
 # 终止进程：
-pkill -f -9 "fastapi_toolbox:app"
+pkill -f -9 "backend_main:app"
 
 # 拉取代码：
 git pull origin fastapi-dev-master
@@ -99,10 +386,11 @@ git pull origin fastapi-dev-master
 > password
 
 # 启动进程
-nohup gunicorn -c gunicorn.configuration.py fastapi_toolbox:app > /zdhgj/python_projects/fastapi-toolbox/fastapi-toolbox.log 2>&1 &
+nohup gunicorn -c gunicorn.conf.py backend_main:app > /zdhgj/python_projects/ForkRunner/ForkRunner.log 2>&1 &
 ```
 
-# 自动部署项目
+## 自动部署项目
+
 ```shell script
 # 查看脚本权限：
 ls -al
@@ -178,33 +466,31 @@ chmod -R 777 deploy.sh
 └─────────────────┘
 ```
 
+## 启动Celery Worker服务
 
-
-# 启动Celery Worker服务
 ```shell script
 # celery_scheduler是专用于Celery的Worker实现
 
 # Celery Worker Windows环境启动（Windows没有POSIX信号和Forx事件，因此只能单线程，网上说的可以借助gevent或eventlet实现协程池，但没效果）
 celery -A celery_scheduler.celery_worker worker --pool=solo -l INFO
 
-# Celery Worker Linux环境启动
-celery -A celery_scheduler.celery_worker worker --pool=solo -c 10 -l INFO
-
+# Celery Worker Linux环境启动（需要添加端口前缀）
+celery -A celery_scheduler.celery_worker worker --pool=solo -c 10 -l INFO --hostname=worker1@%h
 ```
 
-# 启动Celery Beat服务
+## 启动Celery Beat服务
+
 ```shell script
 # Celery Beat启动节拍器，定时任务需要
 celery -A celery_scheduler.celery_worker beat --loglevel=info --scheduler=redbeat.schedulers:RedBeatScheduler
-
 ```
 
-# API 接口 summary 编写规范
+## API 接口 summary 编写规范
 
 新增或修改 `applications/**/views/**/*.py` 中的路由时，**必须**为装饰器填写规范的 `summary`。  
 权限初始化与「刷新路由」自动补绑依赖 `summary` 前缀动词识别行为类型，写法不规范会导致角色权限漏绑或错绑。
 
-## 强制前缀（按行为选择其一）
+### 强制前缀（按行为选择其一）
 
 | 行为 | summary 必须以…开头 | 说明 | 标准用户 | 宾客用户 |
 |------|---------------------|------|:--------:|:--------:|
@@ -216,7 +502,7 @@ celery -A celery_scheduler.celery_worker beat --loglevel=info --scheduler=redbea
 | 导入 | `导入` / `上传` | 导入文件或上传数据 | ✓ | ✗ |
 | 运维 | `刷新` | 如刷新路由，仅管理员 | ✗ | ✗ |
 
-## 允许的特例（个人白名单 / 公开接口）
+### 允许的特例（个人白名单 / 公开接口）
 
 | summary | 用途 |
 |---------|------|
@@ -224,7 +510,7 @@ celery -A celery_scheduler.celery_worker beat --loglevel=info --scheduler=redbea
 | `用户登出` | 退出登录（标准/宾客可绑） |
 | `生成访问令牌` | 登录换 Token（公开接口） |
 
-## 写法要求
+### 写法要求
 
 1. **动词必须在开头**：`查询用户列表` ✓；`用户列表查询` ✗；`按条件查询用户` ✗（应写 `查询用户列表`）。
 2. **统一同义词**：
@@ -251,7 +537,7 @@ celery -A celery_scheduler.celery_worker beat --loglevel=info --scheduler=redbea
 
 5. **自检**：提交前确认 `summary` 能被上表某一行前缀匹配；若匹配不到，先改 summary，再合入。
 
-## 角色权限与刷新路由
+### 角色权限与刷新路由
 
 内置角色路由分配规则见 `applications/base/services/permission_rule.py`，与上表行为一致：
 
@@ -265,4 +551,3 @@ celery -A celery_scheduler.celery_worker beat --loglevel=info --scheduler=redbea
 3. 将库中全部菜单 **补绑到三角色**（只追加，系统菜单对标准/宾客可见，写操作仍由路由约束）。
 
 首次空库初始化顺序：`菜单 → 路由 → 角色 → 部门 → 用户 → 应用 → 标签`。
-
