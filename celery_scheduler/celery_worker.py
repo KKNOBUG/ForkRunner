@@ -774,9 +774,9 @@ def create_celery():
 
 celery = create_celery()
 
-# ========== 启动命令（在仓库根目录执行，保证 PYTHONPATH 可 import backend）==========
-# Worker：
-#   celery -A celery_scheduler.celery_worker worker -Q default,autotest_queue -c 4 -l INFO
+## ========== 启动命令（在仓库根目录执行）==========
+# Worker：队列名必须与celery_config.py的端口前缀队列一致: {port}_default,{port}_autotest
+#   celery -A celery_scheduler.celery_worker worker -Q 8518_default,8518_autotest -c 4 -l INFO
 # Beat：
 #   celery -A celery_scheduler.celery_worker beat -l INFO
 # 日志默认写入：output/logs/celery_logs/celery_worker.log | celery_beat.log
