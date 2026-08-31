@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter
 
+from applications.aotutest.services.autotest_runtime.builtin_variables import builtin_variable_entries
 from common.generate_utils import GenerateUtils
 from configure import LOGGER
 from core.responses import SuccessResponse, FailureResponse
@@ -80,4 +81,19 @@ async def list_funcs():
         return SuccessResponse(message="查询成功", data=func_list, total=len(func_list))
     except Exception as e:
         LOGGER.error(f"辅助函数查询失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+
+
+@autotest_tool.get("/builtin_variables", summary="查询内置环境变量", description="查询内置变量列表")
+async def list_builtin_variables():
+    """
+    内置环境变量查询。
+
+    :return: 统一HTTP响应
+    """
+    try:
+        entries = builtin_variable_entries()
+        return SuccessResponse(message="查询成功", data=entries, total=len(entries))
+    except Exception as e:
+        LOGGER.error(f"内置环境变量查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
