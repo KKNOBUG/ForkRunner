@@ -9,6 +9,7 @@ from tortoise.expressions import Q, RawSQL
 from applications.autotest.models.autotest_task_model import AutoTestTaskModel
 from applications.autotest.schemas.autotest_task_schema import AutoTestApiTaskCreate, AutoTestApiTaskUpdate
 from applications.autotest.services.autotest_project_crud import AutoTestProjectCrud
+from applications.autotest.services.autotest_task_schedule import normalize_schedule
 from applications.base.services.scaffold import ScaffoldCrud
 from configure import LOGGER
 from core.exceptions import (
@@ -187,6 +188,10 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
         try:
             task_dict: Dict[str, Any] = task_in.model_dump(exclude_none=True, exclude_unset=True)
             task_dict = self._dump_enum_fields(task_dict)
+            if "task_schedule_expr" in task_dict:
+                task_dict["task_schedule_expr"] = normalize_schedule(
+                    periodic=task_dict.get("task_periodic_expr"), schedule=task_dict.get("task_schedule_expr")
+                )
             if task_dict.get("created_user") and not task_dict.get("updated_user"):
                 task_dict["updated_user"] = task_dict["created_user"]
             task_dict = self._apply_related_env_ids(task_dict)
@@ -218,6 +223,12 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
             exclude={"task_id", "task_code"}
         )
         update_dict = self._dump_enum_fields(update_dict)
+        if "task_periodic_expr" in update_dict or "task_schedule_expr" in update_dict:
+            # 时效与定时表达式联动校验：以合并后的时效校验合并后的定时，防止单改时效后存量定时失配
+            update_dict["task_schedule_expr"] = normalize_schedule(
+                periodic=update_dict.get("task_periodic_expr", instance.task_periodic_expr),
+                schedule=update_dict.get("task_schedule_expr", instance.task_schedule_expr),
+            )
         if "task_kwargs" in update_dict:
             update_dict["task_kwargs"] = normalize_task_kwargs(update_dict.get("task_kwargs"))
         merged_for_env = {
@@ -275,7 +286,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
 
     async def set_task_enabled(self, task_id: int, enabled: bool = True) -> AutoTestTaskModel:
         """
-        设置任务是否启用调度(仅切换task_enabled，触发依赖crontab)。
+        设置任务是否启用调度(仅切换task_enabled，触发依赖task_schedule_expr)。
 
         :param task_id: 任务主键ID
         :param enabled: 是否启用

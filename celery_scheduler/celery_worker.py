@@ -30,9 +30,7 @@ from .celery_base import (
 
 _async_event_loop_pool = None
 # 扫描任务不写执行记录、不走终态更新
-_SCAN_TASK_NAME = (
-    "celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
-)
+_SCAN_TASK_NAME = "celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
 # setup_logging 写入 celery 专用日志文件时登记的 Loguru sink id，避免重复添加
 _celery_logfile_sink_id = None
 _celery_console_sink_id = None
@@ -250,7 +248,7 @@ async def _create_task_record(
                         ),
                     },
                     "cases_execute_config": cases_cfg if isinstance(cases_cfg, dict) else {},
-                    "task_crontabs_expr": getattr(task_instance, "task_crontabs_expr", None),
+                    "task_schedule_expr": getattr(task_instance, "task_schedule_expr", None),
                     "task_periodic_expr": getattr(periodic, "value", periodic),
                     "task_enabled": getattr(task_instance, "task_enabled", None),
                 }),
@@ -774,7 +772,7 @@ def create_celery():
 
 celery = create_celery()
 
-## ========== 启动命令（在仓库根目录执行）==========
+# ========== 启动命令（在仓库根目录执行）==========
 # Worker：队列名必须与celery_config.py的端口前缀队列一致: {port}_default,{port}_autotest
 #   celery -A celery_scheduler.celery_worker worker -Q 8518_default,8518_autotest -c 4 -l INFO
 # Beat：
