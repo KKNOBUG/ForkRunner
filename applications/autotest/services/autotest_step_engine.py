@@ -19,6 +19,7 @@ from aiomysql import Pool
 
 if TYPE_CHECKING:
     from applications.autotest.dependencies import AutoTestApiServices
+
 from applications.autotest.services.autotest_runtime.protocol_http import (
     assemble_http_body_payloads,
     build_absolute_http_url,
@@ -33,7 +34,6 @@ from applications.autotest.services.autotest_runtime.protocol_tcp import (
     tcp_body_source_for_assert
 )
 from applications.autotest.services.autotest_runtime.datagram.datagram_diff import compare_messages
-
 from applications.autotest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
 from applications.autotest.schemas.autotest_report_schema import AutoTestApiReportCreate
 from applications.autotest.schemas.autotest_datagram_diff_schema import DatagramFieldCompareItem
@@ -74,7 +74,8 @@ from enums import (
     PUBLIC_CASE_TYPES,
     AutoTestLoopErrorStrategy,
     AutoTestReqArgsType,
-    AutoTestConfigNodeType, HTTPMethod
+    AutoTestConfigNodeType,
+    HTTPMethod,
 )
 from services import get_current_username
 

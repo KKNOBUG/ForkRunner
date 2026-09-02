@@ -13,8 +13,11 @@ class AutoTestCaseType(StringEnum):
     PRIVATE_SCRIPT = "用户脚本"
 
 
-# 公共标识：不可引用其他脚本、不可绑定数据源、不允许打标签（公共脚本放开，允许打标签）
-PUBLIC_CASE_TYPES = (AutoTestCaseType.PUBLIC_API,)
+# 公共标识：可以被「引用公共脚本/接口」步骤引用；自身不可引用其他脚本、不可绑定数据源；
+PUBLIC_CASE_TYPES = (AutoTestCaseType.PUBLIC_SCRIPT, AutoTestCaseType.PUBLIC_API,)
+
+# 标签管控：仅公共接口不允许打标签，公共脚本/用户脚本均可打标签；
+NO_TAG_CASE_TYPES = (AutoTestCaseType.PUBLIC_API,)
 
 
 class AutoTestReportType(StringEnum):
@@ -89,6 +92,18 @@ class AutoTestTaskType(StringEnum):
     EXPORT_CASE_DATA = "导出用例数据"  # 公共接口HEAD/BODY导出
     EXPORT_CASE_SCRIPT = "导出公共接口"  # 公共接口脚本模板导出
     SCHEDULE_SCAN = "调度扫描"  # Beat 扫描派发（通常不写 Record）
+
+
+class AutoTestTaskExecuteMode(StringEnum):
+    """任务执行模式：存储值与存量数据中文文案保持一致。"""
+    PARALLEL = "并行执行"
+    SERIAL = "串行执行"
+
+
+class AutoTestEnvMode(StringEnum):
+    """任务环境模式：cases_execute_config.env_mode存储枚举。"""
+    SINGLE = "single"
+    MULTIPLE = "multiple"
 
 
 class AutoTestTaskStatus(StringEnum):
