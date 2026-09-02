@@ -145,7 +145,12 @@ async def get_user(
         instance = await user_crud.get_by_id(user_id=user_id, state__not=1)
         if not instance:
             return NotFoundResponse(message=f"用户(id={user_id})信息不存在")
-        data: dict = await instance.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"})
+        data: dict = await instance.to_dict(
+            m2m=True,
+            exclude_fields=["password"],
+            replace_fields={"id": "user_id"},
+            m2m_replace_fields={"roles": {"id": "role_id"}}
+        )
         dept_id = data.pop("dept_id", None)
         if dept_id:
             department_instance = await dept_crud.get_or_error(id=dept_id)
