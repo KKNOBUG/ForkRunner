@@ -357,6 +357,7 @@ async def splice_step_tree(
         LOGGER.error(f"根据用例id或code列表查询拼接步骤树结构失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
+
 @autotest_step.post("/update_or_create_tree", summary="更新步骤树结构", description="更新或创建用例级步骤树结构")
 async def batch_update_steps_tree(
         tree_in: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)"),
@@ -956,8 +957,7 @@ async def execute_step_tree(
         )
         async with in_transaction():
             report_instance = await services.report_curd.create_report(report_in=defer_create_report)
-            for detail_create in (pending_create_details or []):
-                await services.detail_curd.create_detail(detail_in=detail_create)
+            await services.detail_curd.create_details(details_in=list(pending_create_details or []))
             case_state: bool = statistics.get("failed_steps", 0) == 0
             case_last_time: str = defer_create_report.case_ed_time
             await services.case_curd.update_case(
