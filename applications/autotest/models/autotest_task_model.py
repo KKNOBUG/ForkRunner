@@ -71,7 +71,6 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
         table_description = "自动化测试-任务信息表"
         unique_together = (
             ("task_name", "task_project"),
-            ("task_project", "state", "updated_time"),
         )
         ordering = ["-last_execute_time", "-updated_time"]
 
