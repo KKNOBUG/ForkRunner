@@ -545,7 +545,7 @@ full_deploy() {
 # ==================== 帮助信息 ====================
 show_help() {
     cat << EOF
-==================== ForkRunner 部署脚本 ====================
+==================== ToolBox 部署脚本 ====================
 适配: Kylin Linux V10, x86_64, ${CPU_CORES}核CPU
 
 用法: $0 <command> [options]
@@ -587,7 +587,7 @@ Celery 服务:
 日志位置:
   FastAPI: $FASTAPI_LOG_FILE
   Celery:  $CELERY_LOG_DIR/
-==================== ForkRunner 部署脚本 ====================
+==================== ToolBox 部署脚本 ====================
 EOF
 }
 
