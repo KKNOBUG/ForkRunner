@@ -321,7 +321,7 @@ async def delete_file_source(
                 "file_path",
                 "created_user", "updated_user",
                 "created_time", "updated_time",
-                "reserve_1", "reserve_2", "reserve_3", "reserve_4", "reserve_5",
+                "reserve_1", "reserve_2", "reserve_3",
             },
             replace_fields={"id": "data_create_id"}
         )

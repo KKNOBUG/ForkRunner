@@ -263,7 +263,7 @@ async def batch_fetch_related_data(
                 "state",
                 "created_user", "updated_user",
                 "created_time", "updated_time",
-                "reserve_1", "reserve_2", "reserve_3", "reserve_4", "reserve_5"
+                "reserve_1", "reserve_2", "reserve_3",
             },
             replace_fields={"id": "project_id"}
         )
@@ -276,7 +276,7 @@ async def batch_fetch_related_data(
                 "state",
                 "created_user", "updated_user",
                 "created_time", "updated_time",
-                "reserve_1", "reserve_2", "reserve_3", "reserve_4", "reserve_5"
+                "reserve_1", "reserve_2", "reserve_3",
             },
             replace_fields={"id": "tag_id"}
         )
@@ -393,7 +393,7 @@ async def search_cases(
         for instance in instances:
             serialize: Dict[str, Any] = await instance.to_dict(
                 exclude_fields={
-                    "state", "reserve_1", "reserve_2", "reserve_3", "reserve_4", "reserve_5"
+                    "state", "reserve_1", "reserve_2", "reserve_3",
                 },
                 replace_fields={"id": "case_id"}
             )
