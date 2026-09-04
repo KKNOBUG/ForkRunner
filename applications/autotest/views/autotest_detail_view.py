@@ -228,17 +228,28 @@ async def search_step_details(
             order=detail_in.order
         )
         detail_serializes: List[Dict[str, Any]] = []
-        for instance in instances:
-            serialize: Dict[str, Any] = await instance.to_dict(
-                exclude_fields={
-                    "state",
-                    "created_user", "updated_user",
-                    "created_time", "updated_time",
-                    "reserve_1", "reserve_2", "reserve_3"
-                },
-                replace_fields={"id": "detail_id"}
-            )
-            detail_serializes.append(serialize)
+        for row in instances:
+            row["detail_id"] = row.pop("id")
+            detail_serializes.append(row)
+        # 历史代码
+        # total, instances = await services.detail_curd.select_details(
+        #     search=q,
+        #     page=detail_in.page,
+        #     page_size=detail_in.page_size,
+        #     order=detail_in.order
+        # )
+        # detail_serializes: List[Dict[str, Any]] = []
+        # for instance in instances:
+        #     serialize: Dict[str, Any] = await instance.to_dict(
+        #         exclude_fields={
+        #             "state",
+        #             "created_user", "updated_user",
+        #             "created_time", "updated_time",
+        #             "reserve_1", "reserve_2", "reserve_3"
+        #         },
+        #         replace_fields={"id": "detail_id"}
+        #     )
+        #     detail_serializes.append(serialize)
         return SuccessResponse(message="查询成功", data=detail_serializes, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
