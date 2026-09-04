@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import re
 import traceback
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Set, Tuple
@@ -206,10 +207,10 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
         :return: 复制生成的新任务实例
         """
         source = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
-        # 新名称=原名+微秒时间戳后缀：(task_name, task_project)唯一性由时间戳唯一性保证，无需查重；
-        # 原名按后缀长度截断，确保不超task_name上限255
+        # 新名称=基础名+微秒时间戳后缀：(task_name, task_project)唯一性由时间戳唯一性保证，无需查重；连续复制时先剥离上一轮时间戳后缀，名称恒为"源基础名_最新时间戳"，不再链式变长；
         suffix: str = datetime.now().strftime("%Y%m%d%H%M%S%f")
-        new_task_name: str = f"{source.task_name[:255 - len(suffix) - 1]}_{suffix}"
+        base_name: str = re.compile(r"_\d{20}$").sub("", source.task_name)
+        new_task_name: str = f"{base_name[:255 - len(suffix) - 1]}_{suffix}"
         copy_in = AutoTestApiTaskCreate(
             task_name=new_task_name,
             task_desc=source.task_desc,
