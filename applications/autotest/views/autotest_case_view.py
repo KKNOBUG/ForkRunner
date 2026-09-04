@@ -362,6 +362,12 @@ async def search_cases(
             page_size=case_in.page_size,
             order=case_in.order
         )
+        if case_in.case_ids and instances:
+            # 精确过滤时按case_ids入参顺序重排(绑定顺序即业务顺序, 供编辑任务抽屉回显)，通用查询路径不受影响
+            id_rank: Dict[int, int] = {}
+            for case_id in case_in.case_ids:
+                id_rank.setdefault(case_id, len(id_rank))
+            instances.sort(key=lambda instance: id_rank.get(instance.id, len(id_rank)))
         if not instances:
             return SuccessResponse(message="查询成功", data=[], total=total)
 
