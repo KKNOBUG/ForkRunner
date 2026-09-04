@@ -310,7 +310,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
         else:
             instance = await self.get_by_code(task_code=task_code, on_error=True, state__not=1)
 
-        instance = await self.hard_delete(id=instance.id)
+        instance = await self.soft_delete(id=instance.id)
         instance.task_enabled = False
         await instance.save(update_fields=["task_enabled"])
         return instance
