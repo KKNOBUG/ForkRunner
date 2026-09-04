@@ -5,7 +5,7 @@ import os.path
 import re
 import traceback
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Set, Union
+from typing import Optional, List, Dict, Any, Set, Tuple, Union
 from urllib.parse import quote
 
 import aiofiles.os as aos
@@ -23,7 +23,8 @@ from applications.autotest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceUpdate,
     AutoTestDataSourceSaveOrUpdate,
     AutoTestDataSourceSelect,
-    AutoTestDataSourceUnbindCase, AutoTestDataSourceUpdateFields,
+    AutoTestDataSourceUnbindCase,
+    AutoTestDataSourceUpdateFields,
 )
 from applications.autotest.services.autotest_case_excel_service import style_data_source_sheet
 from applications.autotest.services.autotest_data_source_parser import (
@@ -37,6 +38,7 @@ from applications.autotest.services.autotest_data_source_service import (
     build_blank_vertical_matrix,
     build_vertical_matrix_from_step,
     clear_step_data_source_meta,
+    collect_step_report_original,
     DEFAULT_SCENE_NAMES,
     ensure_case_allows_data_source,
     ensure_request_step,
@@ -44,7 +46,8 @@ from applications.autotest.services.autotest_data_source_service import (
     resolve_case,
     resolve_case_and_step,
     resolve_enabled_data_source,
-    sync_step_data_source_meta, sync_data_source_fields,
+    sync_data_source_fields,
+    sync_step_data_source_meta,
 )
 from configure import LOGGER, PROJECT_CONFIG
 from core.exceptions import (
@@ -69,6 +72,9 @@ from services.file_transfer import FileTransfer
 
 autotest_data_source = APIRouter()
 
+# 步骤定位查询仅加载的轻量字段(步骤名/编码匹配与映射所需，不拉取请求报文等大JSON字段)
+STEP_LOCATOR_FIELDS: Tuple[str, ...] = ("id", "step_code", "step_name", "step_type")
+
 
 async def _serialize_data_source(instance: AutoTestDataSourceModel) -> Dict[str, Any]:
     """序列化单条数据源。"""
@@ -91,6 +97,32 @@ async def _remove_upload_file(file_path: str) -> None:
             await aos.remove(file_path)
     except Exception as e:
         LOGGER.warning(f"清理上传文件[{file_path}]失败, 异常描述: {e}")
+
+
+async def _locate_request_step_name(services: AutoTestApiServices, *, case_id: int, step_id: int, step_code: str) -> str:
+    """定位步骤名称用于sheet命名，查询失败时回落步骤编码。"""
+    try:
+        step = await services.step_curd.model.filter(
+            id=step_id, case_id=case_id, step_code=step_code, state__not=1
+        ).only(*STEP_LOCATOR_FIELDS).first()
+    except Exception as e:
+        LOGGER.warning(f"查询步骤名失败，回落步骤编码命名: {e}")
+        return step_code
+    return (step.step_name if step else "") or step_code
+
+
+async def _collect_report_original(services: AutoTestApiServices, instance: AutoTestDataSourceModel) -> Dict[str, Any]:
+    """按数据源绑定的步骤实时采集报文原始值映射，供前端本地插入正交易场景；步骤缺失或非请求步骤时返回空映射。"""
+    try:
+        step = await services.step_curd.model.filter(
+            case_id=instance.case_id, step_code=instance.step_code, state__not=1
+        ).first()
+    except Exception as e:
+        LOGGER.warning(f"查询步骤报文失败，返回空原始值映射: {e}")
+        return {}
+    if step is None or step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+        return {}
+    return collect_step_report_original(step)
 
 
 def _safe_sheet_name(name: Any, used: Set[str]) -> str:
@@ -416,13 +448,13 @@ async def _unbind_empty_data_source(
         has_ds_locator: bool,
 ) -> bool:
     """
-     空表格保存时的解绑处理：定位已绑定记录则软删并清空步骤指针。
+    空表格保存时的解绑处理：定位已绑定记录则软删并清空步骤指针。
 
-     :param services: 自动化测试CRUD依赖聚合
-     :param data_source_in: 数据源入参(用于定位用例/步骤)
-     :param has_ds_locator: 入参是否携带data_source_id或data_source_code
-     :return: 是否实际执行了解绑(定位到并软删了记录)
-     """
+    :param services: 自动化测试CRUD依赖聚合
+    :param data_source_in: 数据源入参(用于定位用例/步骤)
+    :param has_ds_locator: 入参是否携带data_source_id或data_source_code
+    :return: 是否实际执行了解绑(定位到并软删了记录)
+    """
     kwargs: Dict[str, Any] = {"services": services, "on_error": True}
     if has_ds_locator:
         kwargs.update({
@@ -500,7 +532,7 @@ async def update_data_source_fields(
         return FailureResponse(message=f"同步失败，异常描述: {e}")
 
 
-@autotest_data_source.get("/build", summary="构建数据源矩阵", description="查询已有数据源矩阵或根据步骤报文构建垂直矩阵")
+@autotest_data_source.get("/build", summary="构建数据源矩阵", description="查询已有数据源矩阵或根据步骤报文构建垂直矩阵，并附带报文原始值映射")
 async def build_data_source(
         data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
         data_source_code: Optional[str] = Query(None, description="数据驱动标识代码"),
@@ -534,6 +566,7 @@ async def build_data_source(
                 on_error=True,
             )
             data = await _serialize_data_source(instance)
+            data["data_original"] = await _collect_report_original(services, instance)
             return SuccessResponse(message="查询成功", data=data, total=1)
 
         case, step = await resolve_case_and_step(
@@ -565,6 +598,7 @@ async def build_data_source(
             "dataset": {},
             "dataset_names": list(DEFAULT_SCENE_NAMES),
             "data_source_id": None,
+            "data_original": collect_step_report_original(step),
         }
         return SuccessResponse(message="构建成功", data=data, total=1)
     except NotFoundException as e:
@@ -653,7 +687,7 @@ async def get_dataset_names(
     data_source_instances = await services.data_source_curd.model.filter(
         case_id=case_id,
         state__not=1
-    ).order_by("created_time").all()
+    ).only("dataset_names").order_by("created_time").all()
     merged_names: List[str] = []
     seen: Set[str] = set()
     for ds in data_source_instances:
@@ -1061,7 +1095,9 @@ async def single_step_dataset_download(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    根据用例步骤导出数据源xlsx。
+    根据用例步骤导出数据源xlsx，sheet名为步骤名称。
+
+    步骤未绑定数据源或矩阵为空时返回业务提示，引导使用模板下载。
 
     :param case_id: 用例主键ID
     :param step_id: 步骤主键ID
@@ -1074,16 +1110,20 @@ async def single_step_dataset_download(
             case_id=case_id,
             step_id=step_id,
             step_code=step_code,
-            on_error=True,
+            on_error=False,
             state__not=1
         )
-        matrix = instance.dataframe if isinstance(instance.dataframe, list) else []
-        df = pd.DataFrame(matrix if matrix else [[]])
+        matrix = instance.dataframe if instance and isinstance(instance.dataframe, list) else []
+        if not matrix:
+            return BadReqResponse(message="该步骤当前没有测试数据，无法导出，如有需要可进行模板下载")
+        step_name = await _locate_request_step_name(services, case_id=case_id, step_id=step_id, step_code=step_code)
+        safe_name = _safe_sheet_name(step_name, set())
+        df = pd.DataFrame(matrix)
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False, header=False, sheet_name="Sheet1")
+            df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
             # 统一样式：分区标记黄底、居中换行、行高/列宽自适应（与报文导出风格一致）
-            style_data_source_sheet(writer.sheets["Sheet1"])
+            style_data_source_sheet(writer.sheets[safe_name])
         output.seek(0)
 
         file_name = f"数据源导出_{step_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
@@ -1101,6 +1141,61 @@ async def single_step_dataset_download(
     except Exception as e:
         LOGGER.error(f"导出数据源xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"导出失败，异常描述: {e}")
+
+
+@autotest_data_source.get("/single_step_template_download", summary="下载数据源模板", description="按步骤报文构建默认原始数据模板xlsx")
+async def single_step_template_download(
+        case_id: int = Query(..., description="用例ID"),
+        step_id: int = Query(..., description="步骤ID"),
+        step_code: str = Query(..., description="步骤标识代码"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    下载步骤数据源模板xlsx：按当前HTTP/TCP步骤报文构建默认原始数据(垂直矩阵)，值留空。
+
+    文件名与数据源导出一致(数据源导出_步骤id_下载时间)，sheet名为步骤名称。
+
+    :param case_id: 用例主键ID
+    :param step_id: 步骤主键ID
+    :param step_code: 步骤业务标识
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 文件流响应
+    """
+    try:
+        # 模板矩阵依赖请求报文字段，需加载完整步骤记录
+        step_instance = await services.step_curd.model.filter(
+            id=step_id, case_id=case_id, step_code=step_code, state__not=1
+        ).first()
+    except Exception as e:
+        LOGGER.error(f"查询步骤失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询步骤失败，异常描述: {e}")
+    if not step_instance:
+        return NotFoundResponse(message="查询步骤失败, 记录不存在")
+    if step_instance.step_type not in (AutoTestStepType.HTTP.value, AutoTestStepType.TCP.value):
+        return ParameterResponse(message="仅支持对HTTP/TCP请求步骤下载数据源模板")
+
+    try:
+        matrix = build_vertical_matrix_from_step(step_instance)
+        safe_name = _safe_sheet_name(step_instance.step_name or step_code, set())
+        df = pd.DataFrame(matrix if matrix else [[]])
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
+            # 统一样式：分区标记黄底、居中换行、行高/列宽自适应（与报文导出风格一致）
+            style_data_source_sheet(writer.sheets[safe_name])
+        output.seek(0)
+
+        file_name = f"数据源导出_{step_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        quoted_name: str = quote(file_name)
+        headers: Dict[str, str] = {"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"}
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers,
+        )
+    except Exception as e:
+        LOGGER.error(f"下载数据源模板xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"下载失败，异常描述: {e}")
 
 
 @autotest_data_source.post("/batch_step_dataset_upload", summary="上传步骤数据源", description="参数化驱动多步骤数据集批量上传")
@@ -1132,7 +1227,7 @@ async def batch_step_dataset_upload(
 
     # 获取用例全部步骤（含子步骤），根据步骤名建立HTTP/TCP请求步骤映射
     try:
-        all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1)
+        all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1).only(*STEP_LOCATOR_FIELDS)
     except Exception as e:
         LOGGER.error(f"查询步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询步骤树失败，异常描述: {e}")
@@ -1227,6 +1322,15 @@ async def batch_step_dataset_upload(
     created_user = get_current_username()
     created: List[Dict[str, Any]] = []
     try:
+        # 单次批量预载各步骤现有数据源，事务内循环不再逐sheet定位(与get_by_case_step同条件取首条)
+        existing_list = await services.data_source_curd.model.filter(
+            case_id=case_id,
+            step_code__in=[info["step_code"] for info in step_map.values()],
+            state__not=1
+        )
+        existing_map: Dict[str, AutoTestDataSourceModel] = {}
+        for existing_item in existing_list:
+            existing_map.setdefault(existing_item.step_code, existing_item)
         async with in_transaction():
             for sheet_name, step_data in full_parsed.items():
                 step_info: Dict[str, Any] = step_map[sheet_name]
@@ -1246,6 +1350,7 @@ async def batch_step_dataset_upload(
                     dataframe=sheet_dataframes[sheet_name],
                     axis=sheet_axes.get(sheet_name, AXIS_VERTICAL),
                     created_user=created_user,
+                    existing=existing_map.get(step_code),
                 )
                 created.append(await _serialize_data_source(instance))
                 await sync_step_data_source_meta(
@@ -1285,10 +1390,10 @@ async def batch_step_dataset_download(
     try:
         data_sources = await services.data_source_curd.get_by_case_step(case_id=case_id, state__not=1)
         if not data_sources:
-            return BadReqResponse(message="该用例下没有可导出的数据源")
+            return BadReqResponse(message="该脚本当前没有测试数据，无法下载，如有需要可进行模板下载")
 
         # 获取用例全部步骤，创建step_code/step_id -> step_name映射
-        all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1)
+        all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1).only(*STEP_LOCATOR_FIELDS)
         step_name_map: Dict[Union[str, int], str] = {}
         for step in all_steps:
             step_id: int = step.id
@@ -1328,3 +1433,50 @@ async def batch_step_dataset_download(
     except Exception as e:
         LOGGER.error(f"汇总导出数据源xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"导出失败，异常描述: {e}")
+
+
+@autotest_data_source.get("/batch_step_template_download", summary="下载数据源汇总模板",
+                          description="按用例所有HTTP/TCP请求步骤报文构建默认原始数据汇总模板xlsx")
+async def batch_step_template_download(
+        case_id: int = Query(..., description="用例ID"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    汇总下载用例下所有HTTP/TCP请求步骤的默认原始数据模板，一个步骤一个sheet（sheet名=步骤名）。
+
+    :param case_id: 用例主键ID
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 文件流响应
+    """
+    try:
+        # 模板矩阵依赖请求报文字段，需加载完整步骤记录
+        all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1)
+        request_steps = [
+            step for step in all_steps
+            if step.step_type in (AutoTestStepType.HTTP, AutoTestStepType.TCP) and step.step_name
+        ]
+        if not request_steps:
+            return BadReqResponse(message="该脚本步骤树中没有HTTP/TCP请求步骤，无法下载模板")
+
+        output = io.BytesIO()
+        used_names: Set[str] = set()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            for step in request_steps:
+                matrix = build_vertical_matrix_from_step(step)
+                safe_name = _safe_sheet_name(step.step_name, used_names)
+                df = pd.DataFrame(matrix if matrix else [[]])
+                df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
+                # 统一样式：分区标记黄底、居中换行、行高/列宽自适应（与报文导出风格一致）
+                style_data_source_sheet(writer.sheets[safe_name])
+        output.seek(0)
+
+        file_name = f"数据源汇总_{case_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(file_name)}"}
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers,
+        )
+    except Exception as e:
+        LOGGER.error(f"汇总下载数据源模板xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"下载失败，异常描述: {e}")

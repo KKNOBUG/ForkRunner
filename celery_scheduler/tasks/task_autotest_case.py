@@ -221,7 +221,7 @@ def scan_and_dispatch_autotest_tasks():
 
 
 @celery.task(
-    name="backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task",
+    name="celery_scheduler.tasks.task_autotest_case.run_autotest_task",
     # 失败/超时即ack终结消息：失败结果已落record并回填任务状态，重新执行只会重复写记录且依旧失败；
     # worker进程崩溃/硬时限杀进程(WorkerLostError)由task_reject_on_worker_lost重投，优先于本参数
     acks_on_failure_or_timeout=True,
