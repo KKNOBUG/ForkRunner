@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import typing
+from typing import Union, Any, Optional, List, Dict
 
 import jsonpath
 import jsonpath_ng
@@ -17,8 +17,7 @@ class JSONPathUtils:
     """
 
     @staticmethod
-    def add(json_data: typing.Union[str, dict], json_path: str, value: typing.Any,
-            key: typing.Optional[str] = None) -> typing.Union[str, dict]:
+    def add(json_data: Union[str, dict], json_path: str, value: Any, key: Optional[str] = None) -> Union[str, dict]:
         """
         执行JsonPath新增并返回结果
         1.如果JSONPath表达式存在，且对应的数据是list类型，则在末尾追加value
@@ -74,7 +73,7 @@ class JSONPathUtils:
         return orjson.dumps(json_data).decode("UTF-8")
 
     @staticmethod
-    def delete(json_data: typing.Union[str, dict], json_path: str) -> typing.Union[str, dict]:
+    def delete(json_data: Union[str, dict], json_path: str) -> Union[str, dict]:
         """
         执行JsonPath删除并返回结果
         :param json_data: 待查询的JSON数据（可以是JSON字符串或字典）
@@ -100,7 +99,7 @@ class JSONPathUtils:
         return orjson.dumps(json_data).decode("UTF-8")
 
     @staticmethod
-    def update(json_data: typing.Union[str, dict], json_path: str, value: typing.Any) -> typing.Union[str, dict]:
+    def update(json_data: Union[str, dict], json_path: str, value: Any) -> Union[str, dict]:
         """
         执行JsonPath更新并返回结果
         :param json_data: 待查询的JSON数据（可以是JSON字符串或字典）
@@ -131,7 +130,7 @@ class JSONPathUtils:
         return orjson.dumps(json_data).decode("UTF-8")
 
     @staticmethod
-    def query(json_data: str or dict, json_path: str) -> str or list:
+    def query(json_data: Union[str, List[Any], Dict[str, Any]], json_path: str) -> Union[str, list]:
         """
         执行JsonPath查询并返回结果
         :param json_data: 待查询的JSON数据（可以是JSON字符串或字典）
