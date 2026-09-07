@@ -106,7 +106,7 @@ kill_by_pattern() {
         sleep 1
     fi
 
-    # 第二轮兑底: 重新扫描补杀
+    # 第二轮兜底: 重新扫描补杀
     pids="$(pids_of "$pattern")"
     if [ -n "$pids" ]; then
         for pid in $pids; do
