@@ -1,403 +1,335 @@
 #!/bin/bash
+# -*- coding: utf-8 -*-
+#
+# ToolBox 项目(FastAPI + Celery)部署脚本
+# 完全贴合手动部署流程:
+#   cd /zdhgj/python_projects/fastapi-toolbox-runner
+#   source .venv/bin/activate
+#   pkill -f -9 "backend_main:app"
+#   pkill -f -9 celery
+#   git pull origin toolbox-runner / git reset --hard origin/toolbox-runner
+#   nohup celery ... worker ... > output/logs/celery_log/celery_worker.log 2>&1 &
+#   nohup celery ... beat -l INFO > output/logs/celery_log/celery_beat.log 2>&1 &
+#   nohup gunicorn -c gunicorn.conf.py backend_main:app > toolbox-runner.log 2>&1 &
+# 用法: ./fastapi_deploy.sh start|restart|stop|status|pull
+#
+# Celery 的启停/状态由同目录 celery_deploy.sh 统一提供, 本脚本负责编排完整部署流程。
 
-# 配置脚本所在目录
-PROJECT_ROOT="服务器上的后端项目所在目录"
+# ==================== 基础路径 ====================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="${PROJECT_ROOT:-$SCRIPT_DIR}"
+VENV_DIR="${PROJECT_ROOT}/.venv"
+GUNICORN_BIN="${VENV_DIR}/bin/gunicorn"
 
-# 配置Gunicorn服务
+# Gunicorn 服务(与手动部署一致)
 GUNICORN_APP="backend_main:app"
 GUNICORN_CONFIG_FILE="${PROJECT_ROOT}/gunicorn.conf.py"
-GUNICORN_PID_FILE="${PROJECT_ROOT}/gunicorn.pid"
+# 手动部署 nohup 重定向日志: 项目根目录 toolbox-runner.log
+FASTAPI_LOG_FILE="${PROJECT_ROOT}/toolbox-runner.log"
 
-# 配置Celery应用路径
-CELERY_APP="celery_scheduler.celery_worker:celery"
-CELERY_WORKER_CONCURRENCY=4
-# 队列名与 celery_config.py 端口前缀隔离保持一致（{port}_default,{port}_autotest），从.env读取端口避免漂移
-SERVER_PORT="$(grep -E '^SERVER_PORT=' "${PROJECT_ROOT}/.env" 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' \r')"
-SERVER_PORT="${SERVER_PORT:-8519}"
-CELERY_WORKER_QUEUES="${SERVER_PORT}_default,${SERVER_PORT}_autotest"
-CELERY_BEAT_SCHEDULER="redbeat.schedulers:RedBeatScheduler"
+# Git 配置: 与手动 git pull origin toolbox-runner / git reset --hard origin/toolbox-runner 一致
+GIT_BRANCH="${GIT_BRANCH:-toolbox-runner}"
+# 可选: 私服账号密码(未配置时使用 git 已存储的凭证)
+GIT_USERNAME="${GIT_USERNAME:-}"
+GIT_PASSWORD="${GIT_PASSWORD:-}"
 
-# Celery日志和PID文件
-CELERY_LOG_DIR="${PROJECT_ROOT}/output/logs/celery_logs"
-mkdir -p "$CELERY_LOG_DIR"
-CELERY_WORKER_LOG="${CELERY_LOG_DIR}/celery_worker.log"
-CELERY_BEAT_LOG="${CELERY_LOG_DIR}/celery_beat.log"
-CELERY_WORKER_PID="${PROJECT_ROOT}/celery_worker.pid"
-CELERY_BEAT_PID="${PROJECT_ROOT}/celery_beat.pid"
+# Celery 编排脚本与并发数
+CELERY_DEPLOY="${SCRIPT_DIR}/celery_deploy.sh"
+CELERY_CONCURRENCY="${CELERY_CONCURRENCY:-4}"
 
-# 配置Git服务
-GIT_BRANCH="发布分支"
-GIT_USERNAME="GIT账号"
-GIT_PASSWORD="GIT密码"
+cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; }
+export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
-handle_error() {
-  print_error "错误信息：$1"
-  exit 1
-}
+# 进程匹配模式(与手动 pkill -f "backend_main:app" 一致)
+GUNICORN_PATTERN='backend_main:app'
 
-print_info() {
-    echo -e "\033[32m[INFO]\033[0m $1"
-}
+# ==================== 输出函数 ====================
+print_info()  { echo -e "\033[32m[INFO]\033[0m $1"; }
+print_warn()  { echo -e "\033[33m[WARN]\033[0m $1"; }
+print_error() { echo -e "\033[31m[ERROR]\033[0m $1"; }
+print_step()  { echo -e "\n\033[36m========================================\033[0m"; echo -e "\033[36m$1\033[0m"; echo -e "\033[36m========================================\033[0m"; }
 
-print_warn() {
-    echo -e "\033[33m[WARN]\033[0m $1"
-}
-
-print_error() {
-    echo -e "\033[31m[ERROR]\033[0m $1"
-}
-
-print_step() {
-    echo -e "\n"
-    echo -e "\033[36m========================================\033[0m"
-    echo -e "\033[36m$1\033[0m"
-    echo -e "\033[36m========================================\033[0m"
-}
-
-# 检查命令是否存在
-check_command() {
-    if ! command -v "$1" &> /dev/null; then
-        print_error "$1 未安装, 请先安装..."
-        exit 1
+# ==================== 工具函数 ====================
+activate_venv() {
+    if [ -f "${VENV_DIR}/bin/activate" ]; then
+        # shellcheck disable=SC1091
+        source "${VENV_DIR}/bin/activate"
+        return 0
     fi
+    print_error "虚拟环境不存在: ${VENV_DIR}"
+    return 1
 }
 
-# 检查进程是否运行
+pids_of() {
+    pgrep -f "$1" 2> /dev/null | grep -vw "$$" || true
+}
+
 is_running() {
-    local pid_file=$1
-    if [ -f "$pid_file" ]; then
-        local pid=$(cat "$pid_file")
-        if ps -p "$pid" > /dev/null 2>&1; then
-            return 0
+    [ -n "$(pids_of "$1")" ]
+}
+
+format_pids() {
+    echo "$(pids_of "$1")" | tr '\n' ' ' | sed 's/ $//'
+}
+
+kill_by_pattern() {
+    local pattern="$1"
+    local name="$2"
+    local timeout_s="${3:-10}"
+    local pids pid waited
+
+    pids="$(pids_of "$pattern")"
+    if [ -z "$pids" ]; then
+        print_info "${name} 未运行(跳过)..."
+        return 0
+    fi
+
+    print_info "停止 ${name}(PID: $(format_pids "$pattern"))..."
+    for pid in $pids; do
+        kill -TERM "$pid" 2> /dev/null || true
+    done
+
+    waited=0
+    while [ "$waited" -lt "$timeout_s" ] && is_running "$pattern"; do
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    pids="$(pids_of "$pattern")"
+    if [ -n "$pids" ]; then
+        print_warn "${name} ${timeout_s}s 内未退出, 强制 kill -9..."
+        for pid in $pids; do
+            kill -9 "$pid" 2> /dev/null || true
+        done
+        sleep 1
+    fi
+
+    if is_running "$pattern"; then
+        print_error "${name} 停止失败, 存活进程: $(format_pids "$pattern")"
+        return 1
+    fi
+    print_info "${name} 已停止..."
+    return 0
+}
+
+# 等待进程稳定运行(应用启动含建表/迁移等重逻辑, 连续 3 秒且至少 10 秒才判定成功)
+wait_gunicorn_alive() {
+    local stable=0 elapsed=0
+
+    while [ "$elapsed" -lt 30 ]; do
+        if is_running "$GUNICORN_PATTERN"; then
+            stable=$((stable + 1))
+            if [ "$stable" -ge 3 ] && [ "$elapsed" -ge 10 ]; then
+                print_info "FastAPI(Gunicorn) 启动成功 (PID: $(format_pids "$GUNICORN_PATTERN"))"
+                print_info "日志文件: $FASTAPI_LOG_FILE"
+                return 0
+            fi
         else
-            rm -f "$pid_file"
+            stable=0
         fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    print_error "FastAPI(Gunicorn) 启动失败或超时, 请查看日志: $FASTAPI_LOG_FILE"
+    if [ -f "$FASTAPI_LOG_FILE" ]; then
+        print_error "----- 最近日志 -----"
+        tail -n 50 "$FASTAPI_LOG_FILE" 2> /dev/null || true
     fi
     return 1
 }
 
-# 停止进程
-stop_process() {
-    local pid_file=$1
-    local process_name=$2
-
-    if ! is_running "$pid_file"; then
-        print_info "[INFO] ${process_name} 未运行(跳过)..."
-        return 1
-    fi
-
-    local pid=$(cat "$pid_file")
-    print_info "[INFO] 停止 ${process_name}(PID: $pid)..."
-
-    kill -TERM "$pid" 2>/dev/null
-
-    # 在10秒内持续检查进程是否结束
-    local count=0
-    while ps -p "$pid" > /dev/null 2>&1 && [ $count -lt 10 ]; do
-        sleep 1
-        count=$((count + 1))
-    done
-
-    # 如果10秒进程仍未停止, 强制终止
-    if ps -p "$pid" > /dev/null 2>&1; then
-        print_warn "[WARN] ${process_name} 未正常退出, 强制终止..."
-        kill -9 "$pid" 2>/dev/null
-    fi
-
-    rm -f "$pid_file"
-    print_info "[INFO] ${process_name} 已停止..."
-    return 0
-}
-
-
-# 停止Celery Worker
-stop_celery_worker() {
-    stop_process "$CELERY_WORKER_PID" "Celery Worker"
-}
-
-# 停止Celery Beat
-stop_celery_beat() {
-    stop_process "$CELERY_BEAT_PID" "Celery Beat"
-}
-
-# 步骤1: 停止旧服务
+# ==================== 服务控制 ====================
+# 步骤1: 停止旧服务(与手动顺序一致: 先 FastAPI 后 Celery)
 stop_services() {
     print_step "步骤1: 停止旧服务"
+    kill_by_pattern "$GUNICORN_PATTERN" "FastAPI(Gunicorn)" 10
 
-    # 停止Celery
-    print_info "停止Celery Beat服务..."
-    stop_celery_beat
-    print_info "停止Celery Worker服务..."
-    stop_celery_worker
-
-    # 停止Gunicorn
-    print_info "停止Gunicorn服务..."
-    stop_process "$GUNICORN_PID_FILE" "Gunicorn"
-
-    # 等待一下确保进程完全停止
+    if [ ! -x "$CELERY_DEPLOY" ]; then
+        print_error "Celery 部署脚本不存在: $CELERY_DEPLOY"
+        return 1
+    fi
+    "$CELERY_DEPLOY" stop
     sleep 2
 }
 
-# 步骤2: 拉取最新代码(仅master分支)
+# 步骤2: 拉取最新代码(与手动一致: git pull origin $GIT_BRANCH, 失败/冲突时 git reset --hard 强制覆盖)
 pull_code() {
-    print_step "步骤2: 拉取master分支最新代码"
+    print_step "步骤2: 拉取 ${GIT_BRANCH} 分支最新代码"
 
-    check_command "git"
+    if ! command -v git > /dev/null 2>&1; then
+        print_error "git 未安装, 请先安装..."
+        return 1
+    fi
 
-    print_info "拉取 ${GIT_REMOTE}/${GIT_BRANCH} 最新代码..."
-
-#    # 检查是否有未提交的更改
-#    if ! git diff-index --quiet HEAD --; then
-#        print_warn "检测到存在更改但未提交的文件(放弃), 将回滚本地更改..."
-#        git reset --hard HEAD || {
-#          print_error "回滚本地代码更改失败..."
-#          exit 1
-#        }
-#        print_info "已成功回滚本地代码更改..."
-#    fi
-
-    # 拉取代码(仅master分支)
-    expect <<EOF
+    local pull_rc=0
+    if [ -n "$GIT_USERNAME" ] && [ -n "$GIT_PASSWORD" ]; then
+        if ! command -v expect > /dev/null 2>&1; then
+            print_error "expect 未安装, 请先安装: yum install expect"
+            return 1
+        fi
+        expect <<EOF
+set timeout 60
 spawn git pull origin "$GIT_BRANCH"
-expect "Username"
-send "${GIT_USERNAME}\r"
-expect "Password"
-send "${GIT_PASSWORD}\r"
+expect {
+    "Username" {
+        send "${GIT_USERNAME}\r"
+        exp_continue
+    }
+    "Password" {
+        send "${GIT_PASSWORD}\r"
+        exp_continue
+    }
+    eof
+}
 expect eof
 EOF
-    if [ $? -ne 0 ]; then
-      handle_error "拉取${GIT_BRANCH}分支代码失败"
-    fi
-    print_info "代码更新成功(master分支)"
-}
-
-# 启动 Celery Worker 服务
-start_celery_worker() {
-    if is_running "$CELERY_WORKER_PID"; then
-        local pid=$(cat "$CELERY_WORKER_PID")
-        print_warn "[WARN] Celery Worker 已在运行(PID: $pid)"
-        return 1
-    fi
-
-    print_info "[INFO] 启动 Celery Worker (并发数: ${CELERY_WORKER_CONCURRENCY}, 队列: ${CELERY_WORKER_QUEUES})..."
-
-    celery -A "$CELERY_APP" worker \
-        --loglevel=info \
-        --concurrency=${CELERY_WORKER_CONCURRENCY} \
-        --queues=${CELERY_WORKER_QUEUES} \
-        --logfile="$CELERY_WORKER_LOG" \
-        --pidfile="$CELERY_WORKER_PID" \
-        --pool=solo \
-        --detach
-
-    sleep 3
-
-    if is_running "$CELERY_WORKER_PID"; then
-        local pid=$(cat "$CELERY_WORKER_PID")
-        print_info "[INFO] Celery Worker 启动成功(PID: $pid)"
-        print_info "[INFO] 日志文件: $CELERY_WORKER_LOG"
-        return 0
+        pull_rc=$?
     else
-        print_error "[ERROR] Celery Worker 启动失败, 请查看日志: $CELERY_WORKER_LOG"
+        git pull origin "$GIT_BRANCH"
+        pull_rc=$?
+    fi
+
+    if [ "$pull_rc" -ne 0 ]; then
+        print_warn "git pull 失败(可能存在未提交改动或网络问题), 尝试强制对齐远端..."
+    fi
+
+    # 与手动部署一致: 放弃本地改动, 由 origin/$GIT_BRANCH 分支代码覆盖
+    if ! git reset --hard "origin/${GIT_BRANCH}"; then
+        print_error "git reset --hard origin/${GIT_BRANCH} 失败, 请检查远端分支是否存在"
         return 1
     fi
+    [ "$pull_rc" -ne 0 ] && print_warn "已强制对齐本地仓库到 origin/${GIT_BRANCH}(如拉取失败请检查网络/凭证后重试)"
+    print_info "代码更新成功(${GIT_BRANCH} 分支)"
 }
 
-# 启动 Celery Beat 服务
-start_celery_beat() {
-    if is_running "$CELERY_BEAT_PID"; then
-        local pid=$(cat "$CELERY_BEAT_PID")
-        print_warn "[WARN] Celery Beat 已在运行(PID: $pid)"
-        return 1
-    fi
-
-    print_info "[INFO] 启动 Celery Beat (调度器: ${CELERY_BEAT_SCHEDULER})..."
-
-    celery -A "$CELERY_APP" beat \
-        --loglevel=info \
-        --scheduler="$BEAT_SCHEDULER" \
-        --logfile="$CELERY_BEAT_LOG" \
-        --pidfile="$CELERY_BEAT_PID" \
-        --detach
-
-    sleep 3
-
-    if is_running "$CELERY_BEAT_PID"; then
-        local pid=$(cat "$CELERY_BEAT_PID")
-        print_info "[INFO] Celery Beat 启动成功(PID: $pid)"
-        print_info "[INFO] 日志文件: $CELERY_BEAT_LOG"
-        return 0
-    else
-        print_error "[ERROR] Celery Beat 启动失败, 请查看日志: $CELERY_BEAT_LOG"
-        return 1
-    fi
-}
-
-# 步骤3: 启动Celery
+# 步骤3: 启动 Celery 服务(Worker + Beat)
 start_celery() {
-    print_step "步骤3: 启动Celery服务"
-
-    check_command "celery"
-
-    start_celery_worker || {
-        print_error "启动 Celery Worker 服务失败..."
-        exit 1
-    }
-
-    start_celery_beat || {
-        print_error "启动 Celery Beat 服务失败..."
-        exit 1
-    }
-
-    # 等待一下确保Celery启动成功
-    sleep 1
+    print_step "步骤3: 启动 Celery 服务"
+    if [ ! -x "$CELERY_DEPLOY" ]; then
+        print_error "Celery 部署脚本不存在: $CELERY_DEPLOY"
+        return 1
+    fi
+    "$CELERY_DEPLOY" start "$CELERY_CONCURRENCY"
 }
 
-# 步骤4: 启动FastAPI应用
+# 步骤4: 启动 FastAPI 应用(与手动一致: nohup gunicorn -c gunicorn.conf.py backend_main:app)
 start_fastapi() {
-    print_step "步骤4: 启动FastAPI应用"
+    print_step "步骤4: 启动 FastAPI 应用"
 
-    check_command "gunicorn"
-
-    if is_running "$GUNICORN_PID_FILE"; then
-        print_warn "Gunicorn已在运行, 跳过启动"
+    if is_running "$GUNICORN_PATTERN"; then
+        print_warn "FastAPI(Gunicorn) 已在运行(PID: $(format_pids "$GUNICORN_PATTERN")), 跳过启动"
         return 0
     fi
+    activate_venv || return 1
 
-    # 检查配置文件是否存在
-    if ! [ -f "$GUNICORN_CONFIG_FILE" ]; then
-      print_error "Gunicorn配置文件不存在: $GUNICORN_CONFIG_FILE"
-      exit 1
+    if [ ! -f "$GUNICORN_CONFIG_FILE" ]; then
+        print_error "Gunicorn 配置文件不存在: $GUNICORN_CONFIG_FILE"
+        return 1
     fi
 
-    print_info "启动Gunicorn服务(使用配置文件: $GUNICORN_CONFIG_FILE)"
+    print_info "启动 Gunicorn 服务 (配置文件: $GUNICORN_CONFIG_FILE)"
+    print_info "日志文件: $FASTAPI_LOG_FILE"
+    nohup "$GUNICORN_BIN" -c "$GUNICORN_CONFIG_FILE" "$GUNICORN_APP" \
+        > "$FASTAPI_LOG_FILE" 2>&1 &
 
-    nohup gunicorn "$GUNICORN_APP" \
-        --config="$GUNICORN_CONFIG_FILE" \
-        --pid="$GUNICORN_PID_FILE" \
-        > /dev/null 2>&1
+    wait_gunicorn_alive
+}
 
-    sleep 5
+# 步骤5: 查看服务运行状态
+·show_status() {
+    print_step "服务运行状态"
 
-    if is_running "$GUNICORN_PID_FILE"; then
-        local pid=$(cat "$GUNICORN_PID_FILE")
-        print_info "Gunicorn服务启动成功 (PID: $pid)"
-        print_info "PID文件: $GUNICORN_PID_FILE"
+    if is_running "$GUNICORN_PATTERN"; then
+        print_info "[✓] FastAPI(Gunicorn): 运行中 (PID: $(format_pids "$GUNICORN_PATTERN"))"
+        ps -o pid,ppid,user,etime,command -p "$(format_pids "$GUNICORN_PATTERN" | tr ' ' ',')" | tail -n +2
     else
-        print_error "Gunicorn服务启动失败, 请检查配置文件: $GUNICORN_CONFIG_FILE"
-        exit 1
+        print_warn "[×] FastAPI(Gunicorn): 未运行"
+    fi
+
+    if [ -f "$FASTAPI_LOG_FILE" ]; then
+        echo "  日志: $FASTAPI_LOG_FILE ($(du -h "$FASTAPI_LOG_FILE" 2> /dev/null | cut -f1))"
+    fi
+    echo ""
+
+    if [ -x "$CELERY_DEPLOY" ]; then
+        "$CELERY_DEPLOY" status
+    else
+        print_warn "[×] Celery 部署脚本不存在: $CELERY_DEPLOY"
     fi
 }
 
-# 步骤5: 检查服务状态
-check_status() {
-    print_step "步骤5: 检查服务状态"
-
-    echo ""
-    print_info "========== 服务运行状态 =========="
-
-    # 检查Gunicorn服务
-    if is_running "$GUNICORN_PID_FILE"; then
-        local pid=$(cat "$GUNICORN_PID_FILE")
-        print_info "[✓] Gunicorn: 运行中 (PID: $pid)"
-    else
-        print_error "[×] Gunicorn: 未运行"
-    fi
-
-    # 检查Celery Worker服务
-    if is_running "$CELERY_WORKER_PID"; then
-        local pid=$(cat "$CELERY_WORKER_PID")
-        print_info "[✓] Celery Worker: 运行中 (PID: $pid)"
-    else
-        print_error "[×] Celery Worker: 未运行"
-    fi
-
-    # 检查Celery Beat服务
-    if is_running "$CELERY_BEAT_PID"; then
-        local pid=$(cat "$CELERY_BEAT_PID")
-        print_info "[✓] Celery Beat: 运行中 (PID: $pid)"
-    else
-        print_error "[×] Celery Beat: 未运行"
-    fi
-
-    echo ""
-    print_info "部署完成！"
-    print_info "========== 服务运行状态 =========="
-}
-
-# 完整部署流程
+# ==================== 完整流程 ====================
 full_deploy() {
     print_info "开始完整部署流程..."
-    print_info "项目目录: $SCRIPT_DIR"
-    print_info "Git拉取分支: $GIT_BRANCH"
-    print_info "Gunicorn 配置: $GUNICORN_CONFIG_FILE"
-    print_info "Celery Worker并发数: $CELERY_WORKER_CONCURRENCY"
-    echo ""
+    print_info "项目目录: $PROJECT_ROOT"
+    print_info "Git 分支: $GIT_BRANCH"
+    print_info "Celery 并发: $CELERY_CONCURRENCY"
 
-    stop_services
-    pull_code
-    start_celery
-    start_fastapi
-    check_status
+    stop_services || exit 1
+    pull_code || exit 1
+    start_celery || exit 1
+    start_fastapi || exit 1
+
+    echo ""
+    show_status
+    print_info "部署完成!"
 }
 
 # 仅重启服务(不拉取代码)
 restart_services() {
     print_step "重启服务(不拉取代码)"
-
-    stop_services
+    stop_services || exit 1
     sleep 2
-    start_celery
-    start_fastapi
-    check_status
+    start_celery || exit 1
+    start_fastapi || exit 1
+
+    echo ""
+    show_status
+    print_info "重启完成!"
 }
 
-# 仅停止服务
-stop_all() {
-    print_step "停止所有服务"
-    stop_services
+show_help() {
+    echo "==================== ToolBox 项目部署脚本 ===================="
+    echo "命令说明:"
+    echo "  start         # 完整部署(停止服务 -> 拉取master分支代码 -> 启动Celery服务 -> 启动FastAPI服务)"
+    echo "  restart       # 仅重启服务(不拉取代码)"
+    echo "  stop          # 停止所有服务"
+    echo "  status        # 查看服务运行状态"
+    echo "  pull          # 拉取master分支代码"
+    echo ""
+    echo "使用提示:"
+    echo "  1. 首次使用前, 请确保已安装依赖"
+    echo "  2. 确保gunicorn.configuration.py配置文件正确"
+    echo "  3. 确保configure.project_config.py配置文件正确"
+    echo "  4. 发生改动但未提交的文件会被直接放弃, 由 $GIT_BRANCH 分支代码覆盖"
+    echo "==================== ToolBox 项目部署脚本 ===================="
+    exit 1
 }
 
-# 查看状态
-show_status() {
-    print_step "查看服务运行状态"
-    check_status
-}
-
-# 主逻辑
+# ==================== 主入口 ====================
 main() {
     case "${1:-}" in
         start)
-            # 完整部署
+            [[ "${2:-}" =~ ^[0-9]+$ ]] && CELERY_CONCURRENCY="$2"
             full_deploy
             ;;
         restart)
-            # 仅重启服务
+            [[ "${2:-}" =~ ^[0-9]+$ ]] && CELERY_CONCURRENCY="$2"
             restart_services
             ;;
         stop)
-            # 停止服务
-            stop_all
+            print_step "停止所有服务"
+            stop_services
             ;;
         status)
-            # 查看状态
             show_status
             ;;
+        pull)
+            pull_code
+            ;;
         *)
-            echo "==================== ToolBox 项目部署脚本 ===================="
-            echo "命令说明:"
-            echo "  start         # 完整部署(停止服务 -> 拉取master分支代码 -> 启动Celery服务 -> 启动FastAPI服务)"
-            echo "  restart       # 仅重启服务(不拉取代码)"
-            echo "  stop          # 停止所有服务"
-            echo "  status        # 查看服务运行状态"
-            echo ""
-            echo "使用提示:"
-            echo "  1. 首次使用前, 请确保已安装依赖"
-            echo "  2. 确保gunicorn.configuration.py配置文件正确"
-            echo "  3. 确保configure.project_config.py配置文件正确"
-            echo "  4. 发生改动但未提交的文件会被直接放弃, 由 $GIT_BRANCH 分支代码覆盖"
-            echo "==================== ToolBox 项目部署脚本 ===================="
-            exit 1
+            show_help
             ;;
     esac
 }

@@ -54,7 +54,7 @@ class ProjectConfig(BaseSettings):
 
     # 安全认证配置
     AUTH_JWT_ALGORITHM: str = "HS256"
-    AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 day
+    AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 365
     AUTH_SECRET_KEY: str = Field(..., min_length=64, description="JWT密钥")
     AUTH_TEMPORARY_TOKEN: str = Field(..., min_length=128, description="临时令牌")
 
