@@ -6,8 +6,8 @@
 #   source .venv/bin/activate
 #   pkill -f -9 “backend_main:app”
 #   pkill -f -9 celery
-#   nohup celery -A celery_scheduler.celery_worker worker -Q 8520_default,8520_autotest -c 4 -l INFO > /zdhgj/python_projects/fastapi-toolbox-runner/output/logs/celery_log/celery_worker.log 2>&1 &
-#   nohup celery -A celery_scheduler.celery_worker beat -l INFO > /zdhgj/python_projects/fastapi-toolbox-runner/output/logs/celery_log/celery_beat.log 2>&1 &
+#   nohup celery -A celery_scheduler.celery_worker worker -Q 8520_default,8520_autotest -c 4 -l INFO > /zdhgj/python_projects/fastapi-toolbox-runner/output/logs/celery_logs/celery_worker.log 2>&1 &
+#   nohup celery -A celery_scheduler.celery_worker beat -l INFO > /zdhgj/python_projects/fastapi-toolbox-runner/output/logs/celery_logs/celery_beat.log 2>&1 &
 #   ps aux | grep celery
 #   nohup gunicorn -c gunicorn.conf.py backend_main:app > /zdhgj/python_projects/fastapi-toolbox-runner/toolbox-runner.log 2>&1
 #   ps aux | grep gunicorn
@@ -34,11 +34,10 @@ export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 QUEUES="8520_default,8520_autotest"
 
 # ==================== 日志路径 ====================
-CELERY_LOG_DIR="${PROJECT_ROOT}/output/logs/celery_log"
+CELERY_LOG_DIR="${PROJECT_ROOT}/output/logs/celery_logs"
 mkdir -p "$CELERY_LOG_DIR"
 CELERY_WORKER_LOG="${CELERY_LOG_DIR}/celery_worker.log"
 CELERY_BEAT_LOG="${CELERY_LOG_DIR}/celery_beat.log"
-CELERY_LOGURU_LOG_DIR="${PROJECT_ROOT}/output/logs/celery_logs"
 
 # 进程匹配模式(与手动执行pkill -f命令的匹配对象一致, 且区分worker/beat)
 WORKER_PATTERN='celery_scheduler\.celery_worker[[:space:]]+worker'
@@ -202,7 +201,7 @@ celery_status() {
     fi
 
     echo ""
-    echo "日志文件(nohup 重定向):"
+    echo "日志文件:"
     for log in "$CELERY_WORKER_LOG" "$CELERY_BEAT_LOG"; do
         if [ -f "$log" ]; then
             echo "  $log ($(du -h "$log" 2> /dev/null | cut -f1))"
@@ -210,15 +209,6 @@ celery_status() {
             echo "  $log (不存在)"
         fi
     done
-    echo "日志文件(Loguru 实际落盘):"
-    for log in "${CELERY_LOGURU_LOG_DIR}/celery_worker.log" "${CELERY_LOGURU_LOG_DIR}/celery_beat.log"; do
-        if [ -f "$log" ]; then
-            echo "  $log ($(du -h "$log" 2> /dev/null | cut -f1))"
-        else
-            echo "  $log (不存在)"
-        fi
-    done
-    print_step "Celery 进程状态"
 }
 
 show_help() {
