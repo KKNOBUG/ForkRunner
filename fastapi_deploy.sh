@@ -1,23 +1,19 @@
 #!/bin/bash
 # -*- coding: utf-8 -*-
-#
-# ToolBox 项目(FastAPI + Celery)部署脚本
-# 完全贴合手动部署流程:
+# Celery Worker/Beat 部署脚本
+# 手动部署流程:
 #   cd /zdhgj/python_projects/fastapi-toolbox-runner
 #   source .venv/bin/activate
-#   pkill -f -9 "backend_main:app"
+#   pkill -f -9 “backend_main:app”
 #   pkill -f -9 celery
-#   git pull origin toolbox-runner / git reset --hard origin/toolbox-runner
-#   nohup celery ... worker ... > output/logs/celery_log/celery_worker.log 2>&1 &
-#   nohup celery ... beat -l INFO > output/logs/celery_log/celery_beat.log 2>&1 &
-#   nohup gunicorn -c gunicorn.conf.py backend_main:app > toolbox-runner.log 2>&1 &
-# 用法: ./fastapi_deploy.sh start|restart|stop|status|pull
-#
-# Celery 的启停/状态由同目录 celery_deploy.sh 统一提供, 本脚本负责编排完整部署流程。
+#   nohup celery -A celery_scheduler.celery_worker worker -Q 8520_default,8520_autotest -c 4 -l INFO > /zdhgj/python_projects/fastapi-toolbox-runner/output/logs/celery_log/celery_worker.log 2>&1 &
+#   nohup celery -A celery_scheduler.celery_worker beat -l INFO > /zdhgj/python_projects/fastapi-toolbox-runner/output/logs/celery_log/celery_beat.log 2>&1 &
+#   ps aux | grep celery
+#   nohup gunicorn -c gunicorn.conf.py backend_main:app > /zdhgj/python_projects/fastapi-toolbox-runner/toolbox-runner.log 2>&1
+#   ps aux | grep gunicorn
 
 # ==================== 基础路径 ====================
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="${PROJECT_ROOT:-$SCRIPT_DIR}"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${PROJECT_ROOT}/.venv"
 GUNICORN_BIN="${VENV_DIR}/bin/gunicorn"
 

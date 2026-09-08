@@ -1,25 +1,25 @@
 #!/bin/bash
 # -*- coding: utf-8 -*-
-#
-# Celery Worker / Beat 部署脚本
-# 完全贴合手动部署流程:
+# Celery Worker/Beat 部署脚本
+# 手动部署流程:
 #   cd /zdhgj/python_projects/fastapi-toolbox-runner
 #   source .venv/bin/activate
-#   nohup celery -A celery_scheduler.celery_worker worker -Q 8518_default,8518_autotest -c 4 -l INFO > output/logs/celery_log/celery_worker.log 2>&1 &
-#   nohup celery -A celery_scheduler.celery_worker beat -l INFO > output/logs/celery_log/celery_beat.log 2>&1 &
+#   pkill -f -9 “backend_main:app”
 #   pkill -f -9 celery
-# 用法: ./celery_deploy.sh start|stop|restart|status|start-worker|stop-worker|start-beat|stop-beat
+#   nohup celery -A celery_scheduler.celery_worker worker -Q 8520_default,8520_autotest -c 4 -l INFO > /zdhgj/python_projects/fastapi-toolbox-runner/output/logs/celery_log/celery_worker.log 2>&1 &
+#   nohup celery -A celery_scheduler.celery_worker beat -l INFO > /zdhgj/python_projects/fastapi-toolbox-runner/output/logs/celery_log/celery_beat.log 2>&1 &
+#   ps aux | grep celery
+#   nohup gunicorn -c gunicorn.conf.py backend_main:app > /zdhgj/python_projects/fastapi-toolbox-runner/toolbox-runner.log 2>&1
+#   ps aux | grep gunicorn
 
 # ==================== 基础路径 ====================
-# 部署约定: 本脚本与 .venv 同置于项目根目录, 任意工作目录调用均可正确定位
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$SCRIPT_DIR"
+# 部署约定: 本脚本与.venv虚拟环境同置于项目根目录
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${PROJECT_ROOT}/.venv"
 CELERY_BIN="${VENV_DIR}/bin/celery"
 
 # 激活虚拟环境(启动命令已用绝对路径双保险, 未创建 .venv 时不报错)
 if [ -f "${VENV_DIR}/bin/activate" ]; then
-    # shellcheck disable=SC1091
     source "${VENV_DIR}/bin/activate"
 fi
 
@@ -32,21 +32,18 @@ cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; 
 export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
 # ==================== 队列名(固定写死, 最稳定) ====================
-# 必须与 configure/celery_config.py 的 CeleryConfig 保持一致(端口前缀隔离: {port}_default,{port}_autotest, 当前端口 8518)
-# 注意: .env 中无 SERVER_PORT 变量, 全局配置来源为 CeleryConfig.default_queue / CeleryConfig.autotest_queue,
-#       若服务端口变更, 此处必须与 CeleryConfig 同步修改
-QUEUES="8518_default,8518_autotest"
+# 必须与configure/celery_config.py的CeleryConfig中配置保持一致(端口前缀隔离: {port}_default,{port}_autotest, 当前端口 8520)
+QUEUES="8520_default,8520_autotest"
 
 # ==================== 日志路径 ====================
-# nohup 重定向日志(与手动部署路径一致); 同时通过 --logfile 传给 setup_logging 挂 Loguru 文件 sink
+# nohup 重定向日志
 CELERY_LOG_DIR="${PROJECT_ROOT}/output/logs/celery_log"
 mkdir -p "$CELERY_LOG_DIR"
 CELERY_WORKER_LOG="${CELERY_LOG_DIR}/celery_worker.log"
 CELERY_BEAT_LOG="${CELERY_LOG_DIR}/celery_beat.log"
-# 项目内 Loguru 默认日志目录(configure.celery_config 定义), 一并列出便于排查
 CELERY_LOGURU_LOG_DIR="${PROJECT_ROOT}/output/logs/celery_logs"
 
-# 进程匹配模式(与手动 pkill -f 的匹配对象一致, 且能区分 worker/beat)
+# 进程匹配模式(与手动pkill -f的匹配对象一致, 且能区分worker/beat)
 WORKER_PATTERN='celery_scheduler\.celery_worker[[:space:]]+worker'
 BEAT_PATTERN='celery_scheduler\.celery_worker[[:space:]]+beat'
 CELERY_PATTERN='celery'
