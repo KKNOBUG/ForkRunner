@@ -95,19 +95,10 @@ kill_by_pattern() {
         waited=$((waited + 1))
     done
 
-    # 强杀第一轮: 每次都基于实时进程表重新扫描(不依赖 pid 文件, 不会因 pid 过期而杀空/杀错)
+    # 强杀: 每次都基于实时进程表重新扫描(不依赖 pid 文件, 不会因 pid 过期而杀空/杀错)
     pids="$(pids_of "$pattern")"
     if [ -n "$pids" ]; then
         print_warn "${name} ${timeout_s}s 内未退出, 强制 kill -9..."
-        for pid in $pids; do
-            kill -9 "$pid" 2> /dev/null || true
-        done
-        sleep 1
-    fi
-
-    # 第二轮兜底: 重新扫描补杀
-    pids="$(pids_of "$pattern")"
-    if [ -n "$pids" ]; then
         for pid in $pids; do
             kill -9 "$pid" 2> /dev/null || true
         done
@@ -122,14 +113,14 @@ kill_by_pattern() {
     return 0
 }
 
-# 等待进程稳定运行(前 8 秒为重度 import 阶段, 连续 3 秒存在才判定成功)
+# 等待进程稳定运行(连续 3 秒且至少 8 秒判定稳定; 超时但进程存活仅告警, 进程消失才判失败)
 wait_alive() {
     local pattern="$1"
     local log_file="$2"
     local name="$3"
     local stable=0 elapsed=0
 
-    while [ "$elapsed" -lt 20 ]; do
+    while [ "$elapsed" -lt 30 ]; do
         if is_running "$pattern"; then
             stable=$((stable + 1))
             if [ "$stable" -ge 3 ] && [ "$elapsed" -ge 8 ]; then
@@ -144,7 +135,13 @@ wait_alive() {
         elapsed=$((elapsed + 1))
     done
 
-    print_error "${name} 启动失败或超时, 请查看日志: $log_file"
+    # 超时后区分: 进程仍在说明只是启动慢(虚拟机磁盘IO/重度import), 不误报为失败
+    if is_running "$pattern"; then
+        print_warn "${name} 已拉起但 ${elapsed}s 内未进入稳定运行, 请稍后执行 status 确认"
+        print_info "日志文件: $log_file"
+        return 0
+    fi
+    print_error "${name} 启动失败, 请查看日志: $log_file"
     if [ -f "$log_file" ]; then
         print_error "----- 最近日志 -----"
         tail -n 30 "$log_file" 2> /dev/null || true
@@ -200,8 +197,8 @@ stop_celery_beat() {
 stop_celery_all() {
     stop_celery_beat
     stop_celery_worker
-    # 清扫本项目残留 celery 进程(精确匹配 celery_scheduler.celery_worker)
-    kill_by_pattern "$CELERY_PATTERN" "Celery 残留进程" 3 || true
+    # 兜底清扫兼最终校验(精确匹配 celery_scheduler.celery_worker): 返回非零即存在杀不掉的本项目进程
+    kill_by_pattern "$CELERY_PATTERN" "Celery 残留进程" 3
 }
 
 celery_status() {
@@ -281,7 +278,7 @@ main() {
         restart)
             [[ "${2:-}" =~ ^[0-9]+$ ]] && CONCURRENCY="$2"
             print_step "重启 Celery 服务 (并发: ${CONCURRENCY})"
-            stop_celery_all
+            stop_celery_all || exit 1
             sleep 2
             start_celery_worker || exit 1
             start_celery_beat || exit 1
