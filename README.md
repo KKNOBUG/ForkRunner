@@ -17,20 +17,21 @@
 13. [API 接口 summary 编写规范](#api-接口-summary-编写规范)
 
 ## 技术栈
-
-| 类别       | 技术组合 | 说明 |
-|----------|----------|------|
-| Web 框架   | FastAPI | 异步 Web 框架，自动 Swagger/ReDoc |
-| ORM 框架   | Tortoise ORM + Aerich | 异步 ORM 与数据库迁移 |
-| SQL 构建   | pypika-tortoise | 基于 Pypika 的 SQL 构建器 |
-| 数据库      | MySQL | 业务数据持久化 |
-| 数据库驱动    | aiomysql | MySQL 异步客户端 |
-| 缓存 / 队列  | Redis | Celery 任务队列、缓存 |
-| 任务调度     | Celery + Celery Beat + RedBeat | 定时 / 周期 / 一次性任务 |
-| 认证       | JWT + argon2 | 无状态登录、Token 版本吊销 |
-| 配置管理     | pydantic-settings | `.env` → 类型安全配置 |
-| HTTP 客户端 | aiohttp | 异步 HTTP 客户端 |
-| 日志       | loguru | 简化的日志收集器 |
+| 类别 | 技术组合 | 说明 |
+|---|---|---|
+| Web 框架 | FastAPI | 异步框架，自动 Swagger/ReDoc |
+| 数据校验 | Pydantic | 请求/响应模型校验 |
+| ORM 框架 | Tortoise ORM + Aerich | 异步 ORM + 迁移 |
+| SQL 构建 | pypika-tortoise | 基于 Pypika 构建 SQL |
+| 数据库 | MySQL + aiomysql | 数据存储，异步驱动 |
+| 缓存 / 队列 | Redis | 任务队列 + 缓存 |
+| 任务调度 | Celery + Beat + RedBeat | 周期 / 定时 / 一次性任务 |
+| 认证 | JWT + argon2 | 无状态认证，Token 可吊销 |
+| 配置管理 | pydantic-settings | .env 类型安全加载 |
+| HTTP 客户端 | aiohttp | 异步 HTTP 请求 |
+| JSON 处理 | jsonpath + orjson | JSON 定位查询 + 高速序列化 |
+| 日志 | loguru | 日志收集 |
+| 部署 | Gunicorn + Uvicorn | 生产级 ASGI 部署 |
 
 
 ## 项目结构
@@ -61,22 +62,23 @@
 │  │  ├─exceptions              - 异常处理
 │  │  ├─initialization          - 初始化
 │  │  ├─middleware              - 中间件
-│  │  └─ response               - 响应处理
+│  │  └─ responses              - 响应处理
 │  ├─enums                      - 总项目中的枚举构造
 │  ├─output                     - 总项目中的输出文件存储目录
 │  │  ├─__init__.py
-│  │  ├─datagram                - 业务所需要数据文件模板
+│  │  ├─datagram                - 业务文件
 │  │  ├─docx                    - 需求/开发/依赖/说明类文档
 │  │  ├─download                - 下载文件
 │  │  ├─jmx                     - Jmeter脚本
 │  │  ├─logs                    - 日志文件
-│  │  ├─media                   - 多媒体文件
+│  │  │  └─ celery_logs         - celery worker/beat日志文件
+│  │  ├─template                - 模板文件
 │  │  ├─upload                  - 上传文件
 │  │  └─ xlsx                   - 其他数据文件
 │  ├─service                    - 总项目中的公共业务实现、场景实现、业务底座等
-│  ├─static                     - OpenAPI文档
-│  ├─celery_start.sh            - Celery Linux启动脚本
-│  ├─deploy.sh                  - ForkRunner Linux部署脚本
+│  ├─static                     - 静态文件, 如OpenAPI文档
+│  ├─celery_start.sh            - Celery 部署脚本
+│  ├─fastapi_deploy.sh          - FastAPI 部署脚本
 │  ├─backend_main.py            - 项目的启动文件
 │  ├─gunicorn.conf.py           - Gunicorn进程管理器的配置文件
 │  ├─README.md                  - 项目的说明文档
