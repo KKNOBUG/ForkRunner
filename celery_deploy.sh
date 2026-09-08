@@ -16,12 +16,13 @@
 # 部署约定: 本脚本与.venv虚拟环境同置于项目根目录
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${PROJECT_ROOT}/.venv"
-CELERY_BIN="${VENV_DIR}/bin/celery"
 
-# 激活虚拟环境(启动命令已用绝对路径双保险, 未创建 .venv 时不报错)
-if [ -f "${VENV_DIR}/bin/activate" ]; then
-    source "${VENV_DIR}/bin/activate"
+# 项目约定: 所有依赖均在 .venv 内, 必须先激活虚拟环境再启动 celery
+if [ ! -f "${VENV_DIR}/bin/activate" ]; then
+    echo "虚拟环境不存在: ${VENV_DIR}"
+    exit 1
 fi
+source "${VENV_DIR}/bin/activate"
 
 CELERY_APP="celery_scheduler.celery_worker"
 # 并发数: 固定 4(可用命令行第二参数覆盖, 如 ./celery_deploy.sh start 8)
@@ -46,7 +47,8 @@ CELERY_LOGURU_LOG_DIR="${PROJECT_ROOT}/output/logs/celery_logs"
 # 进程匹配模式(与手动pkill -f的匹配对象一致, 且能区分worker/beat)
 WORKER_PATTERN='celery_scheduler\.celery_worker[[:space:]]+worker'
 BEAT_PATTERN='celery_scheduler\.celery_worker[[:space:]]+beat'
-CELERY_PATTERN='celery'
+# 兜底清扫仅限本项目应用(不误杀其他含celery关键字的进程, 如其他项目celery或tail日志)
+CELERY_PATTERN='celery_scheduler\.celery_worker'
 
 # ==================== 输出函数 ====================
 print_info()  { echo -e "\033[32m[INFO]\033[0m $1"; }
@@ -56,7 +58,7 @@ print_step()  { echo -e "\n\033[36m========== $1 ==========\033[0m"; }
 
 # ==================== 工具函数 ====================
 
-# 查找匹配进程 PID(排除脚本自身, 避免 celery_deploy.sh 自身被 pkill celery 误杀)
+# 查找匹配进程 PID(排除脚本自身 PID)
 pids_of() {
     pgrep -f "$1" 2> /dev/null | grep -vw "$$" || true
 }
@@ -156,16 +158,12 @@ start_celery_worker() {
         print_warn "Celery Worker 已在运行(PID: $(format_pids "$WORKER_PATTERN")), 跳过启动"
         return 0
     fi
-    if [ ! -x "$CELERY_BIN" ]; then
-        print_error "celery 不存在: $CELERY_BIN, 请先在项目根目录创建虚拟环境(.venv)"
-        return 1
-    fi
 
     print_info "启动 Celery Worker (并发数: ${CONCURRENCY}, 队列: ${QUEUES})..."
     print_info "日志文件: ${CELERY_WORKER_LOG}"
     # 导出 CELERY_LOGFILE: prefork 子进程(worker_process_init)重建 Loguru sink 时写同一文件
     export CELERY_LOGFILE="${CELERY_WORKER_LOG}"
-    nohup "$CELERY_BIN" -A "$CELERY_APP" worker \
+    nohup celery -A "$CELERY_APP" worker \
         -Q "$QUEUES" -c "$CONCURRENCY" -l INFO \
         --logfile="$CELERY_WORKER_LOG" \
         > "$CELERY_WORKER_LOG" 2>&1 &
@@ -178,16 +176,12 @@ start_celery_beat() {
         print_warn "Celery Beat 已在运行(PID: $(format_pids "$BEAT_PATTERN")), 跳过启动"
         return 0
     fi
-    if [ ! -x "$CELERY_BIN" ]; then
-        print_error "celery 不存在: $CELERY_BIN, 请先在项目根目录创建虚拟环境(.venv)"
-        return 1
-    fi
 
     print_info "启动 Celery Beat..."
     print_info "日志文件: ${CELERY_BEAT_LOG}"
     export CELERY_LOGFILE="${CELERY_BEAT_LOG}"
     # 调度器(redbeat)由 celery_config.py 配置提供, 不额外传参
-    nohup "$CELERY_BIN" -A "$CELERY_APP" beat \
+    nohup celery -A "$CELERY_APP" beat \
         -l INFO \
         --logfile="$CELERY_BEAT_LOG" \
         > "$CELERY_BEAT_LOG" 2>&1 &
@@ -206,14 +200,14 @@ stop_celery_beat() {
 stop_celery_all() {
     stop_celery_beat
     stop_celery_worker
-    # 清扫残留 celery 进程(脚本自身已排除, 不会被误杀)
+    # 清扫本项目残留 celery 进程(精确匹配 celery_scheduler.celery_worker)
     kill_by_pattern "$CELERY_PATTERN" "Celery 残留进程" 3 || true
 }
 
 celery_status() {
     print_step "Celery 进程状态"
     echo "项目目录: $PROJECT_ROOT"
-    echo "Celery:   $CELERY_BIN"
+    echo "Celery:   $(command -v celery)"
     echo "队列:     $QUEUES"
     echo ""
 
