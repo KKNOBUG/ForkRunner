@@ -457,7 +457,7 @@ async def interactive_main(args: argparse.Namespace) -> None:
     """交互模式: 展示能力菜单, 循环响应选择, 直至退出。"""
     while True:
         print_menu(args)
-        choice = read_input("请选择能力编号: ")
+        choice = read_input("请选择功能编号: ")
         if choice in ("q", "quit", "exit"):
             print("已退出。")
             return
