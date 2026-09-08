@@ -1,7 +1,7 @@
 #!/bin/bash
 # -*- coding: utf-8 -*-
-# Celery Worker/Beat 部署脚本
-# 手动部署流程:
+# FastAPI 部署脚本
+# 原手动部署流程:
 #   cd /zdhgj/python_projects/fastapi-toolbox-runner
 #   source .venv/bin/activate
 #   pkill -f -9 “backend_main:app”
@@ -11,33 +11,29 @@
 #   ps aux | grep celery
 #   nohup gunicorn -c gunicorn.conf.py backend_main:app > /zdhgj/python_projects/fastapi-toolbox-runner/toolbox-runner.log 2>&1
 #   ps aux | grep gunicorn
-
 # ==================== 基础路径 ====================
+# 部署约定: 本脚本与.venv虚拟环境同置于项目根目录
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${PROJECT_ROOT}/.venv"
-GUNICORN_BIN="${VENV_DIR}/bin/gunicorn"
+# 项目约定: 所有依赖均在.venv内, 必须先激活虚拟环境再启动服务
+if [ ! -f "${VENV_DIR}/bin/activate" ]; then
+    echo "虚拟环境不存在: ${VENV_DIR}"
+    exit 1
+fi
+source "${VENV_DIR}/bin/activate"
 
-# Gunicorn 服务(与手动部署一致)
+# Gunicorn 应用标识(启动参数; 同时作为pgrep/pkill -f的进程匹配模式, 与手动执行pkill -f "backend_main:app"命令保持一致)
 GUNICORN_APP="backend_main:app"
 GUNICORN_CONFIG_FILE="${PROJECT_ROOT}/gunicorn.conf.py"
-# 手动部署 nohup 重定向日志: 项目根目录 toolbox-runner.log
 FASTAPI_LOG_FILE="${PROJECT_ROOT}/toolbox-runner.log"
 
-# Git 配置: 与手动 git pull origin toolbox-runner / git reset --hard origin/toolbox-runner 一致
-GIT_BRANCH="${GIT_BRANCH:-toolbox-runner}"
-# 可选: 私服账号密码(未配置时使用 git 已存储的凭证)
-GIT_USERNAME="${GIT_USERNAME:-}"
-GIT_PASSWORD="${GIT_PASSWORD:-}"
-
-# Celery 编排脚本与并发数
-CELERY_DEPLOY="${SCRIPT_DIR}/celery_deploy.sh"
-CELERY_CONCURRENCY="${CELERY_CONCURRENCY:-4}"
+# Git配置: 与手动执行git pull origin toolbox-runner/git reset --hard origin/toolbox-runner命令保持一致
+GIT_BRANCH="toolbox-runner"
+GIT_USERNAME="CS4224"
+GIT_PASSWORD='KFuser01@!'
 
 cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; }
 export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
-
-# 进程匹配模式(与手动 pkill -f "backend_main:app" 一致)
-GUNICORN_PATTERN='backend_main:app'
 
 # ==================== 输出函数 ====================
 print_info()  { echo -e "\033[32m[INFO]\033[0m $1"; }
@@ -46,16 +42,6 @@ print_error() { echo -e "\033[31m[ERROR]\033[0m $1"; }
 print_step()  { echo -e "\n\033[36m========================================\033[0m"; echo -e "\033[36m$1\033[0m"; echo -e "\033[36m========================================\033[0m"; }
 
 # ==================== 工具函数 ====================
-activate_venv() {
-    if [ -f "${VENV_DIR}/bin/activate" ]; then
-        # shellcheck disable=SC1091
-        source "${VENV_DIR}/bin/activate"
-        return 0
-    fi
-    print_error "虚拟环境不存在: ${VENV_DIR}"
-    return 1
-}
-
 pids_of() {
     pgrep -f "$1" 2> /dev/null | grep -vw "$$" || true
 }
@@ -108,26 +94,15 @@ kill_by_pattern() {
     return 0
 }
 
-# 等待进程稳定运行(应用启动含建表/迁移等重逻辑, 连续 3 秒且至少 10 秒才判定成功)
+# 启动后等待10秒, 进程仍存在即判定成功
 wait_gunicorn_alive() {
-    local stable=0 elapsed=0
-
-    while [ "$elapsed" -lt 30 ]; do
-        if is_running "$GUNICORN_PATTERN"; then
-            stable=$((stable + 1))
-            if [ "$stable" -ge 3 ] && [ "$elapsed" -ge 10 ]; then
-                print_info "FastAPI(Gunicorn) 启动成功 (PID: $(format_pids "$GUNICORN_PATTERN"))"
-                print_info "日志文件: $FASTAPI_LOG_FILE"
-                return 0
-            fi
-        else
-            stable=0
-        fi
-        sleep 1
-        elapsed=$((elapsed + 1))
-    done
-
-    print_error "FastAPI(Gunicorn) 启动失败或超时, 请查看日志: $FASTAPI_LOG_FILE"
+    sleep 10
+    if is_running "$GUNICORN_APP"; then
+        print_info "FastAPI(Gunicorn) 启动成功 (PID: $(format_pids "$GUNICORN_APP"))"
+        print_info "日志文件: $FASTAPI_LOG_FILE"
+        return 0
+    fi
+    print_error "FastAPI(Gunicorn) 启动失败, 请查看日志: $FASTAPI_LOG_FILE"
     if [ -f "$FASTAPI_LOG_FILE" ]; then
         print_error "----- 最近日志 -----"
         tail -n 50 "$FASTAPI_LOG_FILE" 2> /dev/null || true
@@ -136,35 +111,26 @@ wait_gunicorn_alive() {
 }
 
 # ==================== 服务控制 ====================
-# 步骤1: 停止旧服务(与手动顺序一致: 先 FastAPI 后 Celery)
+# 停止旧服务(与手动执行pkill -f "backend_main:app"命令保持一致)
 stop_services() {
-    print_step "步骤1: 停止旧服务"
-    kill_by_pattern "$GUNICORN_PATTERN" "FastAPI(Gunicorn)" 10
-
-    if [ ! -x "$CELERY_DEPLOY" ]; then
-        print_error "Celery 部署脚本不存在: $CELERY_DEPLOY"
-        return 1
-    fi
-    "$CELERY_DEPLOY" stop
-    sleep 2
+    print_step "停止旧服务"
+    kill_by_pattern "$GUNICORN_APP" "FastAPI(Gunicorn)"
 }
 
-# 步骤2: 拉取最新代码(与手动一致: git pull origin $GIT_BRANCH, 失败/冲突时 git reset --hard 强制覆盖)
+# 拉取最新代码(与手动执行一致: git pull 失败/冲突时 git reset --hard 强制覆盖)
 pull_code() {
-    print_step "步骤2: 拉取 ${GIT_BRANCH} 分支最新代码"
+    print_step "拉取 ${GIT_BRANCH} 分支最新代码"
 
     if ! command -v git > /dev/null 2>&1; then
         print_error "git 未安装, 请先安装..."
         return 1
     fi
+    if ! command -v expect > /dev/null 2>&1; then
+        print_error "expect 未安装, 请先安装: yum install expect"
+        return 1
+    fi
 
-    local pull_rc=0
-    if [ -n "$GIT_USERNAME" ] && [ -n "$GIT_PASSWORD" ]; then
-        if ! command -v expect > /dev/null 2>&1; then
-            print_error "expect 未安装, 请先安装: yum install expect"
-            return 1
-        fi
-        expect <<EOF
+    expect <<EOF
 set timeout 60
 spawn git pull origin "$GIT_BRANCH"
 expect {
@@ -180,11 +146,7 @@ expect {
 }
 expect eof
 EOF
-        pull_rc=$?
-    else
-        git pull origin "$GIT_BRANCH"
-        pull_rc=$?
-    fi
+    pull_rc=$?
 
     if [ "$pull_rc" -ne 0 ]; then
         print_warn "git pull 失败(可能存在未提交改动或网络问题), 尝试强制对齐远端..."
@@ -199,25 +161,14 @@ EOF
     print_info "代码更新成功(${GIT_BRANCH} 分支)"
 }
 
-# 步骤3: 启动 Celery 服务(Worker + Beat)
-start_celery() {
-    print_step "步骤3: 启动 Celery 服务"
-    if [ ! -x "$CELERY_DEPLOY" ]; then
-        print_error "Celery 部署脚本不存在: $CELERY_DEPLOY"
-        return 1
-    fi
-    "$CELERY_DEPLOY" start "$CELERY_CONCURRENCY"
-}
-
-# 步骤4: 启动 FastAPI 应用(与手动一致: nohup gunicorn -c gunicorn.conf.py backend_main:app)
+# 启动 FastAPI 应用(与手动一致: nohup gunicorn -c gunicorn.conf.py backend_main:app)
 start_fastapi() {
-    print_step "步骤4: 启动 FastAPI 应用"
+    print_step "启动 FastAPI 应用"
 
-    if is_running "$GUNICORN_PATTERN"; then
-        print_warn "FastAPI(Gunicorn) 已在运行(PID: $(format_pids "$GUNICORN_PATTERN")), 跳过启动"
+    if is_running "$GUNICORN_APP"; then
+        print_warn "FastAPI(Gunicorn) 已在运行(PID: $(format_pids "$GUNICORN_APP")), 跳过启动"
         return 0
     fi
-    activate_venv || return 1
 
     if [ ! -f "$GUNICORN_CONFIG_FILE" ]; then
         print_error "Gunicorn 配置文件不存在: $GUNICORN_CONFIG_FILE"
@@ -226,32 +177,25 @@ start_fastapi() {
 
     print_info "启动 Gunicorn 服务 (配置文件: $GUNICORN_CONFIG_FILE)"
     print_info "日志文件: $FASTAPI_LOG_FILE"
-    nohup "$GUNICORN_BIN" -c "$GUNICORN_CONFIG_FILE" "$GUNICORN_APP" \
+    nohup gunicorn -c "$GUNICORN_CONFIG_FILE" "$GUNICORN_APP" \
         > "$FASTAPI_LOG_FILE" 2>&1 &
 
     wait_gunicorn_alive
 }
 
-# 步骤5: 查看服务运行状态
-·show_status() {
+# 查看服务运行状态
+show_status() {
     print_step "服务运行状态"
 
-    if is_running "$GUNICORN_PATTERN"; then
-        print_info "[✓] FastAPI(Gunicorn): 运行中 (PID: $(format_pids "$GUNICORN_PATTERN"))"
-        ps -o pid,ppid,user,etime,command -p "$(format_pids "$GUNICORN_PATTERN" | tr ' ' ',')" | tail -n +2
+    if is_running "$GUNICORN_APP"; then
+        print_info "[✓] FastAPI(Gunicorn): 运行中 (PID: $(format_pids "$GUNICORN_APP"))"
+        ps -o pid,ppid,user,etime,command -p "$(format_pids "$GUNICORN_APP" | tr ' ' ',')" | tail -n +2
     else
         print_warn "[×] FastAPI(Gunicorn): 未运行"
     fi
 
     if [ -f "$FASTAPI_LOG_FILE" ]; then
         echo "  日志: $FASTAPI_LOG_FILE ($(du -h "$FASTAPI_LOG_FILE" 2> /dev/null | cut -f1))"
-    fi
-    echo ""
-
-    if [ -x "$CELERY_DEPLOY" ]; then
-        "$CELERY_DEPLOY" status
-    else
-        print_warn "[×] Celery 部署脚本不存在: $CELERY_DEPLOY"
     fi
 }
 
@@ -260,14 +204,11 @@ full_deploy() {
     print_info "开始完整部署流程..."
     print_info "项目目录: $PROJECT_ROOT"
     print_info "Git 分支: $GIT_BRANCH"
-    print_info "Celery 并发: $CELERY_CONCURRENCY"
 
     stop_services || exit 1
     pull_code || exit 1
-    start_celery || exit 1
     start_fastapi || exit 1
 
-    echo ""
     show_status
     print_info "部署完成!"
 }
@@ -276,11 +217,8 @@ full_deploy() {
 restart_services() {
     print_step "重启服务(不拉取代码)"
     stop_services || exit 1
-    sleep 2
-    start_celery || exit 1
     start_fastapi || exit 1
 
-    echo ""
     show_status
     print_info "重启完成!"
 }
@@ -288,15 +226,15 @@ restart_services() {
 show_help() {
     echo "==================== ToolBox 项目部署脚本 ===================="
     echo "命令说明:"
-    echo "  start         # 完整部署(停止服务 -> 拉取master分支代码 -> 启动Celery服务 -> 启动FastAPI服务)"
+    echo "  start         # 完整部署(停止服务 -> 拉取${GIT_BRANCH}分支代码 -> 启动FastAPI服务)"
     echo "  restart       # 仅重启服务(不拉取代码)"
     echo "  stop          # 停止所有服务"
     echo "  status        # 查看服务运行状态"
-    echo "  pull          # 拉取master分支代码"
+    echo "  pull          # 拉取${GIT_BRANCH}分支代码"
     echo ""
     echo "使用提示:"
-    echo "  1. 首次使用前, 请确保已安装依赖"
-    echo "  2. 确保gunicorn.configuration.py配置文件正确"
+    echo "  1. 首次使用前, 请先通过 requirements.txt 安装依赖"
+    echo "  2. 确保gunicorn.conf.py配置文件正确"
     echo "  3. 确保configure.project_config.py配置文件正确"
     echo "  4. 发生改动但未提交的文件会被直接放弃, 由 $GIT_BRANCH 分支代码覆盖"
     echo "==================== ToolBox 项目部署脚本 ===================="
@@ -307,11 +245,9 @@ show_help() {
 main() {
     case "${1:-}" in
         start)
-            [[ "${2:-}" =~ ^[0-9]+$ ]] && CELERY_CONCURRENCY="$2"
             full_deploy
             ;;
         restart)
-            [[ "${2:-}" =~ ^[0-9]+$ ]] && CELERY_CONCURRENCY="$2"
             restart_services
             ;;
         stop)

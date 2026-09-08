@@ -1,7 +1,7 @@
 #!/bin/bash
 # -*- coding: utf-8 -*-
 # Celery Worker/Beat 部署脚本
-# 手动部署流程:
+# 原手动部署流程:
 #   cd /zdhgj/python_projects/fastapi-toolbox-runner
 #   source .venv/bin/activate
 #   pkill -f -9 “backend_main:app”
@@ -11,40 +11,36 @@
 #   ps aux | grep celery
 #   nohup gunicorn -c gunicorn.conf.py backend_main:app > /zdhgj/python_projects/fastapi-toolbox-runner/toolbox-runner.log 2>&1
 #   ps aux | grep gunicorn
-
 # ==================== 基础路径 ====================
 # 部署约定: 本脚本与.venv虚拟环境同置于项目根目录
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${PROJECT_ROOT}/.venv"
-
-# 项目约定: 所有依赖均在 .venv 内, 必须先激活虚拟环境再启动 celery
+# 项目约定: 所有依赖均在.venv内, 必须先激活虚拟环境再启动服务
 if [ ! -f "${VENV_DIR}/bin/activate" ]; then
     echo "虚拟环境不存在: ${VENV_DIR}"
     exit 1
 fi
 source "${VENV_DIR}/bin/activate"
 
-CELERY_APP="celery_scheduler.celery_worker"
-# 并发数: 固定 4(可用命令行第二参数覆盖, 如 ./celery_deploy.sh start 8)
+# 并发数: 固定4(可用命令行第二参数覆盖, 如 ./celery_deploy.sh start 8)
 CONCURRENCY=4
+CELERY_APP="celery_scheduler.celery_worker"
 
 cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; }
-# 保证 celery 能导入项目模块
 export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
-# ==================== 队列名(固定写死, 最稳定) ====================
+# ==================== 队列名称 ====================
 # 必须与configure/celery_config.py的CeleryConfig中配置保持一致(端口前缀隔离: {port}_default,{port}_autotest, 当前端口 8520)
 QUEUES="8520_default,8520_autotest"
 
 # ==================== 日志路径 ====================
-# nohup 重定向日志
 CELERY_LOG_DIR="${PROJECT_ROOT}/output/logs/celery_log"
 mkdir -p "$CELERY_LOG_DIR"
 CELERY_WORKER_LOG="${CELERY_LOG_DIR}/celery_worker.log"
 CELERY_BEAT_LOG="${CELERY_LOG_DIR}/celery_beat.log"
 CELERY_LOGURU_LOG_DIR="${PROJECT_ROOT}/output/logs/celery_logs"
 
-# 进程匹配模式(与手动pkill -f的匹配对象一致, 且能区分worker/beat)
+# 进程匹配模式(与手动执行pkill -f命令的匹配对象一致, 且区分worker/beat)
 WORKER_PATTERN='celery_scheduler\.celery_worker[[:space:]]+worker'
 BEAT_PATTERN='celery_scheduler\.celery_worker[[:space:]]+beat'
 # 兜底清扫仅限本项目应用(不误杀其他含celery关键字的进程, 如其他项目celery或tail日志)
@@ -95,7 +91,6 @@ kill_by_pattern() {
         waited=$((waited + 1))
     done
 
-    # 强杀: 每次都基于实时进程表重新扫描(不依赖 pid 文件, 不会因 pid 过期而杀空/杀错)
     pids="$(pids_of "$pattern")"
     if [ -n "$pids" ]; then
         print_warn "${name} ${timeout_s}s 内未退出, 强制 kill -9..."
@@ -113,31 +108,15 @@ kill_by_pattern() {
     return 0
 }
 
-# 等待进程稳定运行(连续 3 秒且至少 8 秒判定稳定; 超时但进程存活仅告警, 进程消失才判失败)
+# 启动后等待10秒, 进程仍存在即判定成功
 wait_alive() {
     local pattern="$1"
     local log_file="$2"
     local name="$3"
-    local stable=0 elapsed=0
 
-    while [ "$elapsed" -lt 30 ]; do
-        if is_running "$pattern"; then
-            stable=$((stable + 1))
-            if [ "$stable" -ge 3 ] && [ "$elapsed" -ge 8 ]; then
-                print_info "${name} 启动成功 (PID: $(format_pids "$pattern"))"
-                print_info "日志文件: $log_file"
-                return 0
-            fi
-        else
-            stable=0
-        fi
-        sleep 1
-        elapsed=$((elapsed + 1))
-    done
-
-    # 超时后区分: 进程仍在说明只是启动慢(虚拟机磁盘IO/重度import), 不误报为失败
+    sleep 10
     if is_running "$pattern"; then
-        print_warn "${name} 已拉起但 ${elapsed}s 内未进入稳定运行, 请稍后执行 status 确认"
+        print_info "${name} 启动成功 (PID: $(format_pids "$pattern"))"
         print_info "日志文件: $log_file"
         return 0
     fi
@@ -197,7 +176,6 @@ stop_celery_beat() {
 stop_celery_all() {
     stop_celery_beat
     stop_celery_worker
-    # 兜底清扫兼最终校验(精确匹配 celery_scheduler.celery_worker): 返回非零即存在杀不掉的本项目进程
     kill_by_pattern "$CELERY_PATTERN" "Celery 残留进程" 3
 }
 
