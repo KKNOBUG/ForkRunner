@@ -24,8 +24,8 @@ if [ -f "${VENV_DIR}/bin/activate" ]; then
 fi
 
 CELERY_APP="celery_scheduler.celery_worker"
-# 并发数: 默认 4, 可用环境变量 CELERY_CONCURRENCY 或命令行第二参数覆盖
-CONCURRENCY="${CELERY_CONCURRENCY:-4}"
+# 并发数: 固定 4(可用命令行第二参数覆盖, 如 ./celery_deploy.sh start 8)
+CONCURRENCY=4
 
 cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; }
 # 保证 celery 能导入项目模块
