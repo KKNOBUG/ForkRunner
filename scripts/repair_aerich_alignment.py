@@ -1,35 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : scripts/repair_aerich_alignment
-@DateTime: 2026/7/31
-
 修复 aerich 迁移记录与迁移文件错位问题的通用工具。
 
 背景:
-    aerich 以 aerich 表中 id 最大记录(Meta.ordering=["-id"])推进迁移序号(即version前缀+1),
-    并以其 content 快照作为下次 migrate 的 diff 基线; upgrade 以"磁盘有文件但表无记录"判定待应用文件。
-    表记录与磁盘文件错位会引发撞号("Miration file exists..."交互提示, 生产无人值守时启动卡死)
-    以及基线污染(生成全量或错误DDL)等问题。
+    aerich 用 aerich 表登记"哪些迁移文件已应用", 迁移序号和下次迁移的对比基线都取自表中id最大一条记录。
+    这张表一旦与磁盘迁移文件对不上(漏记/多记/重复), 轻则迁移文件撞号(生产启动卡在
+    "Miration file exists..."确认), 重则对比基线错乱(下次迁移生成全量甚至错误的SQL)。
 
-修复动作(默认进入交互菜单选择能力执行; 追加 --execute 跳过菜单非交互全流程修复):
-    1. 去重: 同version多条记录(并发upgrade等导致)保留id最大一条, 删除其余;
-    2. 删除残留记录: 数据库有记录但磁盘无对应迁移文件;
-    3. 补登缺失记录: 磁盘有文件但表无记录且序号不超过补登上限, 仅补登记不执行SQL(DDL视为已生效);
-    4. 真实应用: 序号超过补登上限的缺失文件由 aerich upgrade 执行SQL并登记真实content快照;
-    5. 基线检查与重建: id最大记录content为占位空快照({})时, 配合 --rebuild-baseline
-       重建为当前models快照, 避免下次migrate以空基线全量diff;
-    6. 迁移预览: 打印下次migrate将生成的SQL并标记DROP/RENAME风险,
-       覆盖删字段/改名字段被误判为DROP+ADD导致列数据丢失的场景;
-    7. 结果校验: 记录与文件一一对应、无重复version、id最大记录为最高版本号、基线content有效,
-       校验不通过时以退出码1结束。
+修复动作(默认进入交互菜单选择执行; 追加 --execute 跳过菜单直接全流程修复):
+    1. 去重: 同一version的多条记录只保留id最大一条;
+    2. 删残留: 删除登记表里有、磁盘上已不存在的迁移记录;
+    3. 补缺失: 磁盘有文件但登记表漏记的, 序号在补登上限内的仅补登记不执行SQL, 超过的真实执行SQL;
+    4. 基线重建: 最新登记的快照为空占位({})时, 可用当前模型快照覆盖, 避免下次迁移全量diff;
+    5. 迁移预览: 打印下次migrate将生成的SQL并标出DROP/RENAME风险, 防止删字段/改名字段被误判丢数据;
+    6. 结果校验: 记录与文件一一对应、无重复、序号可正常推进、基线有效, 不通过则退出码为1。
 
-行为边界(本工具只修复"登记层", 不修复"结构层"):
-    - 无法感知并校正数据库真实结构与迁移链的偏差(schema drift);
-    - 无法修复content基线过期导致的错误SQL, 以及误判DROP后已丢失的列数据;
-    - 无法防止应用多进程(gunicorn多worker)并发迁移的竞态, 修复期间请先停止应用。
+行为边界(只修登记表, 不修表结构):
+    - 数据库真实结构与迁移链的偏差(schema drift)无法感知和校正;
+    - 基线过期导致的错误SQL、以及已被误删列的数据, 无法由本工具恢复;
+    - 不防应用多进程(gunicorn多worker)同时迁移的冲突, 修复期间请先停止应用。
 
 用法(在项目根目录执行):
     .venv/bin/python scripts/repair_aerich_alignment.py                            # 进入交互菜单
@@ -48,12 +37,11 @@ from dotenv import dotenv_values
 
 BACKEND_DIR: Path = Path(__file__).resolve().parent.parent
 MIGRATION_DIR: Path = BACKEND_DIR / "migrations" / "models"
-# 补登记录的占位content; migrate的diff只读取id最大记录的content,
-# 修复后若id最大记录仍为该占位值, 需配合 --rebuild-baseline 重建基线
+# 补登记录用占位快照; 若它成为最新登记, 下次迁移会误判全库为空, 需 --rebuild-baseline 重建
 FAKE_CONTENT: str = "{}"
-# --fake-max all 时的补登上限, 表示全部缺失文件仅补登不执行SQL
+# --fake-max all 时使用的上限, 效果是所有漏记迁移只补登记不执行SQL
 FAKE_MAX_ALL: int = 10 ** 9
-# MySQL GET_LOCK锁名前缀, 防止多个修复实例并发改动登记; 连接关闭时锁自动释放
+# MySQL GET_LOCK锁名前缀, 防止同时运行多个修复; 连接断开锁自动释放
 LOCK_KEY_PREFIX: str = "aerich_repair"
 
 
@@ -152,10 +140,10 @@ def build_tortoise_config(project_config, app: str) -> dict:
 
 
 async def repair_records(app: str, fake_max: str, execute: bool, assume_yes: bool) -> tuple[list[tuple[int, str]], int]:
-    """阶段一: 修复aerich表登记(去重/删残留/补缺失); GET_LOCK防止修复实例并发, 连接关闭时自动释放。
+    """修复aerich登记表: 去重/删残留/补缺失; GET_LOCK防止同时运行多个修复。
 
-    execute为False时只分析打印; assume_yes为False时打印计划后需交互确认。
-    返回(需要真实应用(执行SQL)的缺失文件列表, 计划变更的记录数)。
+    execute为False只分析打印; assume_yes为False时打印计划后需交互确认。
+    返回(需要真实执行SQL的漏记文件列表, 计划变更的记录数)。
     """
     files = list_migration_files()
     file_names: set[str] = {name for _, name in files}
@@ -216,7 +204,7 @@ async def repair_records(app: str, fake_max: str, execute: bool, assume_yes: boo
 
 
 async def apply_pending_migrations(app: str) -> None:
-    """阶段二: 调用aerich upgrade真实应用未登记的迁移文件(执行SQL并由aerich写入真实content快照)。"""
+    """调用aerich upgrade真实执行漏记迁移的SQL, 并由aerich写入真实模型快照。"""
     ensure_project_import()
     from aerich import Command
     from configure import PROJECT_CONFIG
@@ -244,12 +232,12 @@ async def apply_pending_migrations_with_hint(app: str, pending_real: list[tuple[
 
 
 def preview_next_migrate(app: str) -> None:
-    """复用aerich diff内核预览下次migrate将生成的SQL(不落盘); DROP/RENAME属高风险操作需人工确认。"""
+    """预览下次migrate将生成的SQL(只算不落盘), 标出DROP/RENAME高风险操作。"""
     ensure_project_import()
     from aerich import Migrate
     from aerich.utils import get_models_describe
 
-    # Migrate为类级全局状态, diff前重置操作符列表, 保证重复调用安全
+    # Migrate的操作列表是类级共享状态, diff前清空防止残留上次结果
     Migrate.upgrade_operators = []
     Migrate.downgrade_operators = []
     Migrate._upgrade_fk_m2m_index_operators = []
@@ -278,13 +266,13 @@ def preview_next_migrate(app: str) -> None:
 
 
 async def check_baseline_and_preview(app: str, execute: bool, rebuild: bool, preview_enabled: bool) -> bool:
-    """阶段三: 检查并按需重建id最大记录的content基线, 随后预览下次迁移。返回基线是否有效。"""
+    """检查最新登记的快照基线, 按需重建; 随后预览下次迁移。返回基线是否有效。"""
     ensure_project_import()
     from aerich import Migrate
     from configure import PROJECT_CONFIG
     from tortoise import connections
 
-    # aerich的Migrate.init内部先按cls.app查询基线再赋值app, 直接调用时需先行设置
+    # aerich的Migrate.init会先用app查基线再赋值app, 调用前必须先设置否则报错
     Migrate.app = app
     await Migrate.init(build_tortoise_config(PROJECT_CONFIG, app), app, str(MIGRATION_DIR.parent))
     try:
@@ -319,7 +307,7 @@ async def check_baseline_and_preview(app: str, execute: bool, rebuild: bool, pre
 
 
 async def verify_repair(app: str) -> bool:
-    """阶段四: 校验记录与文件一一对应、无重复version、id最大记录为最高版本号且基线content有效。"""
+    """校验登记表与文件一一对应、无重复version、序号可正常推进、基线快照有效。"""
     files = list_migration_files()
     max_num = max(num for num, _ in files) if files else -1
     conn = await open_db_connection()
@@ -404,36 +392,36 @@ def prompt_fake_max(args: argparse.Namespace) -> str:
 
 def print_menu(args: argparse.Namespace) -> None:
     """打印能力菜单。"""
-    print("-" * 64)
-    print(" aerich 迁移修复工具 (仅修登记层; 写数据库操作执行前均会二次确认)")
+    print("-" * 90)
+    print(" aerich 迁移修复工具 (只修迁移登记表, 不动业务数据; 写操作执行前都会二次确认)")
     print(f" 迁移目录: {MIGRATION_DIR}")
-    print("-" * 64)
-    print(" [1] 体检诊断   只读操作: 错位分析 + 基线状态 + 迁移预览 + 结果校验")
-    print(" [2] 登记修复   去重复(同一version 有多行)、删残留(登记表里有记录、但磁盘上文件已不存在)、补缺失和应用迁移)")
-    print(" [3] 重建基线   占位空快照基线重建为当前models快照")
-    print(" [4] 迁移预览   打印下次migrate将生成的SQL, 标记DROP/RENAME风险")
-    print(" [5] 结果校验   记录/文件一致性 + 序号推进 + 基线有效性")
-    print(" [0] 一键修复   登记修复 -> 基线按需重建 -> 迁移预览 -> 结果校验")
+    print("-" * 90)
+    print(" [1] 体检诊断   只读检查: 登记表与迁移文件是否对齐、基线是否有效, 并预演下次迁移")
+    print(" [2] 登记修复   修正登记表与迁移文件一致: 去除重复、删除无效记录、补充遗漏(超上限的漏记会真实执行迁移应用)")
+    print(" [3] 重建基线   最新登记的快照是空占位({})时, 用当前模型快照覆盖, 防止下次迁移生成全量建表SQL")
+    print(" [4] 迁移预览   只读预演: 下次迁移将执行的SQL, 重点标出删列(DROP)和改列名(RENAME)高风险操作")
+    print(" [5] 结果校验   只读复查: 登记表与迁移文件一一对应、序号可正常推进、基线快照有效")
+    print(" [0] 一键修复   登记修复 -> 基线按需重建 -> 迁移预览 -> 结果校验(入口确认一次)")
     print(" [q] 退出")
-    print("-" * 64)
+    print("-" * 90)
 
 
 async def capability_diagnose(args: argparse.Namespace) -> None:
-    """能力1: 体检诊断, 全程只读。"""
+    """体检诊断: 全程只读。"""
     await repair_records(args.app, args.fake_max, execute=False, assume_yes=True)
     await check_baseline_and_preview(args.app, execute=False, rebuild=False, preview_enabled=True)
     await verify_repair(args.app)
 
 
 async def capability_repair_records(args: argparse.Namespace) -> bool:
-    """能力2: 登记修复, 打印计划并二次确认后执行。返回是否实际执行了修复。"""
+    """登记修复: 打印计划并二次确认后执行。"""
     fake_max = prompt_fake_max(args)
     _, planned_changes = await repair_records(args.app, fake_max, execute=True, assume_yes=False)
     return planned_changes > 0
 
 
 async def capability_rebuild_baseline(args: argparse.Namespace) -> None:
-    """能力3: 将占位空快照基线重建为当前models快照, 前提是所有迁移文件均已真实生效。"""
+    """重建基线: 用当前模型快照覆盖空占位基线, 前提是所有迁移均已真实生效。"""
     if not confirm("重建会把id最大记录的content替换为当前models快照(仅当其为占位空快照时生效), 确认?"):
         print("已取消重建基线。")
         return
@@ -442,18 +430,18 @@ async def capability_rebuild_baseline(args: argparse.Namespace) -> None:
 
 
 async def capability_preview(args: argparse.Namespace) -> None:
-    """能力4: 打印下次migrate将生成的SQL并标记DROP/RENAME风险。"""
+    """迁移预览: 打印下次migrate将生成的SQL并统计DROP/RENAME。"""
     await check_baseline_and_preview(args.app, execute=False, rebuild=False, preview_enabled=True)
 
 
 async def capability_verify(args: argparse.Namespace) -> None:
-    """能力5: 校验登记与文件一致性、序号推进与基线有效性。"""
+    """结果校验: 只读校验登记一致性。"""
     verify_ok = await verify_repair(args.app)
     print("[校验] 全部通过。" if verify_ok else "[校验] 存在失败项, 请按上方提示人工核查!")
 
 
 async def capability_full_fix(args: argparse.Namespace) -> None:
-    """能力0: 一键修复, 串联登记修复/真实应用/基线按需重建/迁移预览/结果校验。"""
+    """一键修复: 串联登记修复/真实应用/基线重建/迁移预览/结果校验。"""
     if not confirm("一键修复将依次执行登记修复、真实应用、基线按需重建、迁移预览与结果校验, 确认?"):
         print("已取消一键修复。")
         return
