@@ -226,14 +226,8 @@ def register_routers(app: FastAPI) -> None:
     app.mount("/static", StaticFiles(directory=PROJECT_CONFIG.STATIC_DIR), name="static")
     app.openapi_version = PROJECT_CONFIG.APP_OPENAPI_VERSION
     swagger_modules = sys.modules["fastapi.openapi.docs"].get_swagger_ui_html.__kwdefaults__
-    # js/css 附带版本指纹：静态资源 URL 无变化时浏览器会长期使用强缓存，
-    # 若缓存的是旧版/损坏的 bundle.js（缺少 markdown 渲染器），描述会退化成原始文本
-    swagger_modules["swagger_js_url"] = (
-        f"{PROJECT_CONFIG.APP_OPENAPI_JS_URL}?v={PROJECT_CONFIG.APP_VERSION}"
-    )
-    swagger_modules["swagger_css_url"] = (
-        f"{PROJECT_CONFIG.APP_OPENAPI_CSS_URL}?v={PROJECT_CONFIG.APP_VERSION}"
-    )
+    swagger_modules["swagger_js_url"] = f"{PROJECT_CONFIG.APP_OPENAPI_JS_URL}?v={PROJECT_CONFIG.APP_VERSION}"
+    swagger_modules["swagger_css_url"] = f"{PROJECT_CONFIG.APP_OPENAPI_CSS_URL}?v={PROJECT_CONFIG.APP_VERSION}"
     swagger_modules["swagger_favicon_url"] = PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL
     redoc_modules = sys.modules["fastapi.openapi.docs"].get_redoc_html.__kwdefaults__
     redoc_modules["redoc_js_url"] = PROJECT_CONFIG.APP_OPENAPI_JS_URL_REDOC
