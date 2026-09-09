@@ -7,14 +7,14 @@
     数据库(aerich表)中最新的一条记录存的是"上次迁移时模型长什么样";
     aerich 生成新迁移时不看数据库真实结构, 只对比快照和当前模型的差异。
     数据库(aerich表)记录一旦和磁盘上的迁移文件对不上(如：漏记、多记、重复记), 就会出两类问题:
-        1.轻则：新迁移文件序号和已有文件重复, 生产启动时卡住等人点确认、修复;
+        1.轻则：新迁移文件序号和已有文件重复, 生产启动时卡住等人确认处理;
         2.重则：快照错乱, 下次迁移误以为数据库是空的, 生成一整套建表SQL甚至错误的SQL。
 
 能力:
     1. 去除重复: 同一个迁移文件被数据库记了多次时, 只保留最后记的那条;
     2. 删除残留: 数据库存在记录、但磁盘上迁移文件不存在, 则删掉这条记录;
-    3. 查漏补缺: 磁盘上存在迁移文件, 但数据库没有记录, 序号在查漏补缺范围内的只补一笔记录(不动数据库实际应用表), 超过范围的真实执行文件里的SQL(操作迁移文件);
-    4. 重建基线: 数据库最新记录的快照是空的时, 用当前模型重新生成一份, 防止下次迁移生成全量建表SQL;
+    3. 查漏补缺: 磁盘上有迁移文件但数据库没记录, 序号在查漏补缺范围内的只在aerich表补一条记录(不改业务表结构), 超过范围的真实执行文件里的SQL(会改表结构);
+    4. 重建基线: 数据库最新记录的快照为空时, 用当前模型重新生成一份, 防止下次迁移生成全量建表SQL;
     5. 迁移预览: 计算出下次迁移会执行哪些SQL并打印, 提前发现删字段、改字段名可能丢数据的问题;
     6. 结果校验: 检查数据库和磁盘上的迁移文件是否一一对应, 有问题会明确报告。
 
@@ -36,9 +36,9 @@ from dotenv import dotenv_values
 
 BACKEND_DIR: Path = Path(__file__).resolve().parent.parent
 MIGRATION_DIR: Path = BACKEND_DIR / "migrations" / "models"
-# 查漏补缺时数据库用的空快照; 若它恰好成为数据库最新一条, 下次迁移会误以为数据库是空的, 需菜单[3]重建
+# 查漏补缺时数据库用的空快照(若它恰好成为数据库最新一条, 下次迁移会误以为数据库是空的, 需菜单[3]重建)
 FAKE_CONTENT: str = "{}"
-# 查漏补缺范围填 all 时用的上限值(足够大), 效果是所有漏记文件都只补记账、不执行SQL
+# 查漏补缺范围填all时用的上限值, 效果是所有漏记文件都只补记录、不执行SQL
 FAKE_MAX_ALL: int = 10 ** 9
 # 数据库锁的名字前缀, 防止两个人同时跑修复; 程序退出后锁自动释放
 LOCK_KEY_PREFIX: str = "aerich_repair"
@@ -66,7 +66,13 @@ def find_duplicate_records(rows: list[tuple[int, str]]) -> list[tuple[int, str]]
 
 
 def resolve_fake_max(raw: str, matched_max_num: int | None) -> int:
-    """把输入的查漏补缺范围换算成序号: auto=数据库已记到的最大序号(没记过按-1算, 即全部真实执行), all=全部只补记账, 数字=指定序号。"""
+    """
+    把输入的查漏补缺范围换算成具体序号。
+
+    auto=数据库已记到的最大序号(一条都没记过按-1算, 等于全部真实执行);
+    all=全部只补记录;
+    数字=就用这个序号。
+    """
     if raw == "all":
         return FAKE_MAX_ALL
     if raw == "auto":
@@ -87,12 +93,12 @@ def print_repair_plan(
     print(f"[登记修复] 无效记录(数据库中有记录, 但磁盘迁移文件已不在, 记录将删除): {len(stale_rows)} 条")
     for row_id, version in stale_rows:
         print(f"    - id={row_id} {version}")
-    print(f"[登记修复] 遗漏迁移(磁盘上有迁移文件, 但数据库中没有记录): {len(missing_files)} 个")
+    print(f"[登记修复] 查漏补缺(磁盘上有迁移文件, 但是数据库没有记录): {len(missing_files)} 个")
     for num, name in missing_files:
-        action = "只补记账(不执行SQL)" if num <= fake_max else "真实执行SQL(会改表结构)"
+        action = "只补记录(不执行SQL、不改业务表结构)" if num <= fake_max else "真实应用(执行SQL、改业务表结构)"
         print(f"    - {name} -> {action}")
     if any(num > fake_max for num, _ in missing_files):
-        print("[提示] 标记为\"真实执行SQL\"的文件会真的修改表结构; 如果这些SQL其实早就执行过,")
+        print("[提示] 标记为\"真实应用\"的文件会真的修改业务表结构; 如果这些SQL其实早就执行过,")
         print("       真跑会报\"列已存在\"这类错误, 届时把查漏补缺范围改成<已执行过的最大序号>重跑即可。")
 
 
@@ -136,7 +142,7 @@ def build_tortoise_config(project_config, app: str) -> dict:
 
 
 async def repair_records(app: str, fake_max: str, execute: bool, assume_yes: bool) -> tuple[list[tuple[int, str]], int]:
-    """核对并修复数据库(去重/删无效/查漏补缺), 加数据库锁防止两个人同时修。
+    """核对并修复aerich表记录(去重/删无效/查漏补缺), 加数据库锁防止两个人同时修。
 
     execute为False时只看不改; assume_yes为False时列出清单后需要手动确认。
     返回(需要真实执行SQL的漏记文件, 本次打算修改的条数)。
@@ -170,7 +176,7 @@ async def repair_records(app: str, fake_max: str, execute: bool, assume_yes: boo
             print_repair_plan(duplicate_rows, stale_rows, missing_files, resolved_fake_max)
             if matched_max_num is None and missing_files:
                 print("[提示] 数据库里没有一条记录和磁盘文件对得上, 查漏补缺范围自动按 -1 处理: 所有漏记文件都会真实执行SQL!")
-                print("       如果这些SQL其实早就执行过, 请在查漏补缺范围处输入 all(只补记账不动表)。")
+                print("       如果这些SQL其实早就执行过, 请在查漏补缺范围处输入all(只补记录, 不执行SQL)。")
 
             if not execute:
                 print("\n[体检] 以上是只读分析, 没有改动任何数据; 需要修复时选择菜单[2]。")
@@ -196,7 +202,7 @@ async def repair_records(app: str, fake_max: str, execute: bool, assume_yes: boo
                     "INSERT INTO aerich (version, app, content) VALUES (%s, %s, %s)",
                     (name, app, FAKE_CONTENT),
                 )
-                print(f"[登记修复] 已补记账: {name}(只记账, 未执行SQL)")
+                print(f"[登记修复] 已补记录: {name}(只补记录, 未执行SQL)")
             await conn.commit()
             return pending_real, planned_changes
     finally:
@@ -204,7 +210,7 @@ async def repair_records(app: str, fake_max: str, execute: bool, assume_yes: boo
 
 
 async def apply_pending_migrations(app: str) -> None:
-    """执行漏记文件里的SQL(真改表结构), 执行完由aerich记上账并保存真实的模型快照。"""
+    """执行漏记文件里的SQL(真改表结构), 执行完由aerich补上记录并保存真实的模型快照。"""
     ensure_project_import()
     from aerich import Command
     from configure import PROJECT_CONFIG
@@ -269,7 +275,7 @@ def preview_next_migrate(app: str) -> None:
 
 
 async def check_baseline_and_preview(app: str, rebuild: bool, preview_enabled: bool) -> bool:
-    """检查数据库最新记录的快照是否完整, rebuild为True时空了就用当前模型重建一份; 然后预演下次迁移。返回快照是否有效。"""
+    """检查aerich表最新记录的快照是否完整(rebuild为True且快照为空时, 用当前模型重建一份); 然后预演下次迁移。返回快照是否有效。"""
     ensure_project_import()
     from aerich import Migrate
     from configure import PROJECT_CONFIG
@@ -372,25 +378,25 @@ def confirm(prompt: str, default: bool = False) -> bool:
 
 def prompt_fake_max() -> str:
     """问查漏补缺范围, 直接回车用默认值。"""
-    raw = read_input(f"查漏补缺范围(输入 auto/all/数字, 直接回车用 {DEFAULT_FAKE_MAX}): ")
+    raw = read_input(f"查漏补缺范围(输入auto/all/数字, 直接回车用 {DEFAULT_FAKE_MAX}): ")
     if not raw:
         return DEFAULT_FAKE_MAX
     if raw in ("auto", "all") or raw.isdigit():
         return raw
-    print(f"输入的 \"{raw}\" 不认识, 改用默认值 {DEFAULT_FAKE_MAX}。")
+    print(f"输入的\"{raw}\"不认识, 改用默认值 {DEFAULT_FAKE_MAX}。")
     return DEFAULT_FAKE_MAX
 
 
 def print_menu() -> None:
     """打印功能菜单。"""
     print("-" * 90)
-    print(" aerich 迁移修复工具 (只修迁移登记表, 不动业务数据; 每一步改动前都会先让你确认)")
-    print(" 说明: 数据库 = 数据库里的 aerich 表, 记录了哪些迁移文件已经执行过")
+    print(" aerich 迁移修复工具：")
+    print(" 修复数据库(aerich表)登记, 不动业务表结构; 每一步改动前都会先让你确认")
     print(f" 迁移文件目录: {MIGRATION_DIR}")
     print("-" * 90)
-    print(" [1] 体检诊断   只看不动: 数据库和文件对不对得上、快照完不完整, 顺便预演下次迁移")
-    print(" [2] 登记修复   把数据库修到和文件一致: 删掉重复和无效的记录, 补上漏记的(超范围的真实执行SQL)")
-    print(" [3] 重建基线   数据库最新记录的快照是空的时, 用当前模型重新生成, 防止下次迁移生成全量建表SQL")
+    print(" [1] 体检诊断   只看不动: 数据库记录和迁移文件对不对得上、快照完不完整, 顺便预演下次迁移")
+    print(" [2] 登记修复   把数据库记录修到和迁移文件一致: 删掉重复和无效的记录, 补上漏记的(超范围的真实执行SQL)")
+    print(" [3] 重建基线   数据库最新记录的快照为空时, 用当前模型重新生成, 防止下次迁移生成全量建表SQL")
     print(" [4] 迁移预览   只看不动: 预演下次迁移会执行哪些SQL, 重点标出删列(DROP)和改列名(RENAME)")
     print(" [5] 结果校验   只看不动: 复查数据库和文件一一对应、新文件序号接得上、快照完整")
     print(" [0] 一键修复   按顺序自动做完: 登记修复 -> 执行SQL -> 重建基线 -> 预演 -> 校验(开头确认一次)")
@@ -412,7 +418,7 @@ async def capability_repair_records(app: str) -> None:
 
 
 async def capability_rebuild_baseline(app: str) -> None:
-    """重建基线: 快照是空的时用当前模型重造一份, 前提是所有迁移文件都已真实执行过。"""
+    """重建基线: 快照为空时用当前模型重造一份, 前提是所有迁移文件都已真实执行过。"""
     if not confirm("重建会用当前模型的完整信息, 覆盖数据库里那条空快照(只在它是空的时候才会动), 继续?"):
         print("[基线] 已取消, 没有改动。")
         return
@@ -431,7 +437,7 @@ async def capability_verify(app: str) -> None:
 
 
 async def capability_full_fix(app: str, fake_max: str) -> None:
-    """一键修复: 按顺序做完 登记修复/执行SQL/重建基线/预演/校验。"""
+    """一键修复: 依次执行 登记修复/执行SQL/重建基线/预演/校验。"""
     if not confirm("一键修复会按顺序执行: 修复数据库 -> 执行漏记SQL -> 重建基线 -> 预演 -> 校验, 继续?"):
         print("[一键修复] 已取消, 没有改动。")
         return
