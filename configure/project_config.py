@@ -33,8 +33,8 @@ class ProjectConfig(BaseSettings):
     凭借 FastAPI 的高效性能，平台能够迅速响应各种操作，确保测试工作的连贯性和高效性。
     同时，系统还支持历史测试数据的回溯和对比，帮助团队持续优化测试流程，为软件质量的提升提供强大支持。
     """
-    APP_DOCS_URL: str = "/krun/docs"
-    APP_REDOC_URL: str = "/krun/redoc"
+    APP_DOCS_URL: str = "/toolbox/docs"
+    APP_REDOC_URL: str = "/toolbox/redoc"
     APP_OPENAPI_URL: str = "/krun/openapi_url"
     APP_OPENAPI_JS_URL: str = "/static/swagger-ui/swagger-ui-bundle.js"
     APP_OPENAPI_CSS_URL: str = "/static/swagger-ui/swagger-ui.css"
@@ -47,7 +47,7 @@ class ProjectConfig(BaseSettings):
     # 调试配置
     SERVER_APP: str = "backend_main:app"
     # SERVER_HOST: str = ShellUtils.acquire_localhost()
-    SERVER_HOST: str = "192.168.245.94"
+    SERVER_HOST: str = "192.168.245.76"
     SERVER_SYSTEM: str = platform.system()
     SERVER_PORT: int = 8520
     SERVER_DEBUG: bool = SERVER_SYSTEM != "Linux"  # Windows | Linux | Darwin
