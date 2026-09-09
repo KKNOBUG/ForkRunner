@@ -1,32 +1,32 @@
 # -*- coding: utf-8 -*-
 """
-修复 aerich 迁移记录与迁移文件错位问题的通用工具。
+修复 aerich 迁移登记与迁移文件对不上的通用工具。
 
 背景:
-    aerich 用 aerich 表登记"哪些迁移文件已应用", 迁移序号和下次迁移的对比基线都取自表中id最大一条记录。
-    这张表一旦与磁盘迁移文件对不上(漏记/多记/重复), 轻则迁移文件撞号(生产启动卡在
-    "Miration file exists..."确认), 重则对比基线错乱(下次迁移生成全量甚至错误的SQL)。
+    账本 = 数据库里的 aerich 表, 记录了"哪些迁移文件已经执行过";
+    快照 = 账本最新一条记录里存的"上次迁移时模型长什么样";
+    aerich 生成新迁移时不看数据库真实结构, 只对比快照和当前模型的差异。
+    账本一旦和磁盘上的迁移文件对不上(漏记/多记/重复记), 就会出两类问题:
+    轻则新迁移文件序号和已有文件重复, 生产启动时卡住等人点确认;
+    重则快照错乱, 下次迁移误以为数据库是空的, 生成一整套建表SQL甚至错误的SQL。
 
-修复动作(默认进入交互菜单选择执行; 追加 --execute 跳过菜单直接全流程修复):
-    1. 去重: 同一version的多条记录只保留id最大一条;
-    2. 删残留: 删除登记表里有、磁盘上已不存在的迁移记录;
-    3. 补缺失: 磁盘有文件但登记表漏记的, 序号在补登上限内的仅补登记不执行SQL, 超过的真实执行SQL;
-    4. 基线重建: 最新登记的快照为空占位({})时, 可用当前模型快照覆盖, 避免下次迁移全量diff;
-    5. 迁移预览: 打印下次migrate将生成的SQL并标出DROP/RENAME风险, 防止删字段/改名字段被误判丢数据;
-    6. 结果校验: 记录与文件一一对应、无重复、序号可正常推进、基线有效, 不通过则退出码为1。
+本工具做什么(运行后进入菜单, 输入编号选择):
+    1. 去除重复: 同一个迁移文件被记了多次时, 只保留最后记的那条;
+    2. 删除残留: 账本里记了、但磁盘上文件已经没了的, 删掉这条记录;
+    3. 查漏补缺: 磁盘上有文件但账本没记的, 序号在补漏范围内的只在账本补一笔(不动数据库), 超过范围的真实执行文件里的SQL(会改表结构);
+    4. 重建基线: 账本最新记录的快照是空的时, 用当前模型重新生成一份,
+       防止下次迁移生成全量建表SQL;
+    5. 迁移预览: 先算出下次迁移会执行哪些SQL并打印, 提前发现删字段/改字段名可能丢数据的问题;
+    6. 结果校验: 检查账本和文件是否一一对应, 有问题会明确报告。
 
-行为边界(只修登记表, 不修表结构):
-    - 数据库真实结构与迁移链的偏差(schema drift)无法感知和校正;
-    - 基线过期导致的错误SQL、以及已被误删列的数据, 无法由本工具恢复;
-    - 不防应用多进程(gunicorn多worker)同时迁移的冲突, 修复期间请先停止应用。
+本工具做不到的事:
+    - 它只修"账本", 数据库真实结构和代码模型对不上的问题无法发现和修复;
+    - 已经被误删的字段数据无法找回;
+    - 应用(gunicorn多个进程)同时在跑迁移会互相冲突, 修复期间请先停掉应用。
 
 用法(在项目根目录执行):
-    .venv/bin/python scripts/repair_aerich_alignment.py                            # 进入交互菜单
-    .venv/bin/python scripts/repair_aerich_alignment.py --execute                  # 非交互全流程修复
-    .venv/bin/python scripts/repair_aerich_alignment.py --execute --fake-max 8     # 非交互指定补登上限
-    .venv/bin/python scripts/repair_aerich_alignment.py --execute --rebuild-baseline   # 非交互重建基线
+    .venv/bin/python scripts/repair_aerich_alignment.py
 """
-import argparse
 import asyncio
 import os
 import sys
@@ -37,16 +37,19 @@ from dotenv import dotenv_values
 
 BACKEND_DIR: Path = Path(__file__).resolve().parent.parent
 MIGRATION_DIR: Path = BACKEND_DIR / "migrations" / "models"
-# 补登记录用占位快照; 若它成为最新登记, 下次迁移会误判全库为空, 需 --rebuild-baseline 重建
+# 补漏时记账用的空快照; 若它恰好成为账本最新一条, 下次迁移会误以为数据库是空的, 需菜单[3]重建
 FAKE_CONTENT: str = "{}"
-# --fake-max all 时使用的上限, 效果是所有漏记迁移只补登记不执行SQL
+# 补漏范围填 all 时用的上限值(足够大), 效果是所有漏记文件都只补记账、不执行SQL
 FAKE_MAX_ALL: int = 10 ** 9
-# MySQL GET_LOCK锁名前缀, 防止同时运行多个修复; 连接断开锁自动释放
+# 数据库锁的名字前缀, 防止两个人同时跑修复; 程序退出后锁自动释放
 LOCK_KEY_PREFIX: str = "aerich_repair"
+# 菜单默认使用的应用名和补漏范围
+DEFAULT_APP: str = "models"
+DEFAULT_FAKE_MAX: str = "auto"
 
 
 def list_migration_files() -> list[tuple[int, str]]:
-    """列出磁盘迁移文件，根据版本号升序。"""
+    """按序号从小到大列出磁盘上的迁移文件名。"""
     out: list[tuple[int, str]] = []
     for file in MIGRATION_DIR.glob("*.py"):
         num_str: str = file.name.split("_")[0]
@@ -56,7 +59,7 @@ def list_migration_files() -> list[tuple[int, str]]:
 
 
 def find_duplicate_records(rows: list[tuple[int, str]]) -> list[tuple[int, str]]:
-    """找出同version多条记录中除id最大以外的全部记录(保留最后写入的一条)。"""
+    """找出被记了多次的文件记录(每个文件保留最后写入的一条, 其余都算重复)。"""
     latest_id_by_version: dict[str, int] = {}
     for row_id, version in rows:
         latest_id_by_version[version] = max(latest_id_by_version.get(version, 0), row_id)
@@ -64,7 +67,7 @@ def find_duplicate_records(rows: list[tuple[int, str]]) -> list[tuple[int, str]]
 
 
 def resolve_fake_max(raw: str, matched_max_num: int | None) -> int:
-    """解析补登上限: auto为已登记且与磁盘文件匹配的最大序号(无则-1即全部真实应用), all为全部仅补登, 其余为指定序号。"""
+    """把输入的补漏范围换算成序号: auto=账本已记到的最大序号(没记过按-1算, 即全部真实执行), all=全部只补记账, 数字=指定序号。"""
     if raw == "all":
         return FAKE_MAX_ALL
     if raw == "auto":
@@ -72,36 +75,30 @@ def resolve_fake_max(raw: str, matched_max_num: int | None) -> int:
     return int(raw)
 
 
-def fake_max_type(raw: str) -> str:
-    if raw in ("auto", "all") or raw.isdigit():
-        return raw
-    raise argparse.ArgumentTypeError("fake-max 仅支持 auto/all/非负整数")
-
-
 def print_repair_plan(
-    duplicate_rows: list[tuple[int, str]],
-    stale_rows: list[tuple[int, str]],
-    missing_files: list[tuple[int, str]],
-    fake_max: int,
+        duplicate_rows: list[tuple[int, str]],
+        stale_rows: list[tuple[int, str]],
+        missing_files: list[tuple[int, str]],
+        fake_max: int,
 ) -> None:
-    """打印修复计划: 重复/残留/缺失记录及对应动作。"""
-    print(f"[重复记录](同version多条, 保留id最大, 其余将删除): {len(duplicate_rows)}")
+    """打印修复清单: 哪些记录要删、哪些文件要补、分别怎么处理。"""
+    print(f"[登记修复] 重复记录(同一个文件记了多次, 保留最后一条, 其余删除): {len(duplicate_rows)} 条")
     for row_id, version in duplicate_rows:
-        print(f"    - id={row_id} version={version}")
-    print(f"[残留记录](DB有记录/磁盘无文件, 将删除): {len(stale_rows)}")
+        print(f"    - id={row_id} {version}")
+    print(f"[登记修复] 无效记录(账本里有, 磁盘上文件已不在, 记录将删除): {len(stale_rows)} 条")
     for row_id, version in stale_rows:
-        print(f"    - id={row_id} version={version}")
-    print(f"[缺失记录](磁盘有文件/DB无记录): {len(missing_files)}")
+        print(f"    - id={row_id} {version}")
+    print(f"[登记修复] 漏记文件(磁盘上有, 账本里没记): {len(missing_files)} 个")
     for num, name in missing_files:
-        action = "仅补登(不执行SQL)" if num <= fake_max else "真实应用(执行SQL)"
+        action = "只补记账(不执行SQL)" if num <= fake_max else "真实执行SQL(会改表结构)"
         print(f"    - {name} -> {action}")
     if any(num > fake_max for num, _ in missing_files):
-        print("[提示] 标记为真实应用的文件将执行其SQL; 若此前已生效(如曾被fake登记), 执行会报列重复等错误,")
-        print("       可改用 --fake-max <最高已生效序号> 将其仅补登。")
+        print("[提示] 标记为\"真实执行SQL\"的文件会真的修改表结构; 如果这些SQL其实早就执行过,")
+        print("       真跑会报\"列已存在\"这类错误, 届时把补漏范围改成<已执行过的最大序号>重跑即可。")
 
 
 async def open_db_connection() -> aiomysql.Connection:
-    """根据.env配置创建数据库连接。"""
+    """读取.env里的数据库配置, 创建一个数据库连接。"""
     cfg = dotenv_values(BACKEND_DIR / ".env")
     required_keys = ("DATABASE_HOST", "DATABASE_PORT", "DATABASE_USERNAME", "DATABASE_PASSWORD", "DATABASE_NAME")
     missing_keys = [key for key in required_keys if not cfg.get(key)]
@@ -118,14 +115,14 @@ async def open_db_connection() -> aiomysql.Connection:
 
 
 def ensure_project_import() -> None:
-    """将项目根目录加入sys.path, 支持从任意工作目录导入configure等包。"""
+    """把项目根目录加到模块搜索路径里, 保证在任意目录下都能导入项目代码。"""
     root = str(BACKEND_DIR)
     if root not in sys.path:
         sys.path.insert(0, root)
 
 
 def build_tortoise_config(project_config, app: str) -> dict:
-    """构建与app_initialization.register_database一致的tortoise配置。"""
+    """拼出和项目启动时一样的数据库配置, 保证这里的迁移行为和应用保持一致。"""
     return {
         "connections": project_config.DATABASE_CONNECTIONS,
         "apps": {
@@ -140,10 +137,10 @@ def build_tortoise_config(project_config, app: str) -> dict:
 
 
 async def repair_records(app: str, fake_max: str, execute: bool, assume_yes: bool) -> tuple[list[tuple[int, str]], int]:
-    """修复aerich登记表: 去重/删残留/补缺失; GET_LOCK防止同时运行多个修复。
+    """核对并修复账本(去重/删无效/补漏), 加数据库锁防止两个人同时修。
 
-    execute为False只分析打印; assume_yes为False时打印计划后需交互确认。
-    返回(需要真实执行SQL的漏记文件列表, 计划变更的记录数)。
+    execute为False时只看不改; assume_yes为False时列出清单后需要手动确认。
+    返回(需要真实执行SQL的漏记文件, 本次打算修改的条数)。
     """
     files = list_migration_files()
     file_names: set[str] = {name for _, name in files}
@@ -152,7 +149,7 @@ async def repair_records(app: str, fake_max: str, execute: bool, assume_yes: boo
         async with conn.cursor() as cur:
             await cur.execute("SELECT GET_LOCK(%s, 0)", (f"{LOCK_KEY_PREFIX}_{app}",))
             if (await cur.fetchone())[0] != 1:
-                print(f"获取修复锁失败: 存在其他修复实例({LOCK_KEY_PREFIX}_{app}), 请稍后重试。")
+                print(f"[登记修复] 另一个修复正在运行(锁 {LOCK_KEY_PREFIX}_{app} 被占用), 请等它结束后再试。")
                 sys.exit(1)
             await cur.execute("SELECT id, version FROM aerich WHERE app=%s ORDER BY id", (app,))
             rows: list[tuple[int, str]] = await cur.fetchall()
@@ -168,27 +165,31 @@ async def repair_records(app: str, fake_max: str, execute: bool, assume_yes: boo
             pending_real = [(num, name) for num, name in missing_files if num > resolved_fake_max]
             planned_changes = len(duplicate_rows) + len(stale_rows) + len(missing_files)
 
-            print(f"迁移目录: {MIGRATION_DIR}")
-            print(f"aerich表记录数: {len(rows)}(其中重复{len(duplicate_rows)}条); 磁盘迁移文件数: {len(files)}; 补登上限(fake-max): {resolved_fake_max}")
+            fake_max_text = "all" if resolved_fake_max >= FAKE_MAX_ALL else str(resolved_fake_max)
+            print(f"[登记修复] 迁移文件目录: {MIGRATION_DIR}")
+            print(f"[登记修复] 账本记录 {len(rows)} 条(重复 {len(duplicate_rows)} 条); 磁盘文件 {len(files)} 个; 补漏范围: {fake_max_text}")
             print_repair_plan(duplicate_rows, stale_rows, missing_files, resolved_fake_max)
+            if matched_max_num is None and missing_files:
+                print("[提示] 账本里没有一条记录和磁盘文件对得上, 补漏范围自动按 -1 处理: 所有漏记文件都会真实执行SQL!")
+                print("       如果这些SQL其实早就执行过, 请在补漏范围处输入 all(只补记账不动表)。")
 
             if not execute:
-                print("\n以上为只读分析, 未做任何改动; 可通过菜单[2]登记修复或 --execute 执行。")
+                print("\n[体检] 以上是只读分析, 没有改动任何数据; 需要修复时选择菜单[2]。")
                 return pending_real, planned_changes
             if not assume_yes:
                 if planned_changes == 0:
-                    print("[登记修复] 登记层无错位, 无需修复。")
+                    print("[登记修复] 账本和文件本来就是对齐的, 不需要修复。")
                     return pending_real, 0
-                if not confirm("确认执行以上登记修复?"):
-                    print("已取消登记修复。")
+                if not confirm("确认按上面的清单修复账本?"):
+                    print("[登记修复] 已取消, 没有改动。")
                     return pending_real, 0
 
             for row_id, version in duplicate_rows:
                 await cur.execute("DELETE FROM aerich WHERE id=%s", (row_id,))
-                print(f"已删除重复记录: id={row_id} version={version}")
+                print(f"[登记修复] 已删除重复记录: id={row_id} {version}")
             for row_id, version in stale_rows:
                 await cur.execute("DELETE FROM aerich WHERE id=%s", (row_id,))
-                print(f"已删除残留记录: id={row_id} version={version}")
+                print(f"[登记修复] 已删除无效记录: id={row_id} {version}")
             for num, name in missing_files:
                 if num > resolved_fake_max:
                     continue
@@ -196,7 +197,7 @@ async def repair_records(app: str, fake_max: str, execute: bool, assume_yes: boo
                     "INSERT INTO aerich (version, app, content) VALUES (%s, %s, %s)",
                     (name, app, FAKE_CONTENT),
                 )
-                print(f"已补登记录: {name}(仅登记, 不执行SQL)")
+                print(f"[登记修复] 已补记账: {name}(只记账, 未执行SQL)")
             await conn.commit()
             return pending_real, planned_changes
     finally:
@@ -204,7 +205,7 @@ async def repair_records(app: str, fake_max: str, execute: bool, assume_yes: boo
 
 
 async def apply_pending_migrations(app: str) -> None:
-    """调用aerich upgrade真实执行漏记迁移的SQL, 并由aerich写入真实模型快照。"""
+    """执行漏记文件里的SQL(真改表结构), 执行完由aerich记上账并保存真实的模型快照。"""
     ensure_project_import()
     from aerich import Command
     from configure import PROJECT_CONFIG
@@ -215,42 +216,45 @@ async def apply_pending_migrations(app: str) -> None:
         migrated = await command.upgrade(run_in_transaction=True)
     finally:
         await command.close()
-    print(f"aerich upgrade 完成, 应用文件: {migrated}")
+    print(f"[真实应用] SQL执行完成, 已应用文件: {migrated}")
 
 
 async def apply_pending_migrations_with_hint(app: str, pending_real: list[tuple[int, str]]) -> None:
-    """真实应用未登记迁移文件, 失败时输出fake-max补登引导。"""
+    """执行漏记文件的SQL, 失败时告诉用户怎么换一种方式重跑。"""
     pending_names = [name for _, name in pending_real]
-    print(f"\n调用 aerich upgrade 真实应用 {len(pending_names)} 个文件: {pending_names}")
+    print(f"\n[真实应用] 开始执行 {len(pending_names)} 个漏记文件的SQL: {pending_names}")
     try:
         await apply_pending_migrations(app)
     except Exception as exc:
-        print(f"\n真实应用失败: {exc}")
-        print("提示: 若报列重复/表已存在等错误, 说明这些文件的SQL此前已生效(如曾被fake登记),")
-        print("      请改用 --fake-max <最高已生效序号> 将其仅补登后重跑。")
+        print(f"\n[真实应用] 执行失败: {exc}")
+        print("[提示] 如果错误是\"列已存在/表已存在\", 说明这些文件的SQL早就执行过了,")
+        print("       重新选择[2]登记修复, 补漏范围输入<已执行过的最大序号>再跑一遍即可。")
         raise
 
 
 def preview_next_migrate(app: str) -> None:
-    """预览下次migrate将生成的SQL(只算不落盘), 标出DROP/RENAME高风险操作。"""
+    """预演下次迁移会执行哪些SQL并打印(只是演算, 不落盘不执行), 标出删列/改列名高风险操作。"""
     ensure_project_import()
     from aerich import Migrate
     from aerich.utils import get_models_describe
 
-    # Migrate的操作列表是类级共享状态, diff前清空防止残留上次结果
+    # Migrate的操作列表是所有调用共享的, 每次演算前先清空, 防止上一次的结果混进来
     Migrate.upgrade_operators = []
     Migrate.downgrade_operators = []
     Migrate._upgrade_fk_m2m_index_operators = []
     Migrate._downgrade_fk_m2m_index_operators = []
+    Migrate._upgrade_m2m = []
+    Migrate._downgrade_m2m = []
+    Migrate._rename_fields = {}
     new_content = get_models_describe(app)
     Migrate.diff_models(Migrate._last_version_content, new_content, no_input=True)
     Migrate.diff_models(new_content, Migrate._last_version_content, False, no_input=True)
     Migrate._merge_operators()
     operators = Migrate.upgrade_operators
     if not operators:
-        print("[预览] 下次migrate无变更: 基线快照与当前models一致, 重启服务不会再生成迁移文件。")
+        print("[预览] 下次迁移不会有任何SQL: 模型和上次快照一模一样, 重启服务也不会生成新的迁移文件。")
         return
-    print(f"[预览] 下次aerich migrate将生成 {len(operators)} 条SQL:")
+    print(f"[预览] 下次迁移将执行 {len(operators)} 条SQL:")
     drop_count = 0
     rename_count = 0
     for index, operator in enumerate(operators, start=1):
@@ -260,54 +264,55 @@ def preview_next_migrate(app: str) -> None:
             drop_count += 1
         elif "RENAME" in upper_sql:
             rename_count += 1
-    print(f"[预览] 风险统计: DROP {drop_count} 条, RENAME {rename_count} 条。")
-    print("[预览] 说明: RENAME为字段改名识别结果, 真实migrate时需交互确认(生产无人值守会卡住, 建议在开发环境生成迁移文件);")
-    print("[预览]       若存在非预期的DROP, 说明基线与models错位已导致删字段误判, 执行前务必人工核对, 避免列数据丢失!")
+    print(f"[预览] 风险统计: 删列(DROP) {drop_count} 条, 改列名(RENAME) {rename_count} 条。")
+    print("[预览] 说明: 改列名(RENAME)在真正迁移时需要人工确认, 生产上无人值守会卡住, 建议先在开发环境生成迁移文件;")
+    print("[预览]       如果出现你没预期的删列(DROP), 说明快照和模型已经对不上, 务必人工确认后再执行, 否则会丢字段数据!")
 
 
-async def check_baseline_and_preview(app: str, execute: bool, rebuild: bool, preview_enabled: bool) -> bool:
-    """检查最新登记的快照基线, 按需重建; 随后预览下次迁移。返回基线是否有效。"""
+async def check_baseline_and_preview(app: str, rebuild: bool, preview_enabled: bool) -> bool:
+    """检查账本最新记录的快照是否完整, rebuild为True时空了就用当前模型重建一份; 然后预演下次迁移。返回快照是否有效。"""
     ensure_project_import()
     from aerich import Migrate
     from configure import PROJECT_CONFIG
     from tortoise import connections
 
-    # aerich的Migrate.init会先用app查基线再赋值app, 调用前必须先设置否则报错
+    # aerich的Migrate.init会先用app查快照再赋值app, 调用前必须先设置否则报错
     Migrate.app = app
     await Migrate.init(build_tortoise_config(PROJECT_CONFIG, app), app, str(MIGRATION_DIR.parent))
     try:
         last = await Migrate.get_last_version()
         if last is None:
-            print("[基线] aerich表无记录, 无基线可用; 空库场景请走应用启动的init-db初始化。")
+            print("[基线] 账本里还没有任何记录, 没有快照可用; 空数据库请走应用启动时的自动初始化。")
             return False
         baseline_ok = bool(Migrate._last_version_content)
         if baseline_ok:
-            print(f"[基线] 有效: id最大记录 {last.version}, 模型数 {len(Migrate._last_version_content)}。")
+            print(f"[基线] 快照完整: 最新记录 {last.version}, 里面有 {len(Migrate._last_version_content)} 个模型的信息。")
         else:
-            print(f"[基线] 警告: id最大记录 {last.version} 的content为占位空快照, 下次migrate将以空基线全量diff!")
-            if execute and rebuild:
+            print(f"[基线] 警告: 最新记录 {last.version} 的快照是空的, 下次迁移会误以为数据库是空的, 生成全量建表SQL!")
+            if rebuild:
                 from aerich.utils import get_models_describe
 
                 last.content = get_models_describe(app)
                 await last.save(update_fields=["content"])
                 Migrate._last_version_content = last.content
                 baseline_ok = True
-                print(f"[基线] 已重建: {last.version} -> 当前models快照({len(last.content)}个模型)。")
+                print(f"[基线] 已重建: {last.version} 的快照已换成当前模型的完整信息({len(last.content)}个模型)。")
+                print("[基线] 注意: 新快照来自当前模型, 接下来预演显示\"没有SQL\"并不代表数据库结构和模型真的一致。")
             else:
-                print("[基线] 修复方式: 追加 --execute --rebuild-baseline 重建基线(前提: 所有迁移文件均已真实生效)。")
+                print("[基线] 怎么修: 选择菜单[3]重建基线(前提: 所有迁移文件都已经真实执行过)。")
         if not preview_enabled:
             return baseline_ok
         if baseline_ok:
             preview_next_migrate(app)
         else:
-            print("[预览] 基线无效, 跳过预览; 请先修复登记并重建基线。")
+            print("[预览] 快照无效, 没法预演; 请先选择[2]修复账本, 再选择[3]重建基线。")
         return baseline_ok
     finally:
         await connections.close_all()
 
 
 async def verify_repair(app: str) -> bool:
-    """校验登记表与文件一一对应、无重复version、序号可正常推进、基线快照有效。"""
+    """复查: 账本和文件一一对应、没有重复记录、新文件序号接得上、快照完整。"""
     files = list_migration_files()
     max_num = max(num for num, _ in files) if files else -1
     conn = await open_db_connection()
@@ -326,52 +331,39 @@ async def verify_repair(app: str) -> bool:
         duplicated = {version for version, count in version_count.items() if count > 1}
 
         ok = True
-        print(f"\n[校验] aerich表记录数: {len(rows)}; 磁盘文件数: {len(files)}")
+        print(f"\n[校验] 账本记录 {len(rows)} 条; 磁盘文件 {len(files)} 个")
         if len(rows) == len(files) and not duplicated:
-            print("[校验] 通过: 记录与文件一一对应, 无重复version。")
+            print("[校验] 通过: 账本和文件一一对应, 没有重复记录。")
         else:
             ok = False
-            print(f"[校验] 失败: 记录数与文件数不一致或存在重复version: {sorted(duplicated)}")
+            print(f"[校验] 失败: 记录数和文件数对不上, 或有重复记录: {sorted(duplicated)}")
         last_num = int(last[1].split("_")[0]) if last else -1
-        if last_num == max_num:
-            print(f"[校验] 通过: id最大记录 {last[1]} 与最高版本文件一致, 后续migrate将生成序号 {max_num + 1}, 不再撞号。")
+        if last is not None and last_num == max_num:
+            print(f"[校验] 通过: 最新记录 {last[1]} 就是最高序号的文件, 下一个新迁移文件会用序号 {max_num + 1}, 不会重名冲突。")
         else:
             ok = False
-            print(f"[校验] 失败: id最大记录序号({last_num})与最高版本文件序号({max_num})不一致!")
+            print(f"[校验] 失败: 最新记录的序号({last_num})和最高文件的序号({max_num})不一致, 下次生成新文件会重名冲突!")
         if last_content is None or str(last_content).strip() in ("{}", "null", ""):
             ok = False
-            print("[校验] 失败: id最大记录content为占位空快照, 下次migrate将全量diff!")
+            print("[校验] 失败: 最新记录的快照是空的, 下次迁移会生成全量建表SQL!")
         else:
-            print("[校验] 通过: id最大记录content为真实快照。")
+            print("[校验] 通过: 最新记录的快照是完整的。")
         return ok
     finally:
         conn.close()
 
 
-async def repair(args: argparse.Namespace) -> None:
-    """非交互模式(--execute): 按命令行参数执行 登记修复 -> 真实应用 -> 基线检查与预览 -> 结果校验。"""
-    pending_real, _ = await repair_records(args.app, args.fake_max, execute=True, assume_yes=True)
-    if pending_real:
-        await apply_pending_migrations_with_hint(args.app, pending_real)
-    baseline_ok = await check_baseline_and_preview(args.app, args.execute, args.rebuild_baseline, not args.no_preview)
-    verify_ok = await verify_repair(args.app)
-    if not (baseline_ok and verify_ok):
-        print("\n修复结果存在警告或失败项, 请按上方提示人工核查!")
-        sys.exit(1)
-    print("\n修复完成。")
-
-
 def read_input(prompt: str) -> str:
-    """读取用户输入, 无标准输入(如管道执行)时提示并退出。"""
+    """读一行用户输入; 没有输入可读时(比如被程序调用)提示后退出。"""
     try:
         return input(prompt).strip().lower()
     except EOFError:
-        print("\n未检测到交互输入, 退出; 自动执行请追加 --execute 参数。")
+        print("\n没有检测到输入, 已退出。")
         raise SystemExit(0) from None
 
 
 def confirm(prompt: str, default: bool = False) -> bool:
-    """交互确认, 直接回车取默认值。"""
+    """问一句"是否继续", 直接回车等于否。"""
     default_hint = "[Y/n]" if default else "[y/N]"
     raw = read_input(f"{prompt} {default_hint}: ")
     if not raw:
@@ -379,121 +371,106 @@ def confirm(prompt: str, default: bool = False) -> bool:
     return raw in ("y", "yes")
 
 
-def prompt_fake_max(args: argparse.Namespace) -> str:
-    """交互询问补登上限, 直接回车取默认值。"""
-    raw = read_input(f"补登上限 fake-max [{args.fake_max}]: ")
+def prompt_fake_max() -> str:
+    """问补漏范围, 直接回车用默认值。"""
+    raw = read_input(f"补漏范围(输入 auto/all/数字, 直接回车用 {DEFAULT_FAKE_MAX}): ")
     if not raw:
-        return args.fake_max
+        return DEFAULT_FAKE_MAX
     if raw in ("auto", "all") or raw.isdigit():
         return raw
-    print(f"输入无效({raw}), 使用默认 {args.fake_max}。")
-    return args.fake_max
+    print(f"输入的 \"{raw}\" 不认识, 改用默认值 {DEFAULT_FAKE_MAX}。")
+    return DEFAULT_FAKE_MAX
 
 
-def print_menu(args: argparse.Namespace) -> None:
-    """打印能力菜单。"""
+def print_menu() -> None:
+    """打印功能菜单。"""
     print("-" * 90)
-    print(" aerich 迁移修复工具 (只修迁移登记表, 不动业务数据; 写操作执行前都会二次确认)")
-    print(f" 迁移目录: {MIGRATION_DIR}")
+    print(" aerich 迁移修复工具 (只修迁移登记表, 不动业务数据; 每一步改动前都会先让你确认)")
+    print(" 说明: 账本 = 数据库里的 aerich 表, 记录了哪些迁移文件已经执行过")
+    print(f" 迁移文件目录: {MIGRATION_DIR}")
     print("-" * 90)
-    print(" [1] 体检诊断   只读检查: 登记表与迁移文件是否对齐、基线是否有效, 并预演下次迁移")
-    print(" [2] 登记修复   修正登记表与迁移文件一致: 去除重复、删除无效记录、补充遗漏(超上限的漏记会真实执行迁移应用)")
-    print(" [3] 重建基线   最新登记的快照是空占位({})时, 用当前模型快照覆盖, 防止下次迁移生成全量建表SQL")
-    print(" [4] 迁移预览   只读预演: 下次迁移将执行的SQL, 重点标出删列(DROP)和改列名(RENAME)高风险操作")
-    print(" [5] 结果校验   只读复查: 登记表与迁移文件一一对应、序号可正常推进、基线快照有效")
-    print(" [0] 一键修复   登记修复 -> 基线按需重建 -> 迁移预览 -> 结果校验(入口确认一次)")
+    print(" [1] 体检诊断   只看不动: 账本和文件对不对得上、快照完不完整, 顺便预演下次迁移")
+    print(" [2] 登记修复   把账本修到和文件一致: 删掉重复和无效的记录, 补上漏记的(超范围的真实执行SQL)")
+    print(" [3] 重建基线   账本最新记录的快照是空的时, 用当前模型重新生成, 防止下次迁移生成全量建表SQL")
+    print(" [4] 迁移预览   只看不动: 预演下次迁移会执行哪些SQL, 重点标出删列(DROP)和改列名(RENAME)")
+    print(" [5] 结果校验   只看不动: 复查账本和文件一一对应、新文件序号接得上、快照完整")
+    print(" [0] 一键修复   按顺序自动做完: 登记修复 -> 执行SQL -> 重建基线 -> 预演 -> 校验(开头确认一次)")
     print(" [q] 退出")
     print("-" * 90)
 
 
-async def capability_diagnose(args: argparse.Namespace) -> None:
-    """体检诊断: 全程只读。"""
-    await repair_records(args.app, args.fake_max, execute=False, assume_yes=True)
-    await check_baseline_and_preview(args.app, execute=False, rebuild=False, preview_enabled=True)
-    await verify_repair(args.app)
+async def capability_diagnose(app: str, fake_max: str) -> None:
+    """体检诊断: 全程只看不动。"""
+    await repair_records(app, fake_max, execute=False, assume_yes=True)
+    await check_baseline_and_preview(app, rebuild=False, preview_enabled=True)
+    await verify_repair(app)
 
 
-async def capability_repair_records(args: argparse.Namespace) -> bool:
-    """登记修复: 打印计划并二次确认后执行。"""
-    fake_max = prompt_fake_max(args)
-    _, planned_changes = await repair_records(args.app, fake_max, execute=True, assume_yes=False)
-    return planned_changes > 0
+async def capability_repair_records(app: str) -> None:
+    """登记修复: 先列清单, 确认后再动手。"""
+    fake_max = prompt_fake_max()
+    await repair_records(app, fake_max, execute=True, assume_yes=False)
 
 
-async def capability_rebuild_baseline(args: argparse.Namespace) -> None:
-    """重建基线: 用当前模型快照覆盖空占位基线, 前提是所有迁移均已真实生效。"""
-    if not confirm("重建会把id最大记录的content替换为当前models快照(仅当其为占位空快照时生效), 确认?"):
-        print("已取消重建基线。")
+async def capability_rebuild_baseline(app: str) -> None:
+    """重建基线: 快照是空的时用当前模型重造一份, 前提是所有迁移文件都已真实执行过。"""
+    if not confirm("重建会用当前模型的完整信息, 覆盖账本里那条空快照(只在它是空的时候才会动), 继续?"):
+        print("[基线] 已取消, 没有改动。")
         return
-    baseline_ok = await check_baseline_and_preview(args.app, execute=True, rebuild=True, preview_enabled=False)
-    print("[重建基线] 基线有效。" if baseline_ok else "[重建基线] 基线仍无效, 请检查上方输出。")
+    await check_baseline_and_preview(app, rebuild=True, preview_enabled=False)
 
 
-async def capability_preview(args: argparse.Namespace) -> None:
-    """迁移预览: 打印下次migrate将生成的SQL并统计DROP/RENAME。"""
-    await check_baseline_and_preview(args.app, execute=False, rebuild=False, preview_enabled=True)
+async def capability_preview(app: str) -> None:
+    """迁移预览: 打印下次迁移会执行的SQL, 统计删列/改列名数量。"""
+    await check_baseline_and_preview(app, rebuild=False, preview_enabled=True)
 
 
-async def capability_verify(args: argparse.Namespace) -> None:
-    """结果校验: 只读校验登记一致性。"""
-    verify_ok = await verify_repair(args.app)
-    print("[校验] 全部通过。" if verify_ok else "[校验] 存在失败项, 请按上方提示人工核查!")
+async def capability_verify(app: str) -> None:
+    """结果校验: 只读复查一遍。"""
+    verify_ok = await verify_repair(app)
+    print("[校验] 全部通过。" if verify_ok else "[校验] 有失败项, 请看上面的说明处理!")
 
 
-async def capability_full_fix(args: argparse.Namespace) -> None:
-    """一键修复: 串联登记修复/真实应用/基线重建/迁移预览/结果校验。"""
-    if not confirm("一键修复将依次执行登记修复、真实应用、基线按需重建、迁移预览与结果校验, 确认?"):
-        print("已取消一键修复。")
+async def capability_full_fix(app: str, fake_max: str) -> None:
+    """一键修复: 按顺序做完 登记修复/执行SQL/重建基线/预演/校验。"""
+    if not confirm("一键修复会按顺序执行: 修复账本 -> 执行漏记SQL -> 重建基线 -> 预演 -> 校验, 继续?"):
+        print("[一键修复] 已取消, 没有改动。")
         return
-    pending_real, _ = await repair_records(args.app, args.fake_max, execute=True, assume_yes=True)
+    pending_real, planned_changes = await repair_records(app, fake_max, execute=True, assume_yes=True)
+    if planned_changes == 0:
+        print("[一键修复] 账本本来就是对齐的, 跳过修复这一步。")
     if pending_real:
-        await apply_pending_migrations_with_hint(args.app, pending_real)
-    baseline_ok = await check_baseline_and_preview(args.app, True, True, True)
-    verify_ok = await verify_repair(args.app)
-    print("\n一键修复完成。" if baseline_ok and verify_ok else "\n一键修复存在失败项, 请按上方提示人工核查!")
+        await apply_pending_migrations_with_hint(app, pending_real)
+    baseline_ok = await check_baseline_and_preview(app, rebuild=True, preview_enabled=True)
+    verify_ok = await verify_repair(app)
+    print("\n[一键修复] 全部完成。" if baseline_ok and verify_ok else "\n[一键修复] 有失败项, 请看上面的说明处理!")
 
 
-async def interactive_main(args: argparse.Namespace) -> None:
-    """交互模式: 展示能力菜单, 循环响应选择, 直至退出。"""
+async def interactive_main(app: str, fake_max: str) -> None:
+    """菜单循环: 打印菜单, 等输入, 一直服务到退出。"""
     while True:
-        print_menu(args)
+        print_menu()
         choice = read_input("请选择功能编号: ")
         if choice in ("q", "quit", "exit"):
             print("已退出。")
             return
         if choice == "0":
-            await capability_full_fix(args)
+            await capability_full_fix(app, fake_max)
         elif choice == "1":
-            await capability_diagnose(args)
+            await capability_diagnose(app, fake_max)
         elif choice == "2":
-            await capability_repair_records(args)
+            await capability_repair_records(app)
         elif choice == "3":
-            await capability_rebuild_baseline(args)
+            await capability_rebuild_baseline(app)
         elif choice == "4":
-            await capability_preview(args)
+            await capability_preview(app)
         elif choice == "5":
-            await capability_verify(args)
+            await capability_verify(app)
         else:
-            print(f"无效选择: {choice}, 请输入菜单中的编号。")
+            print(f"没有 \"{choice}\" 这个选项, 请输入菜单里的编号。")
         print()
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="修复 aerich 迁移记录与迁移文件错位")
-    parser.add_argument("--execute", action="store_true", help="非交互模式: 直接执行全流程修复(默认进入交互菜单)")
-    parser.add_argument("--fake-max", type=fake_max_type, default="auto",
-                        help="仅补登不执行SQL的序号上限: auto(默认, 已登记匹配的最大序号)/all/具体序号")
-    parser.add_argument("--rebuild-baseline", action="store_true",
-                        help="配合--execute: id最大记录content为占位空快照时, 重建为当前models快照")
-    parser.add_argument("--no-preview", action="store_true", help="跳过下次迁移SQL预览")
-    parser.add_argument("--app", default="models", help="aerich应用标签(默认 models)")
-    return parser.parse_args()
-
-
 if __name__ == "__main__":
-    args = parse_args()
     os.chdir(BACKEND_DIR)
-    if args.execute:
-        asyncio.run(repair(args))
-    else:
-        asyncio.run(interactive_main(args))
+    asyncio.run(interactive_main(DEFAULT_APP, DEFAULT_FAKE_MAX))
