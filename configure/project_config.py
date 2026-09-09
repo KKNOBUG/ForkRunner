@@ -46,7 +46,7 @@ class ProjectConfig(BaseSettings):
     # 调试配置
     SERVER_APP: str = "backend_main:app"
     # SERVER_HOST: str = ShellUtils.acquire_localhost()
-    SERVER_HOST: str = "192.168.169.94"
+    SERVER_HOST: str = "192.168.245.94"
     SERVER_SYSTEM: str = platform.system()
     SERVER_PORT: int = 8520
     SERVER_DEBUG: bool = SERVER_SYSTEM != "Linux"  # Windows | Linux | Darwin
