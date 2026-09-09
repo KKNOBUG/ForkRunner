@@ -211,7 +211,6 @@ async def enhancer_swagger_docs_html(request: Request) -> HTMLResponse:
         title=f"{PROJECT_CONFIG.APP_TITLE} - Swagger UI",
     )
     html = response.body.decode("utf-8")
-    # enhancer URL 附带版本指纹：文件更新后浏览器不会命中旧缓存
     enhancer_tag = (
         f'<script src="{PROJECT_CONFIG.APP_OPENAPI_ENHANCER_URL}'
         f'?v={PROJECT_CONFIG.APP_VERSION}"></script>'
