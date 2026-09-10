@@ -216,6 +216,7 @@ def register_routers(app: FastAPI) -> None:
     from applications.user.views.user_view import user_public, user_secure
     from applications.toolbox.views import toolbox
     from applications.aotutest.views import autotest
+    from applications.data_generation.views import data_generation
 
     # 挂在路由蓝图
     # tags 采用「一级目录:二级模块」，与侧边栏菜单对齐，便于角色权限按模块制定规则
@@ -231,3 +232,4 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(router=dept, prefix="/yk/dept", tags=["系统管理:部门"], dependencies=[DependPermission])
     app.include_router(router=toolbox, prefix="/yk/toolbox", tags=["便捷工具:工具箱"], dependencies=[DependPermission])
     app.include_router(router=autotest, prefix="/yk/autotest", dependencies=[DependPermission])
+    app.include_router(router=data_generation, prefix="/yk/autotest", dependencies=[DependPermission])

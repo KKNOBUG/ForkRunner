@@ -1,6 +1,8 @@
-# -*- coding: utf-8 -*-import asyncio
+# -*- coding: utf-8 -*-
 import asyncio
 import logging
+import os
+import sys
 import traceback
 from abc import ABC
 from datetime import datetime
@@ -8,7 +10,6 @@ from typing import Dict, Any, Optional
 
 from celery import Celery
 from celery import Task
-from celery._state import _task_stack
 from celery.signals import setup_logging, task_prerun, worker_process_init
 from celery.worker.request import Request
 
@@ -33,10 +34,36 @@ _async_event_loop_pool = None
 _SCAN_TASK_NAME = (
     "celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
 )
+_DATA_GENERATE_TASK_NAME = (
+    "celery_scheduler.tasks.task_autotest_data_generate.generate_test_data_task"
+)
+_DATA_GENERATE_RECOVERY_TASK_NAME = (
+    "celery_scheduler.tasks.task_autotest_data_generate.recover_timed_out_data_generate_tasks"
+)
+# 数据生成使用独立任务表；扫描任务不属于用户执行记录，均不写通用AutoTestRecord。
+_OBSERVATION_SKIPPED_TASKS = {
+    _SCAN_TASK_NAME,
+    _DATA_GENERATE_TASK_NAME,
+    _DATA_GENERATE_RECOVERY_TASK_NAME,
+}
 # setup_logging 写入 celery 专用日志文件时登记的 Loguru sink id，避免重复添加
 _celery_logfile_sink_id = None
 _celery_console_sink_id = None
-_LOG_PREFIX = "【Celery-Worker】"
+
+
+def _detect_celery_role(argv=None) -> str:
+    """根据Celery启动参数区分Worker与Beat进程。"""
+    source = argv if argv is not None else sys.argv
+    tokens = [str(token).lower() for token in source]
+    return "beat" if "beat" in tokens else "worker"
+
+
+def _celery_log_prefix(argv=None) -> str:
+    role = "Beat" if _detect_celery_role(argv) == "beat" else "Worker"
+    return f"【Celery-{role}】"
+
+
+_LOG_PREFIX = _celery_log_prefix()
 
 
 @worker_process_init.connect
@@ -51,10 +78,7 @@ def _reset_async_pool_and_tortoise_after_fork(**kwargs):
     _async_event_loop_pool = None
     AsyncEventLoopContextIOPool.reset_process_state()
     reset_tortoise_orm_state()
-    # prefork 子进程继承父进程 Loguru 文件句柄，需重建 Sink 以免多进程共写/轮转失败
-    from configure.logging_config import loguru_logging
-
-    loguru_logging()
+    # prefork 子进程不能复用父进程的enqueue线程，需重建Celery专用Sink。
     _ensure_celery_logfile_sink_after_fork()
     LOGGER.debug(f"{_LOG_PREFIX}worker_process_init: 已重置异步池、Tortoise 与日志 Sink")
 
@@ -364,7 +388,8 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
     """
     try:
         # 来自 apply_async(..., __task_id=...)，随 Celery 消息传到 Worker 的 request.properties。
-        task_id = task.request.properties.get("__task_id", None)
+        properties = getattr(task.request, "properties", None) or {}
+        task_id = properties.get("__task_id", None)
         req_args = getattr(task.request, "args", None) or ()
         req_kwargs = getattr(task.request, "kwargs", None) or {}
         LOGGER.info(
@@ -375,7 +400,7 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
             f"args={req_args}, "
             f"kwargs={req_kwargs}"
         )
-        if task.name == _SCAN_TASK_NAME:
+        if task.name in _OBSERVATION_SKIPPED_TASKS:
             ensure_tortoise_orm_initialized()
         else:
             try:
@@ -428,9 +453,6 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
     :return: None
     """
     global _celery_logfile_sink_id, _celery_console_sink_id
-    import os
-    import sys
-
     from loguru import logger as loguru_logger
 
     from configure.logging_config import LOG_FORMAT
@@ -444,16 +466,6 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
         root.handlers = [InterceptHandler()]
         root.setLevel(level)
 
-    def _detect_celery_role() -> str:
-        joined = " ".join(sys.argv).lower()
-        # 匹配 `celery ... beat` / `... beat -l`
-        tokens = [t.lower() for t in sys.argv]
-        if "beat" in tokens:
-            return "beat"
-        if "beat" in joined and "worker" not in tokens:
-            return "beat"
-        return "worker"
-
     def _default_celery_logfile() -> str:
         role = _detect_celery_role()
         name = "celery_beat.log" if role == "beat" else "celery_worker.log"
@@ -466,16 +478,16 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
             or _default_celery_logfile()
     )
 
+    # configure.logging_config在模块导入时已经注册过Sink。Celery进程只保留
+    # 自己的文件Sink和一个前台Sink，避免同一条记录同时写入stdout与stderr。
+    loguru_logger.remove()
+    _celery_logfile_sink_id = None
+    _celery_console_sink_id = None
+
     if target:
         log_dir = os.path.dirname(target)
         if log_dir:
             os.makedirs(log_dir, exist_ok=True)
-        if _celery_logfile_sink_id is not None:
-            try:
-                loguru_logger.remove(_celery_logfile_sink_id)
-            except ValueError:
-                pass
-            _celery_logfile_sink_id = None
         _celery_logfile_sink_id = loguru_logger.add(
             target,
             level="INFO",
@@ -489,17 +501,11 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
             retention=10,
         )
         os.environ["CELERY_LOGFILE"] = target
-        LOGGER.info(f"{_LOG_PREFIX}Celery 日志已写入文件: {target}")
+        LOGGER.info(f"{_celery_log_prefix()}Celery 日志已写入文件: {target}")
 
     # 本地前台（非 --detach）保证终端可见
     is_detached = "--detach" in sys.argv or "-D" in sys.argv
     if not is_detached and sys.stderr and getattr(sys.stderr, "isatty", lambda: False)():
-        if _celery_console_sink_id is not None:
-            try:
-                loguru_logger.remove(_celery_console_sink_id)
-            except ValueError:
-                pass
-            _celery_console_sink_id = None
         _celery_console_sink_id = loguru_logger.add(
             sys.stderr,
             level="INFO",
@@ -517,8 +523,6 @@ def _ensure_celery_logfile_sink_after_fork():
 
     :return: None
     """
-    import os
-
     setup_loggers(logfile=os.environ.get("CELERY_LOGFILE") or None)
 
 
@@ -648,7 +652,7 @@ def create_celery():
             :param batch_code: 批次号
             :return: None
             """
-            if self.request.id and self.name != _SCAN_TASK_NAME:
+            if self.request.id and self.name not in _OBSERVATION_SKIPPED_TASKS:
                 try:
                     get_async_event_loop_pool().run(
                         _update_task_record_on_end(
@@ -750,21 +754,12 @@ def create_celery():
                 trace_id = getattr(LOCAL_CONTEXT_VAR, "trace_id", None) or ""
                 enter_celery_span(trace_id, "", "")
 
-            # 推送任务到堆栈
-            _task_stack.push(self)
-            self.push_request(args=args, kwargs=kwargs)
-
-            try:
-                if asyncio.iscoroutinefunction(self.run):
-                    # 异步函数使用惰性初始化的池执行，避免在 Web 进程导入时创建事件循环
-                    return get_async_event_loop_pool().run(self.run(*args, **kwargs))
-                else:
-                    # 同步函数直接执行
-                    return self.run(*args, **kwargs)
-            finally:
-                # 清理
-                self.pop_request()
-                _task_stack.pop()
+            # Celery build_tracer在调用自定义__call__前已经压入包含id、headers等
+            # 信息的完整Request；再次push_request只会用args/kwargs遮蔽原始上下文。
+            if asyncio.iscoroutinefunction(self.run):
+                # 异步函数使用惰性初始化的池执行，避免在 Web 进程导入时创建事件循环
+                return get_async_event_loop_pool().run(self.run(*args, **kwargs))
+            return self.run(*args, **kwargs)
 
     # 创建 Celery 实例
     _celery_: Celery = NewCelery("Celery-Worker", task_cls=ContextTask)

@@ -2,10 +2,10 @@
 import os.path
 import platform
 from functools import lru_cache
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Literal
 from urllib.parse import quote_plus
 
-from pydantic import Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing_extensions import Self
 
@@ -13,6 +13,33 @@ from common import FileUtils, ShellUtils
 
 _PROJECT_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 _PROJECT_CONF: str = os.path.join(_PROJECT_ROOT, ".env")
+
+
+class EnumAIModelConfig(BaseModel):
+    """一个兼容Chat Completions协议的枚举抽取模型配置。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=64)
+    api_key: SecretStr
+    base_url: str = Field(..., min_length=1)
+    model_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=128,
+        validation_alias=AliasChoices("model_name", "model"),
+    )
+    response_format_type: Literal["json_schema", "json_object"] = "json_schema"
+    timeout_seconds: float = Field(default=20.0, gt=0, le=300)
+    max_retries: int = Field(default=0, ge=0, le=5)
+
+    @model_validator(mode="after")
+    def validate_model_endpoint(self) -> Self:
+        if not self.api_key.get_secret_value().strip():
+            raise ValueError(f"枚举抽取AI模型[{self.name}]的api_key不能为空")
+        if not self.base_url.strip().lower().startswith("https://"):
+            raise ValueError(f"枚举抽取AI模型[{self.name}]的base_url必须使用HTTPS")
+        return self
 
 
 class ProjectConfig(BaseSettings):
@@ -211,6 +238,26 @@ class ProjectConfig(BaseSettings):
     ORACLE_CLIENT_MODE: str = Field(default="", description="Oracle Instant 连接模式，仅允许：thick/thin")
     ORACLE_CLIENT_PATH: str = Field(default="", description="Oracle Instant Client 存放目录")
 
+    # 项目接口文档备注枚举值抽取（ESB文档不使用）
+    ENUM_AI_EXTRACTION_ENABLED: bool = False
+    ENUM_AI_BATCH_SIZE: int = Field(
+        default=20,
+        ge=1,
+        le=200,
+    )
+    ENUM_AI_BATCH_MAX_CHARS: int = Field(default=12_000, ge=2_000, le=100_000)
+    ENUM_AI_MAX_CONCURRENCY: int = Field(default=2, ge=1, le=5)
+    ENUM_AI_TOTAL_TIMEOUT_SECONDS: float = Field(default=60.0, gt=0, le=300)
+    ENUM_AI_MAX_COMPLETION_TOKENS: int = Field(
+        default=8192,
+        ge=512,
+        le=65536,
+    )
+    ENUM_AI_MODELS: List[EnumAIModelConfig] = Field(
+        default_factory=list,
+        description="按故障转移优先级排列的枚举抽取AI模型列表",
+    )
+
     @model_validator(mode="after")
     def validate_env_and_assemble_urls(self) -> Self:
         if not self.AUTH_SECRET_KEY or len(self.AUTH_SECRET_KEY) < 64:
@@ -219,6 +266,13 @@ class ProjectConfig(BaseSettings):
         for field_name in ("DATABASE_USERNAME", "DATABASE_HOST", "DATABASE_PORT", "DATABASE_NAME", "REDIS_HOST", "REDIS_PORT"):
             if not getattr(self, field_name):
                 raise ValueError(f"{field_name} 配置为空，请请检查.env文件或环境变量")
+
+        if self.ENUM_AI_EXTRACTION_ENABLED:
+            if not self.ENUM_AI_MODELS:
+                raise ValueError("未配置ENUM_AI_MODELS，无法启用枚举抽取")
+            names = [item.name for item in self.ENUM_AI_MODELS]
+            if len(names) != len(set(names)):
+                raise ValueError("ENUM_AI_MODELS中的name不允许重复")
 
         return self.assemble_connection_urls()
 

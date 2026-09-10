@@ -67,6 +67,9 @@ class CeleryConfig(BaseSettings):
                 "celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task": {
                     "queue": "autotest_queue"
                 },
+                "celery_scheduler.tasks.task_autotest_data_generate.generate_test_data_task": {
+                    "queue": "autotest_queue"
+                },
             },
             "task_default_queue": "default",
             "task_default_exchange": "default",
@@ -86,6 +89,14 @@ class CeleryConfig(BaseSettings):
                     "task": (
                         "celery_scheduler.tasks.task_autotest_case"
                         ".scan_and_dispatch_autotest_tasks"
+                    ),
+                    "schedule": 60.0,
+                    "options": {"queue": "default"},
+                },
+                "recover-timed-out-data-generate-tasks": {
+                    "task": (
+                        "celery_scheduler.tasks.task_autotest_data_generate"
+                        ".recover_timed_out_data_generate_tasks"
                     ),
                     "schedule": 60.0,
                     "options": {"queue": "default"},
