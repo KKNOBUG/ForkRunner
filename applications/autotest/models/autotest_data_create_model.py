@@ -30,7 +30,6 @@ class AutoTestDataCreateModel(ScaffoldModel, MaintainMixin, TimestampMixin, Stat
         )
         indexes = (
             ("case_id", "state"),
-            ("case_code", "state"),
             ("create_code", "state"),
         )
         ordering = ["case_id", "step_code"]

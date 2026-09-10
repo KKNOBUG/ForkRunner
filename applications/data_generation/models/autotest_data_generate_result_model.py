@@ -17,7 +17,7 @@ class AutoTestDataGenerateResultModel(ScaffoldModel):
     created_time = fields.DatetimeField(auto_now_add=True, description="创建时间")
 
     class Meta:
-        table = "krun_autotest_data_generate_result"
+        table = "tbx_autotest_data_generate_result"
         table_description = "自动化测试-测试数据生成结果表"
         unique_together = (
             ("task_id", "scene_name"),

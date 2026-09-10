@@ -70,7 +70,7 @@ class AutoTestDataGenerateTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin
     finished_time = fields.DatetimeField(null=True, description="任务结束时间")
 
     class Meta:
-        table = "krun_autotest_data_generate_task"
+        table = "tbx_autotest_data_generate_task"
         table_description = "自动化测试-测试数据生成任务表"
         indexes = (
             ("case_id", "step_code", "state", "created_time"),
