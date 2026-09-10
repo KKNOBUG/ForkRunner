@@ -196,6 +196,8 @@ class StepExecutionContext:
         self.step_cycle_index: Dict[str, int] = {}
         self._current_step_code: Optional[str] = None
         self.executing_quote_case_id: Optional[int] = None
+        # 引用链执行中容器步骤ID：被引用用例根步骤的parent_step_id为None，落明细时回落到此值归属引用容器
+        self.executing_parent_step_id: Optional[int] = None
         self._http_client = http_client
         self._exit_stack = AsyncExitStack()
         self.defined_variables: List[StepVariablesBase] = []
@@ -1366,6 +1368,7 @@ class BaseStepExecutor:
             case_code=self.context.case_code,
             report_code=self.context.report_code,
             quote_case_id=self.quote_case_id or result.quote_case_id,
+            parent_step_id=self.step.parent_step_id or self.context.executing_parent_step_id,
             step_id=self.step_id or step_timestamp,
             step_no=self.step_no,
             step_name=self.step_name,
@@ -2508,6 +2511,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
         :return: None
         """
         previous_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
+        previous_parent_step_id: Optional[int] = getattr(self.context, "executing_parent_step_id", None)
         try:
             quote_case_id = self.step.quote_case_id
             if not quote_case_id:
@@ -2516,6 +2520,8 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             database_crud_services = await self.get_services()
             # 将当前引用的公共脚本ID在步骤执行器上下文中标记，用于判断是否来自引用链
             self.context.executing_quote_case_id = quote_case_id
+            # 将引用容器步骤ID标记为执行中父级，供被引用用例根步骤明细归属引用容器
+            self.context.executing_parent_step_id = self.step_id
             try:
                 quote_case_instance = await database_crud_services.case_curd.get_by_conditions(
                     only_one=True,
