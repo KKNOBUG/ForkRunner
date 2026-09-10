@@ -18,7 +18,7 @@ import orjson
 from aiomysql import Pool
 
 if TYPE_CHECKING:
-    from applications.autotest.dependencies import AutoTestApiServices
+    from applications.autotest.dependencies import AutoTestServices
 
 from applications.autotest.services.autotest_runtime.protocol_http import (
     assemble_http_body_payloads,
@@ -34,8 +34,8 @@ from applications.autotest.services.autotest_runtime.protocol_tcp import (
     tcp_body_source_for_assert
 )
 from applications.autotest.services.autotest_runtime.datagram.datagram_diff import compare_messages
-from applications.autotest.schemas.autotest_detail_schema import AutoTestApiDetailCreate
-from applications.autotest.schemas.autotest_report_schema import AutoTestApiReportCreate
+from applications.autotest.schemas.autotest_detail_schema import AutoTestDetailCreate
+from applications.autotest.schemas.autotest_report_schema import AutoTestReportCreate
 from applications.autotest.schemas.autotest_datagram_diff_schema import DatagramFieldCompareItem
 from applications.autotest.services.autotest_runtime.builtin_variables import collect_builtin_step_variables
 from applications.autotest.schemas.autotest_step_schema import (
@@ -171,7 +171,7 @@ class StepExecutionContext:
             dataset_name: Optional[str] = None,
             http_client: Optional[HttpClientProtocol] = None,
             initial_variables: Optional[List[StepVariablesBase]] = None,
-            pending_details: Optional[List[AutoTestApiDetailCreate]] = None,
+            pending_details: Optional[List[AutoTestDetailCreate]] = None,
     ) -> None:
         """
         初始化步骤执行上下文。
@@ -1028,7 +1028,7 @@ class BaseStepExecutor:
         )
 
     @classmethod
-    async def get_services(cls) -> AutoTestApiServices:
+    async def get_services(cls) -> AutoTestServices:
         """获取自动化测试依赖注入的CRUD服务聚合。"""
         from applications.autotest.dependencies import get_autotest_api_services
         return await get_autotest_api_services()
@@ -1361,7 +1361,7 @@ class BaseStepExecutor:
         actual_request: Dict[str, Any] = result.request or {}
         # 当step_id、step_code为None时说明是临时步骤(没有保存入库)，所以替换为step_timestamp、temporary-step-debugging标识
         step_timestamp: int = int(str(datetime.now().timestamp()).replace(".", ""))
-        detail_create = AutoTestApiDetailCreate(
+        detail_create = AutoTestDetailCreate(
             case_id=self.context.case_id,
             case_code=self.context.case_code,
             report_code=self.context.report_code,
@@ -3880,7 +3880,7 @@ class AutoTestStepExecutionEngine:
         self._task_code = task_code
         self._batch_code = batch_code
         self._report_code: Optional[str] = None
-        self._pending_details: List[AutoTestApiDetailCreate] = []
+        self._pending_details: List[AutoTestDetailCreate] = []
 
     async def execute_case(
             self,
@@ -3897,8 +3897,8 @@ class AutoTestStepExecutionEngine:
         Optional[str],
         Dict[str, Any],
         List[StepVariablesBase],
-        Optional[AutoTestApiReportCreate],
-        Optional[List[AutoTestApiDetailCreate]]
+        Optional[AutoTestReportCreate],
+        Optional[List[AutoTestDetailCreate]]
     ]:
         """
         执行单用例：在上下文中根据step_no执行根步骤，可选收集报告与明细供调用方落库。
@@ -3927,7 +3927,7 @@ class AutoTestStepExecutionEngine:
             report_code: str = unique_identify()
             self._report_code = report_code
             self._pending_details = []
-        pending_details_arg: Optional[List[AutoTestApiDetailCreate]] = self._pending_details if self._save_report else None
+        pending_details_arg: Optional[List[AutoTestDetailCreate]] = self._pending_details if self._save_report else None
         async with StepExecutionContext(
                 case_id=case_id,
                 case_code=case_code,
@@ -3973,8 +3973,8 @@ class AutoTestStepExecutionEngine:
             case_ed_time_str: str = case_end_time.strftime("%Y-%m-%d %H:%M:%S")
             case_elapsed: str = f"{(case_end_time - case_start_time).total_seconds():.3f}"
             case_state: bool = failed_steps == 0
-            defer_create_report: Optional[AutoTestApiReportCreate] = None
-            pending_create_details: Optional[List[AutoTestApiDetailCreate]] = None
+            defer_create_report: Optional[AutoTestReportCreate] = None
+            pending_create_details: Optional[List[AutoTestDetailCreate]] = None
             involve_envs: Set[str] = {
                 var.env_name if isinstance(var, StepsExecuteConfigBase) else var.get("env_name")
                 for key, var in steps_execute_config.items()
@@ -3982,7 +3982,7 @@ class AutoTestStepExecutionEngine:
             if self._save_report and report_code:
                 user_name: Optional[str] = get_current_username()
                 final_report_type = report_type if report_type is not None else AutoTestReportType.SYNC_EXEC
-                defer_create_report = AutoTestApiReportCreate(
+                defer_create_report = AutoTestReportCreate(
                     case_id=case_id,
                     case_code=case_code,
                     report_code=report_code,

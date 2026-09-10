@@ -7,7 +7,7 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from applications.autotest.models.autotest_case_transfer_model import AutoTestCaseTransferModel
-from applications.autotest.schemas.autotest_case_transfer_schema import AutoTestApiCaseTransferCreate
+from applications.autotest.schemas.autotest_case_transfer_schema import AutoTestCaseTransferCreate
 from applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 from applications.base.services.scaffold import ScaffoldCrud
 from configure import LOGGER
@@ -20,7 +20,7 @@ from core.exceptions import (
 from services import get_current_username
 
 
-class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestApiCaseTransferCreate, AutoTestApiCaseTransferCreate]):
+class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestCaseTransferCreate, AutoTestCaseTransferCreate]):
 
     def __init__(self):
         super().__init__(model=AutoTestCaseTransferModel)
@@ -51,7 +51,7 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestA
             raise NotFoundException(message=error_message)
         return instance
 
-    async def transfer_case(self, transfer_in: AutoTestApiCaseTransferCreate) -> AutoTestCaseTransferModel:
+    async def transfer_case(self, transfer_in: AutoTestCaseTransferCreate) -> AutoTestCaseTransferModel:
         """
         转让用例所属人：仅当前所属人可操作，写入转让记录并改owner_user，不改created_user。
 

@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import httpx
 import orjson
 
-from applications.autotest.dependencies import AutoTestApiServices
+from applications.autotest.dependencies import AutoTestServices
 from applications.autotest.schemas.autotest_step_schema import (
     AutoTestHttpDebugRequest,
     AutoTestPythonCodeDebugRequest,
@@ -182,7 +182,7 @@ class StepDebugService:
     @classmethod
     async def resolve_env_config(
             cls,
-            services: AutoTestApiServices,
+            services: AutoTestServices,
             *,
             project_id: int,
             env_name: str,
@@ -382,7 +382,7 @@ class StepDebugService:
     async def debug_http(
             cls,
             debug_in: AutoTestHttpDebugRequest,
-            services: AutoTestApiServices,
+            services: AutoTestServices,
     ) -> Dict[str, Any]:
         """
         调试HTTP请求步骤。
@@ -624,7 +624,7 @@ class StepDebugService:
     async def debug_tcp(
             cls,
             debug_in: AutoTestTcpDebugRequest,
-            services: AutoTestApiServices,
+            services: AutoTestServices,
     ) -> Dict[str, Any]:
         """
         调试TCP请求步骤。
@@ -905,7 +905,7 @@ class StepDebugService:
     async def debug_redis(
             cls,
             debug_in: AutoTestRedisDebugRequest,
-            services: AutoTestApiServices,
+            services: AutoTestServices,
     ) -> Dict[str, Any]:
         """
         调试Redis请求步骤；查到即止语义与RedisStepExecutor对齐。

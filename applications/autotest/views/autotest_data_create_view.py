@@ -12,7 +12,7 @@ import aiofiles.os as aos
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from starlette.responses import StreamingResponse
 
-from applications.autotest.dependencies import AutoTestApiServices, get_autotest_api_services
+from applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from applications.autotest.models.autotest_step_model import AutoTestStepModel
 from applications.autotest.schemas.autotest_data_create_schema import AutoTestDataCreateCreate
 from applications.autotest.services.autotest_xlsx_create import generate_tcp_test_data, generate_test_data, is_field_mapping_doc
@@ -89,7 +89,7 @@ async def download_file_temple(file_type: str = Form(..., description="模板类
 @autotest_data_create.post(path="/download-create", summary="接口数据下载")
 async def download_file_create(
         create_code: str = Form(..., title="创建CODE"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     instance_hash = await services.data_create_curd.get_by_code(create_code=create_code)
     if not instance_hash:
@@ -114,7 +114,7 @@ async def download_file_create(
 @autotest_data_create.post(path="/query-create", summary="接口数据记录查询")
 async def query_file_create(
         step_code: str = Form(..., description="步骤CODE"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据步骤标识查询接口文件生成记录。
@@ -141,7 +141,7 @@ async def query_file_create(
 async def delete_file_create(
         create_code: str = Form(..., description="生成CODE"),
         step_code: str = Form(..., description="步骤CODE"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据生成CODE软删除接口文件生成记录。
@@ -168,7 +168,7 @@ async def upload_file_create(
         step_name: str = Form(..., description="步骤NAME"),
         rules_list: str = Form(..., description="生成规则"),
         file: UploadFile = File(..., description="案例数据源文件"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     上传接口文档并生成测试数据。
@@ -287,7 +287,7 @@ async def upload_file_create(
 @autotest_data_create.post(path="/delete-source", summary="数据源上传记录删除")
 async def delete_file_source(
         step_code: str = Form(..., description="步骤CODE"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     删除步骤数据源上传记录并清空步骤上的数据源元信息。

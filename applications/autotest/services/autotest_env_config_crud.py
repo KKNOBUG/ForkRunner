@@ -8,12 +8,12 @@ from tortoise.queryset import QuerySet
 
 from applications.autotest.models.autotest_env_config_model import AutoTestEnvBindModel, AutoTestEnvConfigModel
 from applications.autotest.schemas.autotest_env_config_schema import (
-    AutoTestApiEnvConfigCreate,
-    AutoTestApiEnvConfigUpdate,
-    AutoTestApiEnvConfigDelete,
-    AutoTestApiEnvConfigTypedDelete,
+    AutoTestEnvConfigCreate,
+    AutoTestEnvConfigUpdate,
+    AutoTestEnvConfigDelete,
+    AutoTestEnvConfigTypedDelete, QueryAssignConfigEnv,
 )
-from applications.autotest.schemas.autotest_env_schema import AutoTestApiEnvCreate
+from applications.autotest.schemas.autotest_env_schema import AutoTestEnvCreate
 from applications.autotest.services.autotest_env_crud import AutoTestEnvCrud
 from applications.autotest.services.autotest_project_crud import AutoTestProjectCrud
 from applications.base.services.scaffold import ScaffoldCrud
@@ -28,7 +28,7 @@ from core.exceptions import (
 from enums import AutoTestConfigNodeType
 
 
-class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvConfigCreate, AutoTestApiEnvConfigUpdate]):
+class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConfigCreate, AutoTestEnvConfigUpdate]):
 
     def __init__(self):
         super().__init__(model=AutoTestEnvConfigModel)
@@ -74,7 +74,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_config(self, config_in: AutoTestApiEnvConfigCreate) -> AutoTestEnvConfigModel:
+    async def create_config(self, config_in: AutoTestEnvConfigCreate) -> AutoTestEnvConfigModel:
         """
         创建环境配置；同名软删记录则恢复启用。
 
@@ -130,7 +130,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_config(self, config_in: AutoTestApiEnvConfigUpdate) -> AutoTestEnvConfigModel:
+    async def update_config(self, config_in: AutoTestEnvConfigUpdate) -> AutoTestEnvConfigModel:
         """
         更新环境配置，根据config_id或config_code定位。
 
@@ -208,7 +208,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def delete_config(self, config_in: AutoTestApiEnvConfigTypedDelete) -> AutoTestEnvConfigModel:
+    async def delete_config(self, config_in: AutoTestEnvConfigTypedDelete) -> AutoTestEnvConfigModel:
         """
         按节点类型软删除环境配置；已删除则直接返回（幂等）。
 
@@ -227,7 +227,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
             return instance
         return await self.soft_delete(id=instance.id, updated_user=config_in.updated_user)
 
-    async def delete_configs(self, config_in: AutoTestApiEnvConfigDelete) -> int:
+    async def delete_configs(self, config_in: AutoTestEnvConfigDelete) -> int:
         """
         根据ID或code列表批量软删除环境配置。
 
@@ -408,6 +408,28 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
         names = await stmt.values_list("config_name", flat=True)
         return sorted(set(names))
 
+    async def query_assign_config_env_names(self, query_in: QueryAssignConfigEnv) -> List[str]:
+        """
+        按应用/配置名称/节点类型查询符合的环境名称列表。
+
+        :param query_in: 指派配置环境查询入参(三条件均可选)
+        :return: 去重且升序排列的环境名称列表
+        """
+        stmt: QuerySet = self.model.filter(state__not=1)
+        if query_in.config_name:
+            stmt = stmt.filter(config_name=query_in.config_name)
+        if query_in.project_id is not None or query_in.env_type is not None:
+            env_bind_ids = await AutoTestEnvCrud().list_bind_ids(
+                project_id=query_in.project_id,
+                env_type=query_in.env_type,
+            )
+            if not env_bind_ids:
+                return []
+            stmt = stmt.filter(env_bind_id__in=env_bind_ids)
+        # 环境链为真实外键, 经绑定表跨取环境名称
+        names: List[str] = await stmt.values_list("env_bind__env_enum__env_name", flat=True)
+        return sorted(set(names))
+
     async def serialize_config(
             self,
             instance: AutoTestEnvConfigModel,
@@ -455,7 +477,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestApiEnvC
         if not name:
             raise ParameterException(message="参数[env_name]不允许为空")
         return await AutoTestEnvCrud().create_env(
-            AutoTestApiEnvCreate(
+            AutoTestEnvCreate(
                 env_name=name,
                 project_id=project_id,
                 env_type=env_type,

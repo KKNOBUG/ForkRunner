@@ -7,7 +7,7 @@ from applications.base.services.scaffold import UpperStr
 from enums import AutoTestCaseType, AutoTestCaseAttr, AutoTestStepType, AutoTestReqArgsType
 
 
-class AutoTestApiCaseMeta(BaseModel):
+class AutoTestCaseMeta(BaseModel):
     """用例公共字段。"""
 
     case_id: Optional[int] = Field(None, description="用例ID")
@@ -19,7 +19,7 @@ class AutoTestApiCaseMeta(BaseModel):
     case_version: Optional[int] = Field(None, ge=1, description="用例更新版本(修改次数)")
 
 
-class AutoTestApiCaseBase(BaseModel):
+class AutoTestCaseBase(BaseModel):
     """用例公共字段。"""
 
     case_name: Optional[str] = Field(None, max_length=255, description="用例名称")
@@ -43,7 +43,7 @@ class AutoTestApiCaseBase(BaseModel):
         return v
 
 
-class AutoTestApiCaseCreate(AutoTestApiCaseBase):
+class AutoTestCaseCreate(AutoTestCaseBase):
     """创建用例入参。"""
 
     case_name: str = Field(..., max_length=255, description="用例名称")
@@ -54,14 +54,14 @@ class AutoTestApiCaseCreate(AutoTestApiCaseBase):
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
-class AutoTestApiCaseUpdate(AutoTestApiCaseMeta, AutoTestApiCaseBase):
+class AutoTestCaseUpdate(AutoTestCaseMeta, AutoTestCaseBase):
     """更新用例入参。"""
 
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
-class AutoTestApiCaseSelect(AutoTestApiCaseMeta, AutoTestApiCaseBase):
+class AutoTestCaseSelect(AutoTestCaseMeta, AutoTestCaseBase):
     """分页查询用例入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
