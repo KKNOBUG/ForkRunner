@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
 
-from applications.aotutest.services.autotest_case_crud import AutoTestCaseCrud
-from applications.aotutest.services.autotest_data_source_crud import AutoTestDataSourceCrud
-from applications.aotutest.services.autotest_step_crud import AutoTestStepCrud
+from applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
+from applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
+from applications.autotest.services.autotest_step_crud import AutoTestStepCrud
 from applications.data_generation.services.autotest_data_generate_task_crud import (
     AutoTestDataGenerateTaskCrud,
 )
