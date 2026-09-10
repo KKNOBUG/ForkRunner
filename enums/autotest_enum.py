@@ -133,6 +133,13 @@ class AutoTestTaskCycleType(StringEnum):
     MONTH = "monthly"
 
 
+class AutoTestDataGenerateStatus(StringEnum):
+    """测试数据生成任务状态。"""
+    IN_PROGRESS = "进行中"
+    SUCCESS = "成功"
+    FAILURE = "失败"
+
+
 class AutoTestReqArgsType(StringEnum):
     RAW = "raw"
     NONE = "none"

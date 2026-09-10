@@ -27,15 +27,15 @@ from applications.data_generation.services.autotest_project_interface_workbook_s
     ProjectInterfaceWorkbookError,
     resolve_uploaded_interface_document_path,
 )
-from applications.aotutest.services.autotest_data_source_parser import (
+from applications.autotest.services.autotest_data_source_parser import (
     AXIS_HORIZONTAL,
     AXIS_VERTICAL,
     extract_scene_names_from_matrix,
     normalize_dataset_record,
     resolve_matrix_axis,
 )
-from applications.aotutest.schemas.autotest_data_source_schema import AutoTestDataSourceUpdate
-from applications.aotutest.services.autotest_data_source_service import (
+from applications.autotest.schemas.autotest_data_source_schema import AutoTestDataSourceUpdate
+from applications.autotest.services.autotest_data_source_service import (
     build_vertical_matrix_from_step,
     ensure_case_allows_data_source,
     ensure_request_step,

@@ -39,7 +39,7 @@ from applications.data_generation.services.autotest_data_generate_record_service
     resolve_interface_document_path,
 )
 from applications.data_generation.services.autotest_data_generate_task_crud import AutoTestDataGenerateTaskCrud
-from applications.aotutest.services.autotest_data_source_service import (
+from applications.autotest.services.autotest_data_source_service import (
     ensure_case_allows_data_source,
     ensure_request_step,
     resolve_case_and_step,
