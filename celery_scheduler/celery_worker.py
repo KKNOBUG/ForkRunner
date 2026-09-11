@@ -8,7 +8,6 @@ from typing import Dict, Any, Optional
 
 from celery import Celery
 from celery import Task
-from celery._state import _task_stack
 from celery.signals import setup_logging, task_prerun, worker_process_init
 from celery.worker.request import Request
 
@@ -31,9 +30,17 @@ from .celery_base import (
 _async_event_loop_pool = None
 # 扫描任务不写执行记录、不走终态更新
 _SCAN_TASK_NAME = "celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
+_DATA_GENERATE_TASK_NAME = (
+    "celery_scheduler.tasks.task_autotest_data_generate.generate_test_data_task"
+)
+_DATA_GENERATE_RECOVERY_TASK_NAME = (
+    "celery_scheduler.tasks.task_autotest_data_generate.recover_timed_out_data_generate_tasks"
+)
 # 数据生成使用独立任务表；扫描任务不属于用户执行记录，均不写通用AutoTestRecord。
 _OBSERVATION_SKIPPED_TASKS = {
     _SCAN_TASK_NAME,
+    _DATA_GENERATE_TASK_NAME,
+    _DATA_GENERATE_RECOVERY_TASK_NAME,
 }
 # setup_logging 写入 celery 专用日志文件时登记的 Loguru sink id，避免重复添加
 _celery_logfile_sink_id = None
@@ -749,21 +756,14 @@ def create_celery():
                 trace_id = getattr(LOCAL_CONTEXT_VAR, "trace_id", None) or ""
                 enter_celery_span(trace_id, "", "")
 
-            # 推送任务到堆栈
-            _task_stack.push(self)
-            self.push_request(args=args, kwargs=kwargs)
-
-            try:
-                if asyncio.iscoroutinefunction(self.run):
-                    # 异步函数使用惰性初始化的池执行，避免在 Web 进程导入时创建事件循环
-                    return get_async_event_loop_pool().run(self.run(*args, **kwargs))
-                else:
-                    # 同步函数直接执行
-                    return self.run(*args, **kwargs)
-            finally:
-                # 清理
-                self.pop_request()
-                _task_stack.pop()
+            # Celery build_tracer在调用自定义__call__前已push_task并压入含id/retries等
+            # 完整Request；再次push_request会以裸args/kwargs上下文遮蔽原始Request，
+            # 导致任务体内self.request.id变空(数据生成任务报celery_id为空即由此而来)。
+            if asyncio.iscoroutinefunction(self.run):
+                # 异步函数使用惰性初始化的池执行，避免在 Web 进程导入时创建事件循环
+                return get_async_event_loop_pool().run(self.run(*args, **kwargs))
+            # 同步函数直接执行
+            return self.run(*args, **kwargs)
 
     # 创建 Celery 实例
     _celery_: Celery = NewCelery("Celery-Worker", task_cls=ContextTask)
