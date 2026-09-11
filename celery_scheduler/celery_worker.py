@@ -31,17 +31,9 @@ from .celery_base import (
 _async_event_loop_pool = None
 # 扫描任务不写执行记录、不走终态更新
 _SCAN_TASK_NAME = "celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
-_DATA_GENERATE_TASK_NAME = (
-    "celery_scheduler.tasks.task_autotest_data_generate.generate_test_data_task"
-)
-_DATA_GENERATE_RECOVERY_TASK_NAME = (
-    "celery_scheduler.tasks.task_autotest_data_generate.recover_timed_out_data_generate_tasks"
-)
 # 数据生成使用独立任务表；扫描任务不属于用户执行记录，均不写通用AutoTestRecord。
 _OBSERVATION_SKIPPED_TASKS = {
     _SCAN_TASK_NAME,
-    _DATA_GENERATE_TASK_NAME,
-    _DATA_GENERATE_RECOVERY_TASK_NAME,
 }
 # setup_logging 写入 celery 专用日志文件时登记的 Loguru sink id，避免重复添加
 _celery_logfile_sink_id = None
