@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, Mapping, Optional
 
+from applications.data_generation.constants import RULE_ENUM
 from applications.data_generation.services.autotest_data_generate_export_service import (
     AutoTestDataGenerateExportService,
 )
@@ -91,7 +92,12 @@ class AutoTestDataGenerateTaskService:
         interface_document, request_snapshot = self._validate_snapshots(task)
         enum_outcome: Optional[ProjectEnumExtractionOutcome] = None
         workbook_result = None
-        if str(task.interface_style or "").strip().lower() == "project":
+        # 旧条件因新增枚举校验限制而失效，保留供变更对照：
+        # if str(task.interface_style or "").strip().lower() == "project":
+        is_project = str(task.interface_style or "").strip().lower() == "project"
+        # 以任务提交时保存的规则为准；未选枚举时既不调用AI，也不改写上传文档。
+        needs_enum_extraction = is_project and RULE_ENUM in (task.rule_codes or [])
+        if needs_enum_extraction:
             enum_outcome = await self.enum_extraction_service.extract(interface_document)
             interface_document = enum_outcome.document
             # openpyxl是同步文件IO，放入线程避免阻塞Celery异步编排。
