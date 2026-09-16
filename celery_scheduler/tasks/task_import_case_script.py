@@ -18,11 +18,7 @@ from configure import LOGGER
 from services.ctx import CTX_USERNAME
 
 
-async def _import_case_scripts_impl(
-        rows: List[Dict[str, Any]],
-        file_name: Optional[str],
-        created_user: Optional[str],
-) -> Dict[str, Any]:
+async def _import_case_scripts_impl(rows: List[Dict[str, Any]], file_name: Optional[str], created_user: Optional[str]) -> Dict[str, Any]:
     """
     异步导入实现，行级匹配校验通过后单事务落库(存在更新或恢复覆盖、不存在新增)。
 
@@ -60,7 +56,7 @@ async def _import_case_scripts_impl(
     }
 
 
-@celery.task(name="backend.celery_scheduler.tasks.task_import_case_script.import_case_scripts_task")
+@celery.task(name="celery_scheduler.tasks.task_import_case_script.import_case_scripts_task")
 def import_case_scripts_task(
         rows: List[Dict[str, Any]],
         file_name: Optional[str] = None,
