@@ -23,8 +23,8 @@ from applications.data_generation.services.autotest_data_generate_result_utils i
 from applications.data_generation.services.autotest_data_generate_task_crud import (
     AutoTestDataGenerateTaskCrud,
 )
-from applications.data_generation.services.autotest_project_interface_workbook_service import (
-    ProjectInterfaceWorkbookError,
+from applications.data_generation.services.autotest_interface_workbook_service import (
+    InterfaceWorkbookError,
     resolve_uploaded_interface_document_path,
 )
 from applications.autotest.services.autotest_data_source_parser import (
@@ -322,5 +322,5 @@ def resolve_interface_document_path(storage_key: str) -> str:
     """把接口文档相对键限制在上传目录内，防止下载路径越界。"""
     try:
         return resolve_uploaded_interface_document_path(storage_key)
-    except ProjectInterfaceWorkbookError as exc:
+    except InterfaceWorkbookError as exc:
         raise ParameterException(message=str(exc)) from exc

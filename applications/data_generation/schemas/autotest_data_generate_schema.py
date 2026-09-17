@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 """
-说明：
     测试数据生成任务的数据契约
 """
 
@@ -14,13 +13,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from applications.base.services.scaffold import UpperStr
 from applications.data_generation.constants import SUPPORTED_RULE_CODES
-from enums import AutoTestDataGenerateStatus
-
-#支持的四种数据校验规则代码，0：必填；1：长度；2:枚举；3.小数边界;不仅判断是否合法，还决定最终规则顺序
+from enums import AutoTestDataGenerateStatus, AutoTestInterfaceStyle
 
 
 def normalize_generated_file_name(value: str) -> str:
-    """生成文件必须是当前目录下的xlsx文件。"""
+    """
+        生成文件必须是当前目录下的xlsx文件
+    """
     name = str(value or "").strip()
     if (
         not name
@@ -33,14 +32,16 @@ def normalize_generated_file_name(value: str) -> str:
 
 
 class AutoTestDataGenerateTaskCreate(BaseModel):
-    """创建生成任务时的输入契约，对应任务表的任务输入快照"""
-
+    """
+        任务创建契约：创建生成任务时的输入契约，对应任务表的任务输入快照
+    """
+    #拒绝Schema没有的额外字段
     model_config = ConfigDict(extra="forbid")
 
     case_id: int = Field(..., ge=1, description="用例ID")
     step_id: int = Field(..., ge=1, description="步骤ID")
     step_code: str = Field(..., min_length=1, max_length=64, description="步骤标识代码")
-    interface_style: str = Field(..., description="接口样式(esb/project)")
+    interface_style: str = Field(..., description="接口样式(esb/project/integration)")
     rule_codes: List[str] = Field(..., min_length=1, description="数据校验规则代码")
     request_snapshot: Dict[str, Any] = Field(..., description="请求报文展平快照")
     interface_schema_snapshot: Optional[Dict[str, Any]] = Field(None, description="接口文档统一结构快照")
@@ -54,22 +55,31 @@ class AutoTestDataGenerateTaskCreate(BaseModel):
     @classmethod
     def validate_interface_style(cls, value: str) -> str:
         """
-            interface_style字段校验器，
+            interface_style字段校验和标准化函数
         """
-        style = str(value or "").strip().lower()
-        if style not in {"esb", "project"}:
-            raise ValueError("接口样式只支持esb或project")
-        return style
+        try:
+            style = AutoTestInterfaceStyle.normalize(value)
+        except ValueError as exc:
+            raise ValueError("接口样式只支持esb、project或integration") from exc
+        return style.value
 
     @field_validator("rule_codes")
     @classmethod
     def validate_rule_codes(cls, value: List[str]) -> List[str]:
-        selected = {str(item).strip() for item in value if str(item).strip()}
+        """
+            校验和标准化用户选择的数据校验规则代码
+        """
+        selected = {
+            text
+            for item in value
+            if (text := str(item).strip())
+        }
         unknown = selected.difference(SUPPORTED_RULE_CODES)
         if unknown:
             raise ValueError(f"存在不支持的数据校验规则: {', '.join(sorted(unknown))}")
         if not selected:
             raise ValueError("请至少选择一个数据校验点")
+        #按照系统规定的顺序排列校验规则，规定了校验点的标准执行顺序
         return [code for code in SUPPORTED_RULE_CODES if code in selected]
 
     @field_validator("interface_file_hash")
@@ -97,11 +107,16 @@ class AutoTestDataGenerateTaskCreate(BaseModel):
         return normalize_generated_file_name(value)
 
     def create_dict(self) -> Dict[str, Any]:
+        """
+            将已经校验过的Schema对象转换成普通字典，提供给CRUD创建数据库记录
+        """
         return self.model_dump(exclude_none=False)
 
 
 class AutoTestDataGenerateTaskUpdate(BaseModel):
-    """任务失败回写使用的状态字段。"""
+    """
+        更新契约：任务失败回写使用的状态字段
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -110,12 +125,16 @@ class AutoTestDataGenerateTaskUpdate(BaseModel):
     error_message: Optional[str] = None
 
     def update_dict(self) -> Dict[str, Any]:
-        """排除调用者没有传入的字段"""
+        """
+            排除调用者没有传入的字段
+        """
         return self.model_dump(exclude_unset=True)
 
 
 class AutoTestDataGenerateTaskSelect(BaseModel):
-    """查询当前步骤最近的数据生成任务。"""
+    """
+        查询契约：查询当前步骤最近的数据生成任务
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -124,7 +143,7 @@ class AutoTestDataGenerateTaskSelect(BaseModel):
 
 class AutoTestDataGenerateResultCreate(BaseModel):
     """
-        单条场景的生成结果
+        测试数据创建契约：单条场景的生成结果
     """
 
     model_config = ConfigDict(extra="forbid")

@@ -140,6 +140,18 @@ class AutoTestDataGenerateStatus(StringEnum):
     FAILURE = "失败"
 
 
+class AutoTestInterfaceStyle(StringEnum):
+    """测试数据生成支持的接口文档样式。"""
+    ESB = "esb"
+    PROJECT = "project"
+    INTEGRATION = "integration"
+
+    @classmethod
+    def normalize(cls, value: object) -> "AutoTestInterfaceStyle":
+        raw_value = getattr(value, "value", value)
+        return cls(str(raw_value or "").strip().casefold())
+
+
 class AutoTestReqArgsType(StringEnum):
     RAW = "raw"
     NONE = "none"

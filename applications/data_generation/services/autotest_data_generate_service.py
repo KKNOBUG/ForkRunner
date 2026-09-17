@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 '''
-测试场景生成引擎：
-把接口文档的字段和json/xml请求体中的实际字段对应起来，然后针对必输、长度，枚举和小数边界四类规则生成正反测试数据
+    测试场景生成引擎：
+    把接口文档的字段和json/xml请求体中的实际字段对应起来，然后针对
+    必输、长度，枚举和小数边界四类规则生成正反测试数据
 '''
 
 from __future__ import annotations
@@ -14,6 +15,8 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, TypedDic
 from xml.etree import ElementTree
 
 from applications.data_generation.constants import (
+    MAX_ENUM_VALUES_PER_FIELD,
+    MAX_GENERATED_SCENARIOS,
     RULE_DECIMAL_BOUNDARY,
     RULE_ENUM,
     RULE_LENGTH,
@@ -26,9 +29,7 @@ from applications.data_generation.services.autotest_interface_document_parser im
 )
 
 MAX_REQUEST_FIELDS = 10_000
-MAX_ENUM_VALUES = 1_000
 MAX_GENERATED_FIELD_LENGTH = 1_000
-MAX_GENERATED_SCENARIOS = 10_000
 
 _ENUM_SEPARATOR_RE = re.compile(r"[,，;；\r\n]+")
 _ENUM_DESCRIPTION_SEPARATOR_RE = re.compile(r"[:：]")
@@ -43,7 +44,9 @@ class TestDataGenerationLimitError(TestDataGenerationError):
 
 
 class MatchedInterfaceField(TypedDict):
-    """接口文档字段与请求字段的匹配结果。"""
+    """
+        接口文档字段与请求字段的匹配结果
+    """
     interface_field: ParsedInterfaceField   #接口文档的字段定义
     request_path: str                       #展开后的json path/xml path
     request_value: Any                      #请求报文中的原始值
@@ -51,7 +54,9 @@ class MatchedInterfaceField(TypedDict):
 
 
 class GeneratedTestScenario(TypedDict):
-    """单条测试场景的名称和完整请求体字段数据。"""
+    """
+        单条测试场景的名称和完整请求体字段数据
+    """
     scene_name: str                 #测试场景名称
     scenario_data: Dict[str, str]   #场景对应的完整请求体字段数据
 
@@ -81,7 +86,9 @@ def _json_child_path(prefix: str, key: object) -> str:
 
 
 def flatten_json_body_fields(payload: Any) -> Dict[str, Any]:
-    """将JSON请求体展平为保持顺序的JSONPath键值映射。"""
+    """
+        将JSON请求体展平为保持顺序的JSONPath键值映射
+    """
     result: Dict[str, Any] = {}
 
     def walk(value: Any, path: str) -> None:
@@ -147,36 +154,53 @@ def flatten_xml_body_fields(xml_text: str) -> Dict[str, Any]:
     return result
 
 
-def extract_path_field_name(path: str) -> str:
-    """从JSONPath、XPath或纯字段名中提取末级字段名。"""
+def _request_path_segments(path: str) -> Tuple[str, ...]:
+    """
+        把JSONPath或XPath转换成只包含结构名称的元组，方便后续字段路径匹配
+    """
     text = str(path or "").strip()
     if not text:
-        return ""
+        return ()
 
-    text = re.sub(r"\[\d+\]$", "", text)
-    bracket_match = re.search(r"\[['\"]([^'\"\]]+)['\"]\]$", text)
-    if bracket_match:
-        field_name = bracket_match.group(1)
-    else:
-        text = text.rstrip("/")
-        field_name = re.split(r"[./]", text)[-1].lstrip("@")
-    if ":" in field_name:
-        field_name = field_name.rsplit(":", 1)[-1]
-    return field_name.strip()
+    if text.startswith("$"):
+        segments = []
+        for match in re.finditer(
+                r"\.([A-Za-z_][A-Za-z0-9_-]*)|\['((?:\\.|[^'])*)'\]",
+                text,
+        ):
+            dot_name, bracket_name = match.groups()
+            name = dot_name or re.sub(r"\\([\\'])", r"\1", bracket_name)
+            segments.append(name)
+        return tuple(segments)
+
+    if text.startswith(".") or "/" in text:
+        segments = []
+        for raw_segment in text.split("/"):
+            segment = raw_segment.strip()
+            if not segment or segment == ".":
+                continue
+            segment = re.sub(r"\[\d+\]$", "", segment).lstrip("@")
+            if ":" in segment:
+                segment = segment.rsplit(":", 1)[-1]
+            if segment:
+                segments.append(segment)
+        return tuple(segments)
+
+    return (text,)
 
 
-def _extract_path_array_name(path: str) -> Optional[str]:
-    """从当前支持的JSONPath或XPath中提取数组节点名称。"""
-    text = str(path or "").strip()
-    bracket_matches = list(re.finditer(r"\[['\"]([^'\"]+)['\"]\]\[\d+\]", text))
-    segment_matches = list(re.finditer(r"(?:^|[./])([^./\[\]]+)\[\d+\]", text))
-    matches = [
-        (match.start(), match.group(1))
-        for match in (*bracket_matches, *segment_matches)
-    ]
-    if not matches:
-        return None
-    return max(matches, key=lambda item: item[0])[1].strip() or None
+def _interface_array_path(interface_field: ParsedInterfaceField) -> Tuple[str, ...]:
+    """
+        从接口文档字段中读取并校验array_path，然后标准化为字符串元组
+    """
+    raw_path = interface_field.get("array_path")
+    if not isinstance(raw_path, (list, tuple)):
+        raise TestDataGenerationError("接口文档字段缺少合法的数组路径")
+
+    array_path = tuple(str(name or "").strip() for name in raw_path)
+    if any(not name for name in array_path):
+        raise TestDataGenerationError("接口文档字段数组路径中存在空节点")
+    return array_path
 
 
 def match_interface_fields(
@@ -184,19 +208,22 @@ def match_interface_fields(
         request_fields: Mapping[str, Any],
 ) -> List[MatchedInterfaceField]:
     """
-        按BODY顺序匹配；数组字段同时使用数组名和末级字段名。
+        按BODY顺序匹配；完整路径严格识别，允许大小写不敏感的最外层Body作为可选报文包装节点。
     """
     if len(request_fields) > MAX_REQUEST_FIELDS:
         raise TestDataGenerationError(f"请求报文字段数量不能超过{MAX_REQUEST_FIELDS}")
 
-    interface_by_identity: Dict[Tuple[Optional[str], str], ParsedInterfaceField] = {}
+    interface_by_identity: Dict[
+        Tuple[Tuple[str, ...], str],
+        ParsedInterfaceField,
+    ] = {}
     duplicate_identities = set()
     for interface_field in interface_fields:
         field_name = str(interface_field.get("field_name") or "").strip()
         if not field_name:
             continue
-        array_name = str(interface_field.get("array_name") or "").strip() or None
-        identity = (array_name, field_name)
+        array_path = _interface_array_path(interface_field)
+        identity = (array_path, field_name)
         if identity in interface_by_identity:
             duplicate_identities.add(identity)
             continue
@@ -208,11 +235,20 @@ def match_interface_fields(
     matched_identities = set()
     for path, value in request_fields.items():
         request_path = str(path)
-        field_name = extract_path_field_name(request_path)
-        if not field_name:
+        path_segments = _request_path_segments(request_path)
+        if not path_segments:
             continue
-        identity = (_extract_path_array_name(request_path), field_name)
+        identity = (path_segments[:-1], path_segments[-1])
         interface_field = interface_by_identity.get(identity)
+        if (
+                interface_field is None
+                and len(path_segments) > 1
+                and path_segments[0].casefold() == "body"
+        ):
+            # 接口文档不描述报文包装层；原路径未命中时仅跳过大小写不敏感的最外层Body一次。
+            match_segments = path_segments[1:]
+            identity = (match_segments[:-1], match_segments[-1])
+            interface_field = interface_by_identity.get(identity)
         if interface_field is None or identity in matched_identities:
             continue
         matched_identities.add(identity)
@@ -230,7 +266,9 @@ def match_interface_fields(
 
 
 def _normalize_rule_codes(selected_rule_codes: Sequence[str]) -> Tuple[str, ...]:
-    """校验、去重并按固定执行顺序返回用户选择的规则代码。"""
+    """
+        校验、去重并按固定执行顺序返回用户选择的规则代码
+    """
     selected = {code.strip() for code in selected_rule_codes if code.strip()}
     if not selected:
         raise TestDataGenerationError("请至少选择一个数据校验点")
@@ -241,7 +279,9 @@ def _normalize_rule_codes(selected_rule_codes: Sequence[str]) -> Tuple[str, ...]
 
 
 def _field_scene_name_parts(field: ParsedInterfaceField) -> Tuple[str, str]:
-    """返回场景名称使用的中英文字段名，中文名称为空时回落到英文名称。"""
+    """
+        返回场景名称使用的中英文字段名，中文名称为空时回落到英文名称
+    """
     field_name = str(field.get("field_name") or "").strip()
     if not field_name:
         raise TestDataGenerationError("接口文档字段的英文名称/字段名不能为空")
@@ -255,16 +295,25 @@ def _scene_name(
         rule_name: str,
         detail: str,
 ) -> str:
+    """
+        生成正常的测试场景名称
+    """
     chinese_name, field_name = _field_scene_name_parts(field)
     return f"[{polarity}][{chinese_name}][{field_name}]{rule_name}，{detail}"[:255]
 
 
 def _special_scene_name(field: ParsedInterfaceField, detail: str) -> str:
+    """
+        生成异常的测试场景名称
+    """
     chinese_name, field_name = _field_scene_name_parts(field)
     return f"[{chinese_name}][{field_name}]{detail}"[:255]
 
 
 def _value_to_text(value: Any) -> str:
+    """
+        把请求报文中的各种字段值统一转换成字符串
+    """
     if value is None:
         return ""
     if isinstance(value, bool):
@@ -279,6 +328,10 @@ def _scenario_with_value(
         path: str,
         value: str,
 ) -> Dict[str, str]:
+    """
+        基于原始请求报文生成一份只修改一个字段的测试场景数据
+        即拿报文的原始数据填充非生成测试数据
+    """
     scenario_data = dict(baseline)
     scenario_data[path] = value
     return scenario_data
@@ -289,6 +342,9 @@ def _append_scenario(
         scene_name: str,
         scenario_data: Dict[str, str],
 ) -> None:
+    """
+        将生成的测试数据入队
+    """
     if len(scenarios) >= MAX_GENERATED_SCENARIOS:
         raise TestDataGenerationLimitError(
             f"生成场景数量不能超过{MAX_GENERATED_SCENARIOS}"
@@ -297,12 +353,15 @@ def _append_scenario(
 
 
 def _overlength_value(original_value: Any, generated_length: int) -> str:
+    """
+        用于生成制定长度的测试值，主要用于生成超过长度的反向测试数据
+    """
     if generated_length < 1 or generated_length > MAX_GENERATED_FIELD_LENGTH:
         raise TestDataGenerationError(
             f"生成字段长度必须在1到{MAX_GENERATED_FIELD_LENGTH}之间"
         )
     if isinstance(original_value, str):
-        return "A" * generated_length
+        return "1" * generated_length
     if isinstance(original_value, bool) or original_value is None:
         raise TestDataGenerationError("原始报文字段格式不支持，请检查")
     if isinstance(original_value, (int, float)):
@@ -311,6 +370,9 @@ def _overlength_value(original_value: Any, generated_length: int) -> str:
 
 
 def _decimal_text(integer_digits: int, decimal_digits: int) -> str:
+    """
+        根据整数位数和小数位数，构造一个由9组成的小数字符串，生成小数边界值的合法测试数据
+    """
     integer_part = "9" * integer_digits
     if decimal_digits <= 0:
         return integer_part
@@ -318,6 +380,9 @@ def _decimal_text(integer_digits: int, decimal_digits: int) -> str:
 
 
 def _validate_decimal_original_value(original_value: Any) -> None:
+    """
+        检查原始字段值是否适合进行小数测试数据生成
+    """
     if isinstance(original_value, bool) or original_value is None:
         raise TestDataGenerationError("原始报文字段格式不支持，请检查")
     if not isinstance(original_value, (str, int, float)):
@@ -329,6 +394,9 @@ def _decimal_overlength_values(
         integer_length: int,
         decimal_length: int,
 ) -> Tuple[str, str]:
+    """
+        构造超出长度的decimal测试数据
+    """
     _validate_decimal_original_value(original_value)
     if integer_length < 1 or decimal_length < 0:
         raise TestDataGenerationError("小数字段长度必须保证整数位大于0且小数位不小于0")
@@ -342,6 +410,9 @@ def _decimal_overlength_values(
 
 
 def _split_enum_values(raw_value: Optional[str]) -> List[str]:
+    """
+        拆分枚举值文本为枚举值列表
+    """
     values: List[str] = []
     seen = set()
     for item in _ENUM_SEPARATOR_RE.split(str(raw_value or "")):
@@ -352,12 +423,17 @@ def _split_enum_values(raw_value: Optional[str]) -> List[str]:
             continue
         seen.add(value)
         values.append(value)
-        if len(values) > MAX_ENUM_VALUES:
-            raise TestDataGenerationError(f"单字段枚举值数量不能超过{MAX_ENUM_VALUES}")
+        if len(values) > MAX_ENUM_VALUES_PER_FIELD:
+            raise TestDataGenerationError(
+                f"单字段枚举值数量不能超过{MAX_ENUM_VALUES_PER_FIELD}"
+            )
     return values
 
 
 def _cast_enum_value(raw_value: str, original_value: Any) -> str:
+    """
+        检查枚举值是否与原始请求字段的类型兼容
+    """
     if isinstance(original_value, str) or original_value is None:
         return raw_value
     if isinstance(original_value, bool):
@@ -373,6 +449,9 @@ def _cast_enum_value(raw_value: str, original_value: Any) -> str:
 
 
 def _enum_outlier(last_value: str, original_value: Any) -> Optional[str]:
+    """
+        生成异常枚举值测试数据
+    """
     if isinstance(original_value, str) or original_value is None:
         return f"{last_value}1"
     if isinstance(original_value, bool):
@@ -388,6 +467,9 @@ def _enum_outlier(last_value: str, original_value: Any) -> Optional[str]:
 
 
 def _format_decimal(value: Decimal, decimal_length: int) -> str:
+    """
+        把decimal数据格式化为适合测试场景使用的定长小数字符串
+    """
     if value == 0:
         return "0"
     return format(value, f".{decimal_length}f")
@@ -431,15 +513,8 @@ def _generate_required_scenarios(
         scenarios: List[GeneratedTestScenario],
         baseline: Mapping[str, str],
         matched: MatchedInterfaceField,
-) -> None:
+    ) -> None:
     field = matched["interface_field"]
-    if not str(field.get("required_text") or "").strip():
-        _append_scenario(
-            scenarios,
-            _special_scene_name(field, "接口文档的是否必输项为空，请检查"),
-            {},
-        )
-        return
     if field.get("required") is not True:
         return
     for marker, detail in (
@@ -610,7 +685,10 @@ def generate_test_data_scenarios(
         "scene_name": "正交易场景",
         "scenario_data": dict(baseline),
     }]
-    matched_fields = match_interface_fields(interface_fields, raw_request_fields)
+    matched_fields = match_interface_fields(
+        interface_fields,
+        raw_request_fields,
+    )
     rule_handlers = {
         RULE_REQUIRED: ("必输性校验", _generate_required_scenarios),
         RULE_LENGTH: ("字段长度校验", _generate_length_scenarios),
@@ -619,6 +697,19 @@ def generate_test_data_scenarios(
     }
     # 同一字段的全部校验场景必须相邻，导出和应用会沿用这里的生成顺序。
     for matched in matched_fields:
+        field_name_error = str(
+            matched["interface_field"].get("field_name_error") or ""
+        ).strip()
+        if field_name_error:
+            _append_scenario(
+                scenarios,
+                _special_scene_name(
+                    matched["interface_field"],
+                    f"字段名校验，{field_name_error}",
+                ),
+                {},
+            )
+            continue
         if matched["match_error"]:
             _append_scenario(
                 scenarios,

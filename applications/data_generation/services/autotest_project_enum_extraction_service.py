@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 
 """
-    项目接口枚举提取编排：分批调用AI、合并结果并更新文档快照。
+    接口文档枚举提取编排：分批调用AI、合并结果并更新文档快照。
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 from copy import deepcopy
 from dataclasses import dataclass
@@ -15,14 +14,18 @@ from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Protocol,
 
 from pydantic import ValidationError
 
-from applications.data_generation.schemas.autotest_project_enum_extraction_schema import (
+from applications.data_generation.constants import (
+    ENUM_EXTRACTION_INTERFACE_STYLES,
     MAX_ENUM_EXTRACTION_BATCH_SIZE,
+)
+from applications.data_generation.schemas.autotest_project_enum_extraction_schema import (
     ProjectEnumExtractionCandidate,
     ProjectEnumExtractionFieldInput,
 )
 from applications.data_generation.services.autotest_ai_enum_extraction_client import (
     AIEnumExtractionError,
     AIProjectEnumExtractionClient,
+    serialize_enum_extraction_fields_payload,
 )
 from applications.data_generation.services.autotest_project_enum_extraction_validator import (
     build_ambiguous_candidate,
@@ -30,10 +33,13 @@ from applications.data_generation.services.autotest_project_enum_extraction_vali
     validate_project_enum_response,
 )
 from configure import PROJECT_CONFIG
+from enums import AutoTestInterfaceStyle
+
+_MAX_FRAGMENT_OVERLAP = 256
 
 
 class ProjectEnumExtractionInputError(ValueError):
-    """项目接口解析快照缺失或结构不合法。"""
+    """枚举抽取所需的接口文档快照缺失或结构不合法。"""
 
 
 class _EnumExtractionClient(Protocol):
@@ -51,10 +57,10 @@ class _EnumExtractionClient(Protocol):
 @dataclass(frozen=True)
 class ProjectEnumExtractionOutcome:
     """
-        项目接口枚举抽取的最终结果对象；
+        接口文档枚举抽取的最终结果对象；
         统一封住了处理后的接口文档快照、每个字段的枚举提取结果和统计数量以及AI模型的调用与故障转移信息
     """
-    document: Mapping[str, Any]                         #完成枚举抽取后的项目接口文档快照
+    document: Mapping[str, Any]                         #完成枚举抽取后的接口文档快照
     results: Sequence[ProjectEnumExtractionCandidate]   #保存每一个送给AI处理的字段的枚举抽取结果
     extracted_count: int                                #成功提取枚举值的字段数量
     not_found_count: int                                #没有发现枚举的字段数量
@@ -66,48 +72,72 @@ class ProjectEnumExtractionOutcome:
 
 def _batch_payload_chars(fields: Sequence[ProjectEnumExtractionFieldInput]) -> int:
     """
-        用于计算一批字段转换成JSON请求数据后大约包含多少字符，避免单次发送给AI的字段备注过长
+        计算一批字段按照实际请求格式序列化后的字符数。
         fields：表示一组准备发送给AI的字段
         返回值：序列化后的JSON字符串长度
     """
-    payload = {"fields": [field.model_dump(mode="json") for field in fields]}
-    return len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+    return len(serialize_enum_extraction_fields_payload(fields))
 
 
-def _split_text(text: str, limit: int) -> List[str]:
+def _field_with_remark(
+        field: ProjectEnumExtractionFieldInput,
+        remark: str,
+) -> ProjectEnumExtractionFieldInput:
+    return field.model_copy(update={"remark": remark})
+
+
+def _field_payload_fits(
+        field: ProjectEnumExtractionFieldInput,
+        remark: str,
+        max_chars: int,
+) -> bool:
+    return _batch_payload_chars([_field_with_remark(field, remark)]) <= max_chars
+
+
+def _largest_fitting_prefix(
+        field: ProjectEnumExtractionFieldInput,
+        text: str,
+        max_chars: int,
+) -> int:
     """
-        用于将过长的字段备注拆成多个较短的文本片段，避免单次发送给AI的备注超过批次字符限制
-        拆分策略：优先按照中文句号和换行拆分；若某一段仍然超长，再按照固定长度切割
-        text：需要拆分的完整备注文本
-        limit：单个片段允许的最大字符数
-        返回值：拆分后的字符串列表
+        按照实际JSON序列化长度查找可放入单批的最长文本前缀
     """
-    if len(text) <= limit:
-        return [text]
+    lower = 1
+    upper = len(text)
+    best = 0
+    while lower <= upper:
+        middle = (lower + upper) // 2
+        if _field_payload_fits(field, text[:middle], max_chars):
+            best = middle
+            lower = middle + 1
+        else:
+            upper = middle - 1
+    return best
 
+
+def _split_oversized_part(
+        field: ProjectEnumExtractionFieldInput,
+        text: str,
+        max_chars: int,
+) -> List[str]:
     chunks: List[str] = []
-    current = ""
-    overlap = min(256, max(1, limit // 4))
-    for part in filter(None, re.split(r"(?<=[。\r\n])", text)):
-        if len(part) <= limit:
-            if current and len(current) + len(part) > limit:
-                chunks.append(current)
-                current = ""
-            current += part
-            continue
-
-        if current:
-            chunks.append(current)
-            current = ""
-        start = 0
-        while start < len(part):
-            end = min(len(part), start + limit)
-            chunks.append(part[start:end])
-            if end == len(part):
-                break
-            start = end - overlap
-    if current:
-        chunks.append(current)
+    start = 0
+    while start < len(text):
+        prefix_length = _largest_fitting_prefix(field, text[start:], max_chars)
+        if prefix_length < 1:
+            raise ProjectEnumExtractionInputError(
+                f"第{field.source_row}行字段无法在批次字符限制内拆分"
+            )
+        end = start + prefix_length
+        chunks.append(text[start:end])
+        if end == len(text):
+            break
+        overlap = min(
+            _MAX_FRAGMENT_OVERLAP,
+            max(1, prefix_length // 4),
+            prefix_length - 1,
+        )
+        start = end - overlap
     return chunks
 
 
@@ -116,19 +146,42 @@ def _split_field(
         max_chars: int,
 ) -> List[ProjectEnumExtractionFieldInput]:
     """
-        处理单个待提交给AI的字段：根据单次请求允许的最大字符数，扣除字段名，中文名，
-        行号和JSON结构占用的字符，然后拆分超长备注，并为每个备注片段创建一份新的字段对象
+        按照真实JSON序列化长度拆分超长备注，并为每个片段创建字段对象。
         field：表示需要AI分析的字段
         max_chars：表示包含该字段的AI数据部分最多允许多少字符
         返回值：字段对象列表
     """
-    empty_remark = field.model_copy(update={"remark": "x"})
-    metadata_chars = _batch_payload_chars([empty_remark]) - 1
-    remark_limit = max(1, max_chars - metadata_chars)
-    return [
-        field.model_copy(update={"remark": remark})
-        for remark in _split_text(field.remark, remark_limit)
-    ]
+    if _batch_payload_chars([field]) <= max_chars:
+        return [field]
+    if not _field_payload_fits(field, "x", max_chars):
+        raise ProjectEnumExtractionInputError(
+            f"第{field.source_row}行字段元数据超过枚举抽取批次字符限制"
+        )
+
+    chunks: List[str] = []
+    current = ""
+    for part in filter(None, re.split(r"(?<=[。\r\n])", field.remark)):
+        candidate = current + part
+        if _field_payload_fits(field, candidate, max_chars):
+            current = candidate
+            continue
+        if current:
+            chunks.append(current)
+            current = ""
+        if _field_payload_fits(field, part, max_chars):
+            current = part
+        else:
+            chunks.extend(_split_oversized_part(field, part, max_chars))
+    if current:
+        chunks.append(current)
+
+    fragments = [_field_with_remark(field, remark) for remark in chunks]
+    if not fragments or any(
+            _batch_payload_chars([fragment]) > max_chars
+            for fragment in fragments
+    ):
+        raise ProjectEnumExtractionInputError("枚举抽取字段拆分后仍超过批次字符限制")
+    return fragments
 
 
 def _build_batches(
@@ -139,6 +192,9 @@ def _build_batches(
     """
         用于把所有待AI识别的字段划分成多个请求批次（分割）
     """
+    if size < 1 or max_chars < 1:
+        raise ProjectEnumExtractionInputError("枚举抽取批次限制必须大于零")
+
     batches: List[List[ProjectEnumExtractionFieldInput]] = []
     current: List[ProjectEnumExtractionFieldInput] = []
     for field in fields:
@@ -162,6 +218,13 @@ def _build_batches(
             current = candidate
     if current:
         batches.append(current)
+    if any(
+            not batch
+            or len(batch) > size
+            or _batch_payload_chars(batch) > max_chars
+            for batch in batches
+    ):
+        raise ProjectEnumExtractionInputError("枚举抽取批次超过配置限制")
     return batches
 
 
@@ -205,7 +268,7 @@ def _merge_fragment_results(
 
 class AutoTestProjectEnumExtractionService:
     """
-        调用配置的AI模型并将通过本地校验的枚举值合并到项目文档快照。
+        调用配置的AI模型并将通过本地校验的枚举值合并到接口文档快照。
     """
 
     def __init__(
@@ -244,7 +307,7 @@ class AutoTestProjectEnumExtractionService:
         identities = set()
         for raw_field in fields:
             if not isinstance(raw_field, Mapping):
-                raise ProjectEnumExtractionInputError("项目接口fields中存在非对象字段")
+                raise ProjectEnumExtractionInputError("接口文档fields中存在非对象字段")
             remark = str(raw_field.get("remark") or "").strip()
             if not remark:
                 continue
@@ -252,14 +315,13 @@ class AutoTestProjectEnumExtractionService:
                 field = ProjectEnumExtractionFieldInput(
                     source_row=raw_field.get("source_row"),
                     field_name=raw_field.get("field_name"),
-                    field_chinese_name=raw_field.get("field_chinese_name"),
                     remark=remark,
                 )
             except (ValidationError, TypeError, ValueError) as exc:
-                raise ProjectEnumExtractionInputError("项目接口字段缺少枚举抽取所需信息") from exc
+                raise ProjectEnumExtractionInputError("接口字段缺少枚举抽取所需信息") from exc
             identity = (field.source_row, field.field_name)
             if identity in identities:
-                raise ProjectEnumExtractionInputError("项目接口字段行号与字段名重复")
+                raise ProjectEnumExtractionInputError("接口字段行号与字段名重复")
             identities.add(identity)
             inputs.append(field)
         return inputs
@@ -269,6 +331,9 @@ class AutoTestProjectEnumExtractionService:
             document: MutableMapping[str, Any],
             results: Sequence[ProjectEnumExtractionCandidate],
     ) -> None:
+        """
+            把AI枚举提取的最终结果，写回接口文档中的对应字段
+        """
         by_identity = {
             (result.source_row, result.field_name): result
             for result in results
@@ -288,14 +353,24 @@ class AutoTestProjectEnumExtractionService:
             self,
             interface_document: Mapping[str, Any],
     ) -> ProjectEnumExtractionOutcome:
-        """处理项目接口快照；ESB或未知样式直接拒绝，不调用AI。"""
+        """
+            处理项目或整合接口快照；ESB及未知样式不调用AI
+        """
         if not isinstance(interface_document, Mapping):
             raise ProjectEnumExtractionInputError("接口文档解析快照必须是对象")
-        if str(interface_document.get("interface_style") or "").strip().lower() != "project":
-            raise ProjectEnumExtractionInputError("枚举AI抽取仅支持项目接口文档")
+        try:
+            interface_style = AutoTestInterfaceStyle.normalize(
+                interface_document.get("interface_style")
+            )
+        except ValueError as exc:
+            raise ProjectEnumExtractionInputError(
+                "枚举AI抽取仅支持项目或整合接口文档"
+            ) from exc
+        if interface_style not in ENUM_EXTRACTION_INTERFACE_STYLES:
+            raise ProjectEnumExtractionInputError("枚举AI抽取仅支持项目或整合接口文档")
         fields = interface_document.get("fields")
         if not isinstance(fields, list):
-            raise ProjectEnumExtractionInputError("项目接口解析快照缺少fields列表")
+            raise ProjectEnumExtractionInputError("接口文档解析快照缺少fields列表")
 
         document = deepcopy(dict(interface_document))
         inputs = self._build_inputs(fields)
@@ -317,7 +392,7 @@ class AutoTestProjectEnumExtractionService:
             )
         except TimeoutError as exc:
             raise AIEnumExtractionError(
-                f"项目接口枚举抽取超过{self.total_timeout_seconds:g}秒，已终止",
+                f"接口文档枚举抽取超过{self.total_timeout_seconds:g}秒，已终止",
                 failure_types=("TimeoutError",),
             ) from exc
         finally:

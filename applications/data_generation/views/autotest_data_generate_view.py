@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from pydantic import ValidationError
 from starlette.responses import StreamingResponse
 
+from applications.data_generation.constants import MAX_DOCUMENT_SIZE
 from applications.data_generation.dependencies import (
     DataGenerationApiServices,
     get_data_generation_api_services,
@@ -46,14 +47,17 @@ from applications.autotest.services.autotest_data_source_service import (
 )
 from applications.data_generation.services.autotest_interface_document_parser import (
     InterfaceDocumentParseError,
-    MAX_DOCUMENT_SIZE,
     parse_interface_document,
 )
 from celery_scheduler.tasks.task_autotest_data_generate import dispatch_data_generate_task
 from configure import LOGGER, PROJECT_CONFIG
 from core.exceptions import NotFoundException, ParameterException
 from core.responses import FailureResponse, NotFoundResponse, ParameterResponse, SuccessResponse
-from enums import AutoTestDataGenerateStatus, AutoTestReqArgsType
+from enums import (
+    AutoTestDataGenerateStatus,
+    AutoTestInterfaceStyle,
+    AutoTestReqArgsType,
+)
 from services import get_current_username
 from services.file_transfer import FileTransfer
 
@@ -61,8 +65,9 @@ from services.file_transfer import FileTransfer
 autotest_data_generate = APIRouter()
 
 _INTERFACE_TEMPLATE_FILES = {
-    "esb": "ESB接口文档模板.xlsx",
-    "project": "项目接口文档模板.xlsx",
+    AutoTestInterfaceStyle.ESB: "ESB接口文档模板.xlsx",
+    AutoTestInterfaceStyle.PROJECT: "项目接口文档模板.xlsx",
+    AutoTestInterfaceStyle.INTEGRATION: "整合接口文档模板.xlsx",
 }
 
 
@@ -147,9 +152,13 @@ def _resolve_interface_template(interface_style: str) -> tuple[str, str]:
     """
         根据接口样式找到对应的excel模版文件，并返回文件路径和文件名
     """
-    file_name = _INTERFACE_TEMPLATE_FILES.get(str(interface_style or "").strip().lower())
-    if not file_name:
-        raise ParameterException(message="接口样式仅支持esb或project")
+    try:
+        style = AutoTestInterfaceStyle.normalize(interface_style)
+    except ValueError as exc:
+        raise ParameterException(
+            message="接口样式仅支持esb、project或integration"
+        ) from exc
+    file_name = _INTERFACE_TEMPLATE_FILES[style]
 
     template_root = os.path.realpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template"))
     file_path = os.path.realpath(os.path.join(template_root, file_name))
@@ -169,7 +178,7 @@ async def create_task(
         step_code: str = Form(..., min_length=1, max_length=64),
         interface_style: str = Form(...),
         rule_codes: List[str] = Form(...),
-        file: UploadFile = File(..., description="ESB或项目接口文档，仅支持xlsx"),
+        file: UploadFile = File(..., description="ESB、项目或整合接口文档，仅支持xlsx"),
         services: DataGenerationApiServices = Depends(get_data_generation_api_services),
 ):
     """保存任务输入快照并投递Celery；解析失败也保留一条失败记录。"""
@@ -181,6 +190,12 @@ async def create_task(
     file_path: Optional[str] = None
     task = None
     try:
+        try:
+            normalized_interface_style = AutoTestInterfaceStyle.normalize(interface_style)
+        except ValueError as exc:
+            raise ParameterException(
+                message="接口样式仅支持esb、project或integration"
+            ) from exc
         case, step = await resolve_case_and_step(
             services,
             case_id=case_id,
@@ -189,6 +204,15 @@ async def create_task(
         )
         ensure_request_step(step)
         ensure_case_allows_data_source(case)
+        raw_request_type = getattr(step, "request_args_type", None)
+        request_type = str(
+            getattr(raw_request_type, "value", raw_request_type) or ""
+        ).strip()
+        if (
+                normalized_interface_style == AutoTestInterfaceStyle.INTEGRATION
+                and request_type != AutoTestReqArgsType.XML.value
+        ):
+            raise ParameterException(message="只支持xml格式的报文")
         request_snapshot = _request_body_snapshot(step)
 
         content = await file.read(MAX_DOCUMENT_SIZE + 1)
@@ -201,7 +225,10 @@ async def create_task(
         parsed_document = None
         parse_error = None
         try:
-            parsed_document = parse_interface_document(content, interface_style)
+            parsed_document = parse_interface_document(
+                content,
+                normalized_interface_style.value,
+            )
         except InterfaceDocumentParseError as exc:
             parse_error = exc
 
@@ -232,7 +259,7 @@ async def create_task(
             case_id=case.id,
             step_id=step.id,
             step_code=step.step_code,
-            interface_style=interface_style,
+            interface_style=normalized_interface_style.value,
             rule_codes=rule_codes,
             request_snapshot=request_snapshot,
             interface_schema_snapshot=parsed_document,

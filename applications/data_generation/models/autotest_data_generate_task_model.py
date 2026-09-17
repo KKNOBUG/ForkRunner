@@ -19,16 +19,18 @@ from enums import AutoTestDataGenerateStatus
 
 
 class AutoTestDataGenerateTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
-    """记录一次测试数据生成任务及其不可变输入快照。"""
+    """
+        记录一次测试数据生成任务及其不可变输入快照。
+    """
 
-    """任务唯一业务代码"""
+    #任务唯一业务代码
     task_code = fields.CharField(
         max_length=64,
         default=unique_identify,
         unique=True,
         description="数据生成任务标识代码",
     )
-    """Celery调度ID，用于并发下判断执行权是否还属于当前worker"""
+    #Celery调度ID，用于并发下判断执行权是否还属于当前worker
     celery_id = fields.CharField(
         max_length=255,
         null=True,
@@ -36,27 +38,27 @@ class AutoTestDataGenerateTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin
         description="Celery调度ID",
     )
 
-    """业务定位"""
+    #业务定位
     case_id = fields.BigIntField(ge=1, description="用例ID")
     step_id = fields.BigIntField(ge=1, description="步骤ID")
     step_code = fields.CharField(max_length=64, description="步骤标识代码")
     interface_style = fields.CharField(
         max_length=16,
-        description="接口样式(esb/project)",
+        description="接口样式(esb/project/integration)",
     )
-    """输入快照"""
+    #输入快照
     rule_codes = fields.JSONField(default=list, description="本次选择的数据校验规则代码列表")
     request_snapshot = JSONTextField(description="任务提交时的接口请求数据快照")
     interface_schema_snapshot = JSONTextField(
         null=True,
         description="接口文档解析后的统一字段结构快照",
     )
-    """接口文档原文件信息"""
+    #接口文档原文件信息
     interface_file_name = fields.CharField(max_length=255, description="接口文档原始文件名")
     interface_file_hash = fields.CharField(max_length=64, description="接口文档SHA-256哈希值")
     interface_storage_key = fields.CharField(max_length=1024, description="接口文档存储相对键")
 
-    """产出和运行状态"""
+    #产出和运行状态
     generated_file_name = fields.CharField(max_length=255, description="生成数据文件名")
     task_status = fields.CharEnumField(
         AutoTestDataGenerateStatus,

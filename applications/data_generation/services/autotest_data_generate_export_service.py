@@ -29,7 +29,6 @@ from core.exceptions import ParameterException
 @dataclass(frozen=True)
 class DataGenerateExportFile:
     """数据生成导出文件定位信息，负责接收参数并把参数保存到新对象的属性中"""
-
     file_name: str
     file_path: str
     storage_key: str
@@ -113,7 +112,7 @@ def build_data_generate_workbook(results: Sequence[Any]) -> Workbook:
     #表格样式
     header_fill = PatternFill("solid", fgColor="2F75B5")
     section_fill = PatternFill("solid", fgColor="D9EAF7")
-    thin = Side(style="thin", color="D9E1F2")
+    thin = Side(style="thin", color="A6A6A6")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
     # 数据生成仅写入BODY；保留HEAD分区列以兼容数据编辑表格结构。
@@ -142,7 +141,7 @@ def build_data_generate_workbook(results: Sequence[Any]) -> Workbook:
         for column, value in enumerate(values, start=1):
             cell = sheet.cell(row=row, column=column)
             _write_cell(cell, value)
-            cell.alignment = Alignment(vertical="top", wrap_text=True)
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
             cell.border = border
 
     #设置excel表格的样式
@@ -201,14 +200,20 @@ class AutoTestDataGenerateExportService:
             task: AutoTestDataGenerateTaskModel,
     ) -> DataGenerateExportFile:
         """
-            对外核心导出方法
+            读取数据生成任务的全部测试场景，重新构建excel文件，完全地写入下载目录，最后返回文件定位信息
+            task：AutoTestDataGenerateTaskModel类型，任务模型类
         """
+        #根据任务表的id查询数据生成结果表的内容
         results: List[AutoTestDataGenerateResultModel] = await self.result_crud.list_by_task_id(task.id)
+        #构建excel工作薄
         workbook = build_data_generate_workbook(results)
-
+        #校验生成文件名
         file_name = self._safe_file_name(task.generated_file_name)
+        #计算任务专属输出目录
         output_dir = self._task_output_dir(task.task_code)
+        #创建输出目录
         os.makedirs(output_dir, exist_ok=True)
+        #
         target_path = os.path.abspath(os.path.join(output_dir, file_name))
         temp_path: Optional[str] = None
         try:
@@ -223,6 +228,7 @@ class AutoTestDataGenerateExportService:
             workbook.save(temp_path)
             os.replace(temp_path, target_path)
             temp_path = None
+        #异常时清理资源
         finally:
             workbook.close()
             if temp_path and os.path.isfile(temp_path):
@@ -232,6 +238,7 @@ class AutoTestDataGenerateExportService:
             storage_key = path_to_storage_key(target_path)
         else:
             storage_key = os.path.relpath(target_path, self.output_root).replace("\\", "/")
+        #返回包含四个属性的DataGenerateExportFile类
         return DataGenerateExportFile(
             file_name=file_name,
             file_path=target_path,

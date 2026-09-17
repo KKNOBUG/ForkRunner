@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-    项目接口枚举结果校验：使用原始备注验证AI结果。
+    接口文档枚举结果校验：使用原始文本验证AI结果。
 """
 
 from __future__ import annotations
@@ -11,11 +11,12 @@ import re
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 from pydantic import ValidationError
 
+from applications.data_generation.constants import MAX_ENUM_NORMALIZED_TEXT_LENGTH
 from applications.data_generation.schemas.autotest_project_enum_extraction_schema import (
-    MAX_ENUM_NORMALIZED_TEXT_LENGTH,
     ProjectEnumExtractionCandidate,
     ProjectEnumExtractionFieldInput,
     ProjectEnumExtractionItem,
+    ProjectEnumExtractionRawCandidate,
 )
 from configure import LOGGER
 
@@ -60,6 +61,21 @@ def build_ambiguous_candidate(
         items=[],
         reason=reason,
     )
+
+
+def _parse_raw_candidate(
+        raw_candidate: ProjectEnumExtractionRawCandidate
+        | ProjectEnumExtractionCandidate
+        | Mapping[str, Any],
+) -> ProjectEnumExtractionRawCandidate:
+    """解析AI原始结果；最终候选用于分片合并后的二次校验。"""
+    if isinstance(raw_candidate, ProjectEnumExtractionRawCandidate):
+        return raw_candidate
+    if isinstance(raw_candidate, ProjectEnumExtractionCandidate):
+        payload = raw_candidate.model_dump(exclude={"normalized_text"})
+    else:
+        payload = dict(raw_candidate)
+    return ProjectEnumExtractionRawCandidate.model_validate(payload)
 
 
 def _find_item_evidence(
@@ -120,7 +136,9 @@ def _raw_enum_groups(remark: str) -> List[List[str]]:
 
 def validate_project_enum_candidate(
         expected_field: ProjectEnumExtractionFieldInput | Mapping[str, Any],
-        raw_candidate: ProjectEnumExtractionCandidate | Mapping[str, Any],
+        raw_candidate: ProjectEnumExtractionRawCandidate
+        | ProjectEnumExtractionCandidate
+        | Mapping[str, Any],
 ) -> ProjectEnumExtractionCandidate:
     """
         校验单个字段的AI结果。
@@ -131,11 +149,7 @@ def validate_project_enum_candidate(
         else ProjectEnumExtractionFieldInput.model_validate(expected_field)
     )
     try:
-        candidate = (
-            raw_candidate
-            if isinstance(raw_candidate, ProjectEnumExtractionCandidate)
-            else ProjectEnumExtractionCandidate.model_validate(raw_candidate)
-        )
+        candidate = _parse_raw_candidate(raw_candidate)
     except ValidationError as exc:
         rule = "; ".join(
             f"{'.'.join(str(part) for part in error['loc']) + ': ' if error['loc'] else ''}"
@@ -154,7 +168,10 @@ def validate_project_enum_candidate(
     if candidate.status == "not_found" and source_groups:
         return build_ambiguous_candidate(expected, "AI未识别原备注中已存在的枚举候选组")
     if candidate.status != "extracted":
-        return candidate
+        return ProjectEnumExtractionCandidate(
+            **candidate.model_dump(),
+            normalized_text=None,
+        )
 
     values = [item.value for item in candidate.items]
     if len(values) != len(set(values)):

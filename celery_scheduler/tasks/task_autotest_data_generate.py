@@ -22,8 +22,8 @@ from applications.data_generation.services.autotest_ai_enum_extraction_client im
 from applications.data_generation.services.autotest_project_enum_extraction_service import (
     ProjectEnumExtractionInputError,
 )
-from applications.data_generation.services.autotest_project_interface_workbook_service import (
-    ProjectInterfaceWorkbookError,
+from applications.data_generation.services.autotest_interface_workbook_service import (
+    InterfaceWorkbookError,
 )
 from celery_scheduler.celery_base import run_async
 from celery_scheduler.celery_worker import celery
@@ -55,7 +55,7 @@ def is_permanent_generation_error(exc: BaseException) -> bool:
         TestDataGenerationError,
         AIEnumExtractionError,
         ProjectEnumExtractionInputError,
-        ProjectInterfaceWorkbookError,
+        InterfaceWorkbookError,
         NotFoundException,
         ParameterException,
     ))

@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 
+from applications.data_generation.constants import MAX_GENERATED_SCENARIOS
 from applications.data_generation.models.autotest_data_generate_result_model import AutoTestDataGenerateResultModel
 from applications.data_generation.models.autotest_data_generate_task_model import AutoTestDataGenerateTaskModel
 from applications.data_generation.schemas.autotest_data_generate_schema import AutoTestDataGenerateResultCreate
@@ -20,8 +21,6 @@ from applications.base.services.scaffold import ScaffoldCrud
 from configure import LOGGER
 from core.exceptions import DataBaseStorageException, NotFoundException, ParameterException
 from enums import AutoTestDataGenerateStatus
-
-MAX_BATCH_RESULT_COUNT = 10_000#单次结果数量限制
 
 
 class AutoTestDataGenerateResultCrud(ScaffoldCrud[
@@ -51,8 +50,8 @@ class AutoTestDataGenerateResultCrud(ScaffoldCrud[
         """
         if not scenarios:
             raise ParameterException(message="批量写入生成结果失败, 场景列表不能为空")
-        if len(scenarios) > MAX_BATCH_RESULT_COUNT:
-            raise ParameterException(message=f"单次最多写入{MAX_BATCH_RESULT_COUNT}个测试场景")
+        if len(scenarios) > MAX_GENERATED_SCENARIOS:
+            raise ParameterException(message=f"单次最多写入{MAX_GENERATED_SCENARIOS}个测试场景")
 
         validated: List[AutoTestDataGenerateResultCreate] = []
         names = set()
@@ -82,7 +81,9 @@ class AutoTestDataGenerateResultCrud(ScaffoldCrud[
             raise ParameterException(message="批量写入生成结果失败, 参数[task_id]不允许为空")
         if batch_size < 1 or batch_size > 2000:
             raise ParameterException(message="batch_size必须在1到2000之间")
+        #完整校验场景
         validated = self._validate_results(scenarios)
+        #构造ORM模型实例
         instances = [
             self.model(
                 task_id=task_id,
@@ -93,6 +94,7 @@ class AutoTestDataGenerateResultCrud(ScaffoldCrud[
         ]
 
         try:
+            #代码块中的所有数据库操作使用同一个链接和事务
             async with in_transaction() as connection:
                 task = await AutoTestDataGenerateTaskModel.filter(
                     id=task_id,
