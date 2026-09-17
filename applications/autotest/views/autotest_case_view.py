@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import os
 import traceback
 from typing import Optional, List, Dict, Any, Set, Tuple
+from urllib.parse import quote
 
-from celery_scheduler.tasks.task_import_case_script import import_case_scripts_task
-from celery_scheduler.tasks.task_public_api_to_script import generate_case_scripts_task
 from fastapi import APIRouter, Body, Query, Depends, UploadFile, File
+from starlette.responses import StreamingResponse
 from tortoise.expressions import Q
 
 from applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
@@ -22,7 +23,9 @@ from applications.autotest.services.autotest_case_excel_service import (
 )
 from celery_scheduler.tasks.task_export_case_datagram import export_testcases_task
 from celery_scheduler.tasks.task_export_case_script import export_case_scripts_task
-from configure import LOGGER
+from celery_scheduler.tasks.task_import_case_script import import_case_scripts_task
+from celery_scheduler.tasks.task_public_api_to_script import generate_case_scripts_task
+from configure import LOGGER, PROJECT_CONFIG
 from core.exceptions import (
     NotFoundException,
     ParameterException,
@@ -40,6 +43,7 @@ from core.responses import (
 )
 from enums import AutoTestReportType, AutoTestStepType, AutoTestCaseType
 from services import get_current_username
+from services.file_transfer import FileTransfer
 
 autotest_case = APIRouter()
 
@@ -454,6 +458,31 @@ async def get_request_step_selected_project_ids(
     except Exception as e:
         LOGGER.error(f"根据id或code获取步骤树中请求步骤选择的应用ID列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+
+
+@autotest_case.post("/import_template_download", summary="公共接口导入模板下载", description="公共接口数据导入模板文件xlsx下载")
+async def public_api_import_template_download():
+    """
+    公共接口导入模板下载。
+
+    分发仓库内置于output/template的xlsx（HTTP/TCP请求步骤共用）；流式读取，不加UTF-8 BOM，避免损坏二进制格式。
+
+    :return: 文件流响应
+    """
+    filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "公共接口模板.xlsx"))
+    if not filepath.startswith(PROJECT_CONFIG.OUTPUT_DIR) or not os.path.isfile(filepath):
+        LOGGER.error(f"导入模板文件不存在: {filepath}")
+        return NotFoundResponse(message="导入模板文件不存在，请联系管理员部署")
+    file_name = os.path.basename(filepath)
+    quoted_name = quote(file_name)
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"
+    }
+    return StreamingResponse(
+        FileTransfer.iter_download_file_chunks(download_file=filepath, add_bom=False),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
 
 
 @autotest_case.post("/export_case_datagram_async", summary="导出公共接口报文(异步)", description="导出公共接口用例请求头与请求体为xlsx(统一异步)")
