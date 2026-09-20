@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 from pydantic import ValidationError
 
@@ -26,9 +27,23 @@ _FORWARD_PAIR_HEADER_RE = re.compile(
 _REVERSE_PAIR_HEADER_RE = re.compile(
     r"[:：-][ \t]*([A-Za-z0-9]+)(?![A-Za-z0-9])"
 )
-_DIRECT_PAIR_HEADER_RE = re.compile(
+_IMPLICIT_JOINED_PAIR_HEADER_RE = re.compile(
     r"(?:^|(?<=[;；,， ]))([A-Za-z0-9]+) *(?=[^\x00-\x7F；，。：])"
 )
+_IMPLICIT_SPACED_PAIR_HEADER_RE = re.compile(
+    r"(?:^|(?<=[;；,，])) *([A-Za-z0-9]+) +(?=[A-Za-z])"
+)
+_STRONG_ITEM_SEPARATOR_RE = re.compile(r"[;；,，]")
+_GROUP_SEPARATOR_RE = re.compile(r"。")
+_BETWEEN_ITEMS_RE = re.compile(r"[ \t\n;；,，]*")
+
+
+@dataclass(frozen=True)
+class _SourceEnumGroup:
+    """原备注中的一组连续枚举项。"""
+
+    values: Tuple[str, ...]
+    text: str
 
 
 def _log_structure_error(rule: str, raw_item: Any) -> None:
@@ -99,38 +114,85 @@ def _find_item_evidence(
 
 
 def _items_have_ordered_evidence(
-        remark: str,
+        group: _SourceEnumGroup,
         items: Sequence[ProjectEnumExtractionItem],
 ) -> bool:
-    """
-        校验枚举值是否按原文顺序连续出现
-    """
+    """在已确定的枚举组内校验各项是否按原文顺序连续出现。"""
     next_start = 0
     previous_end = 0
     for index, item in enumerate(items):
-        match = _find_item_evidence(remark, item, next_start)
+        match = _find_item_evidence(group.text, item, next_start)
         if match is None:
             return False
-        if index and any(boundary in remark[previous_end:match.start()] for boundary in ("\r", "\n", "。")):
+        if index and _BETWEEN_ITEMS_RE.fullmatch(
+                group.text[previous_end:match.start()]
+        ) is None:
             return False
         previous_end = match.end()
         next_start = match.end()
     return True
 
 
-def _raw_enum_groups(remark: str) -> List[List[str]]:
-    """
-        从原文备注中查找意思枚举值组合。
-    """
-    groups: List[List[str]] = []
-    for segment in re.split(r"[。\r\n]", remark):
-        values = _FORWARD_PAIR_HEADER_RE.findall(segment)
-        if len(values) < 2:
-            values = _REVERSE_PAIR_HEADER_RE.findall(segment)
-        if len(values) < 2:
-            values = _DIRECT_PAIR_HEADER_RE.findall(segment)
-        if len(values) >= 2:
-            groups.append(values)
+def _chunk_enum_values(chunk: str) -> List[str]:
+    """识别一个强分隔符区段中的枚举键。"""
+    forward = list(_FORWARD_PAIR_HEADER_RE.finditer(chunk))
+    reverse = list(_REVERSE_PAIR_HEADER_RE.finditer(chunk))
+    joined = list(_IMPLICIT_JOINED_PAIR_HEADER_RE.finditer(chunk))
+    spaced = list(_IMPLICIT_SPACED_PAIR_HEADER_RE.finditer(chunk))
+
+    stripped = chunk.strip()
+    starts_forward = re.match(r"[A-Za-z0-9]+[ \t]*[:：-]", stripped) is not None
+    ends_reverse = re.search(r"[:：-][ \t]*[A-Za-z0-9]+$", stripped) is not None
+    if starts_forward:
+        matches = forward + joined + spaced
+    elif ends_reverse:
+        matches = reverse + joined + spaced
+    elif forward:
+        matches = forward + joined + spaced
+    elif reverse:
+        matches = reverse
+    else:
+        matches = joined + spaced
+
+    # 多个识别规则命中同一个键时只计一次，保留原文顺序。
+    values_by_position = {match.start(1): match.group(1) for match in matches}
+    return [values_by_position[position] for position in sorted(values_by_position)]
+
+
+def _line_enum_values(line: str) -> List[str]:
+    """按强分隔符拆行后，依次识别该行的枚举键。"""
+    values: List[str] = []
+    for chunk in _STRONG_ITEM_SEPARATOR_RE.split(line):
+        values.extend(_chunk_enum_values(chunk))
+    return values
+
+
+def _source_enum_groups(remark: str) -> List[_SourceEnumGroup]:
+    """统一识别原文中的枚举项和组边界。"""
+    normalized = remark.replace("\r\n", "\n").replace("\r", "\n")
+    groups: List[_SourceEnumGroup] = []
+
+    for sentence in _GROUP_SEPARATOR_RE.split(normalized):
+        current: List[str] = []
+        current_lines: List[str] = []
+        for line in sentence.splitlines():
+            values = _line_enum_values(line.strip())
+            if values:
+                current.extend(values)
+                current_lines.append(line)
+            else:
+                if len(current) >= 2:
+                    groups.append(_SourceEnumGroup(
+                        values=tuple(current),
+                        text="\n".join(current_lines),
+                    ))
+                current = []
+                current_lines = []
+        if len(current) >= 2:
+            groups.append(_SourceEnumGroup(
+                values=tuple(current),
+                text="\n".join(current_lines),
+            ))
     return groups
 
 
@@ -164,7 +226,7 @@ def validate_project_enum_candidate(
 
     if candidate.source_row != expected.source_row or candidate.field_name != expected.field_name:
         return build_ambiguous_candidate(expected, "AI枚举提取结果与原字段不匹配")
-    source_groups = _raw_enum_groups(expected.remark)
+    source_groups = _source_enum_groups(expected.remark)
     if candidate.status == "not_found" and source_groups:
         return build_ambiguous_candidate(expected, "AI未识别原备注中已存在的枚举候选组")
     if candidate.status != "extracted":
@@ -178,11 +240,12 @@ def validate_project_enum_candidate(
         return build_ambiguous_candidate(expected, "AI枚举提取结果存在重复枚举键")
     if len(source_groups) != 1:
         return build_ambiguous_candidate(expected, "原备注不是唯一可确定的枚举组")
-    if len(source_groups[0]) != len(set(source_groups[0])):
+    source_group = source_groups[0]
+    if len(source_group.values) != len(set(source_group.values)):
         return build_ambiguous_candidate(expected, "原备注枚举组存在重复枚举键")
-    if values != source_groups[0]:
+    if values != list(source_group.values):
         return build_ambiguous_candidate(expected, "AI枚举键与原备注枚举组不一致")
-    if not _items_have_ordered_evidence(expected.remark, candidate.items):
+    if not _items_have_ordered_evidence(source_group, candidate.items):
         return build_ambiguous_candidate(expected, "AI枚举提取结果无法在原备注中找到连续依据")
 
     normalized_text = normalize_project_enum_text(candidate.items)

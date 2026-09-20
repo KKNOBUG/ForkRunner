@@ -19,19 +19,12 @@ PROJECT_ENUM_EXTRACTION_RULES = """你是接口文档枚举提取器。
 
 识别规则：
 - 不依赖“枚举”“配置”或“取值”等关键词。
-- 同一行内至少连续出现两个由枚举键和直接描述组成的完整枚举项，才算枚举组。
-- 单个键值对不算枚举；换行不能连接上下两个键值对。
-- 枚举键只允许 ASCII 数字和英文字母，例如 0、01、ab、A01。
-- 不允许负数、小数、下划线、中文或其他符号作为枚举键。
-- 保留枚举键的原始拼写、大小写、排列顺序和前导零，不做数值转换。
-- 枚举键可以位于描述之前，也可以位于描述之后；两者之间允许英文冒号、中文冒号或 ASCII 短横线。
-- 枚举键位于描述之前且省略关联符时，键与描述可以直接相连或仅使用普通空格分隔，不支持制表符。
-- 描述位于枚举键之前时，描述与键之间必须保留关联符。
-- 枚举项之间允许英文分号、中文分号、英文逗号、中文逗号或空格。
-- 空格或逗号后只有再次出现完整枚举项时，才表示下一枚举项。
+- 枚举组由至少两个连续的“枚举键和直接描述”项组成；单个键值对不算枚举。
+- 枚举键只允许 ASCII 数字和英文字母，例如 0、01、ab、A01；保留原始拼写、大小写、顺序和前导零。负数、小数、下划线、中文及其他符号不能作为键。
+- 项内支持“键:描述”“键：描述”“键-描述”和反向的“描述:键”等形式。省略关联符时键必须在前：中文描述可直接相连，中英文描述均可用普通空格分隔；键和描述本身不能跨行。
+- 项间支持中英文分号、逗号、可明确识别的空格或换行；连续枚举行属于同一组。
+- 空行、不含枚举项的说明行或中文句号结束当前组；不得跨过边界拼接枚举项。英文句号暂不作为边界。
 - 枚举项描述只保留与该键直接相关的内容；逗号后不属于新枚举项的尾随说明应删除。
-- 中文句号终止当前枚举组，不保存句号及其后内容；英文句号暂不作为终止符。
-- 原始 remark 中的换行终止当前枚举组，且不能作为枚举项分隔符。
 
 结果规则：
 - 明确识别到一组枚举时返回 extracted，并完整返回 items。
@@ -56,8 +49,9 @@ _PROJECT_ENUM_EXTRACTION_RESPONSE_TEMPLATE: Dict[str, Any] = {
             "field_name": "status",
             "status": "extracted",
             "items": [
-                {"value": "0", "description": "停用"},
-                {"value": "1", "description": "启用"},
+                {"value": "1", "description": "类型一"},
+                {"value": "2", "description": "类型二"},
+                {"value": "3", "description": "类型三"},
             ],
             "reason": None,
         }
@@ -80,40 +74,43 @@ PROJECT_ENUM_EXTRACTION_EXAMPLES: Tuple[Dict[str, Any], ...] = (
     },
     {
         "name": "空格分隔且忽略尾部说明",
-        "remark": "0：正常 1：异常，以上配置用于交易状态。",
+        "remark": "1：类型一 2：类型二 3：类型三，以上配置用于交易状态。",
         "expected": {
             "status": "extracted",
             "items": [
-                {"value": "0", "description": "正常"},
-                {"value": "1", "description": "异常"},
+                {"value": "1", "description": "类型一"},
+                {"value": "2", "description": "类型二"},
+                {"value": "3", "description": "类型三"},
             ],
         },
     },
     {
         "name": "短横线和逗号分隔",
-        "remark": "0-成功,1-失败",
+        "remark": "1-类型一,2-类型二,3-类型三",
         "expected": {
             "status": "extracted",
             "items": [
-                {"value": "0", "description": "成功"},
-                {"value": "1", "description": "失败"},
+                {"value": "1", "description": "类型一"},
+                {"value": "2", "description": "类型二"},
+                {"value": "3", "description": "类型三"},
             ],
         },
     },
     {
-        "name": "字母数字混合与前导零",
-        "remark": "A01:Alpha；01:Zero One",
+        "name": "描述在前的关联形式",
+        "remark": "类型一:1；类型二：2；类型三-3",
         "expected": {
             "status": "extracted",
             "items": [
-                {"value": "A01", "description": "Alpha"},
-                {"value": "01", "description": "Zero One"},
+                {"value": "1", "description": "类型一"},
+                {"value": "2", "description": "类型二"},
+                {"value": "3", "description": "类型三"},
             ],
         },
     },
     {
         "name": "单个键值对不算枚举",
-        "remark": "0：正常",
+        "remark": "1：类型一",
         "expected": {
             "status": "not_found",
             "items": [],
@@ -121,23 +118,27 @@ PROJECT_ENUM_EXTRACTION_EXAMPLES: Tuple[Dict[str, Any], ...] = (
     },
     {
         "name": "重复键标记歧义",
-        "remark": "0：正常；1：异常；0：默认",
+        "remark": "1：类型一；2：类型二；1：类型三",
         "expected": {
             "status": "ambiguous",
             "items": [],
         },
     },
     {
-        "name": "换行不连接枚举项",
-        "remark": "0：正常\n1：异常",
+        "name": "连续多行与省略关联符",
+        "remark": "1 类型一\n2 类型二\n3 类型三",
         "expected": {
-            "status": "not_found",
-            "items": [],
+            "status": "extracted",
+            "items": [
+                {"value": "1", "description": "类型一"},
+                {"value": "2", "description": "类型二"},
+                {"value": "3", "description": "类型三"},
+            ],
         },
     },
     {
         "name": "多组枚举标记歧义",
-        "remark": "0：个人；1：企业。A：正常；B：冻结。",
+        "remark": "1：类型一；2：类型二。2：类型二；3：类型三。",
         "expected": {
             "status": "ambiguous",
             "items": [],

@@ -254,7 +254,7 @@ def _iter_field_rows(
         field_name_header: str,
         chinese_name_header: str,
 ) -> Iterator[Tuple[int, Dict[str, Optional[str]]]]:
-    """从首个字段候选行开始读取，非法字段名不会中断后续扫描。"""
+    """从首个有效英文字段开始读取，开始后遇到非纯英文字段名即停止。"""
     data_started = False
     for row_no, row, is_empty in _iter_limited_rows(
             sheet,
@@ -267,14 +267,13 @@ def _iter_field_rows(
 
         values = _row_values(row, positions)
         field_name = values[field_name_header]
-        if field_name == "输出":
-            break
+        is_english_field_name = re.fullmatch(r"[A-Za-z]+", field_name or "") is not None
         if data_started:
-            if not field_name:
+            if not is_english_field_name:
                 break
         else:
             chinese_name = values[chinese_name_header]
-            if not (field_name and chinese_name):
+            if not (is_english_field_name and chinese_name):
                 continue
             data_started = True
 
