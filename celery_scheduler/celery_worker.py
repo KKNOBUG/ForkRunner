@@ -190,7 +190,7 @@ async def _create_task_record(
     """
     from applications.autotest.models.autotest_task_model import AutoTestTaskModel
     from applications.autotest.services.autotest_record_crud import AutoTestRecordCrud
-    from celery_scheduler.celery_task_contract import resolve_task_meta
+    from celery_scheduler.celery_task_contract import build_async_center_task_name, resolve_task_meta
     from enums import AutoTestTaskStatus
 
     def _normalize_username(raw: Any) -> Optional[str]:
@@ -217,7 +217,13 @@ async def _create_task_record(
     }
     if task_meta.get("task_type") is not None:
         data["task_type"] = task_meta["task_type"]
-    if task_meta.get("task_name"):
+        # 异步中心任务展示名按「{任务类型}-{时间戳}」规则生成，未命中时回落注册表默认展示名
+        async_center_name = build_async_center_task_name(task_meta["task_type"])
+        if async_center_name:
+            data["task_name"] = async_center_name
+        elif task_meta.get("task_name"):
+            data["task_name"] = task_meta["task_name"]
+    elif task_meta.get("task_name"):
         data["task_name"] = task_meta["task_name"]
 
     if isinstance(req_kwargs.get("case_ids"), list):
@@ -349,12 +355,12 @@ async def _update_task_record_on_end(
         if getattr(start, "tzinfo", None) is not None:
             start = start.replace(tzinfo=None)
         delta = now - start
-        data["celery_duration"] = f"{delta.total_seconds():.2f}s"
+        data["celery_elapsed"] = f"{delta.total_seconds():.2f}s"
     await record_crud.update_record_by_celery_id(celery_id=celery_id, data=data)
     LOGGER.info(
         f"{_LOG_PREFIX}【span_id={get_span_id()}】更新执行记录成功: "
         f"celery_id={celery_id}, status={getattr(status_enum, 'value', status_enum)}, "
-        f"batch_code={resolved_batch}, duration={data.get('celery_duration')}"
+        f"batch_code={resolved_batch}, elapsed={data.get('celery_elapsed')}"
     )
 
 

@@ -458,7 +458,7 @@ class StepExecutionContext:
                     f"状态代码: {response.status_code}\n\t"
                     f"响应字符: {response.encoding}\n\t"
                     f"响应版本: {response.http_version}\n\t"
-                    f"响应耗时: {response.elapsed.total_seconds():.3f}s"
+                    f"响应耗时: {response.elapsed.total_seconds():.2f}s"
                 )
                 return response
             except httpx.InvalidURL as e:
@@ -1334,7 +1334,7 @@ class BaseStepExecutor:
         """
         step_end_time: datetime = datetime.now()
         step_ed_time_str: str = step_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
-        step_elapsed: str = f"{result.elapsed:.3f}" if result.elapsed is not None else "0.000"
+        step_elapsed: str = f"{result.elapsed:.2f}" if result.elapsed is not None else "0.00"
         step_logs: List[str] = self.context.logs.get(self.step_code, [])
         step_exec_logger: Optional[str] = "\n".join(step_logs) if step_logs else None
         response_body = None
@@ -2355,7 +2355,7 @@ class PythonStepExecutor(BaseStepExecutor):
                     result.extract_variables = extract_items
                     result.response = {
                         "response_body": executive_result,
-                        "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
+                        "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.2f}",
                     }
                 except Exception as e:
                     raise StepExecutionError(f"【执行代码(Python)】提取结果失败: {e}") from e
@@ -2459,7 +2459,58 @@ class AssertStepExecutor(BaseStepExecutor):
                 "assert_count": len(assert_validators),
                 "assert_passed": sum(1 for item in result.assert_validators if item.get("success")),
                 "assert_failed": sum(1 for item in result.assert_validators if not item.get("success")),
-                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
+                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.2f}",
+            }
+        except StepExecutionError:
+            raise
+        except Exception as e:
+            result.success = False
+            result.error = AutoTestToolService.format_step_error_message(step=self.step, exception=e, is_child_step=False)
+            self.context.log(result.error, step_code=self.step_code)
+            raise StepExecutionError(result.error) from e
+
+
+class ExtractStepExecutor(BaseStepExecutor):
+    """
+    提取步骤执行器：按 extract_variables 执行变量提取，规则/来源/管线与 TCP/HTTP 步骤提取对齐。
+
+    独立提取步骤无请求/响应报文时，数据源通常为变量池（session_variables/变量池）；
+    提取成功项经管线写回会话变量池，供后续步骤以 ${name} 占位符引用。
+    """
+
+    async def _execute(self, result: StepExecutionResult) -> None:
+        """
+        执行步骤上的变量提取规则，失败项通过apply_extract_and_assert转为StepExecutionError。
+
+        :param result: 本步执行结果
+        :return: None
+        """
+        try:
+            extract_variables = self.step.extract_variables
+            if not extract_variables:
+                raise StepExecutionError("【提取】缺少必要配置: extract_variables")
+            for extract_item in extract_variables:
+                if not isinstance(extract_item, StepExtractVariableItem):
+                    raise StepExecutionError(
+                        f"【提取】子项参数异常: \n\t"
+                        f"预期类型: StepExtractVariableItem\n\t"
+                        f"实际类型: {type(extract_item).__name__}"
+                    )
+
+            executive_st_time: datetime = datetime.now()
+            # 与 TCP/HTTP 共用提取/断言管线；提取成功项经 finished_variables 自动写回会话变量池
+            self.apply_extract_and_assert(
+                result,
+                step_label="提取",
+                extract_variables=extract_variables,
+                assert_validators=[],
+            )
+            executive_ed_time: datetime = datetime.now()
+            result.response = {
+                "extract_count": len(extract_variables),
+                "extract_passed": sum(1 for item in result.extract_variables if item.get("success")),
+                "extract_failed": sum(1 for item in result.extract_variables if not item.get("success")),
+                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.2f}",
             }
         except StepExecutionError:
             raise
@@ -2816,10 +2867,10 @@ class TcpStepExecutor(BaseStepExecutor):
                 resp_text = parsed.response_text
                 response_json = parsed.response_json
 
-            elapsed = round(time.perf_counter() - start, 6)
+            elapsed = round(time.perf_counter() - start, 2)
             result.response = {
                 "response_text": resp_text,
-                "response_elapsed": str(elapsed),
+                "response_elapsed": f"{elapsed:.2f}",
                 "response_bytes": len(resp_bytes) if isinstance(resp_bytes, (bytes, bytearray)) else None,
             }
 
@@ -3061,7 +3112,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
             result.response = {
                 "response_body": database_operates_response,
                 "response_text": response_text_str,
-                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
+                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.2f}",
             }
 
             session_lookup_extra: Dict[str, Any] = {}
@@ -3349,7 +3400,7 @@ class RedisStepExecutor(BaseStepExecutor):
             result.response = {
                 "response_body": redis_operates_response,
                 "response_text": response_text_str,
-                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
+                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.2f}",
             }
 
             session_lookup_extra: Dict[str, Any] = {}
@@ -3587,7 +3638,7 @@ class HttpStepExecutor(BaseStepExecutor):
                     "response_header": {k: unquote(v) for k, v in dict(response.headers).items()},
                     "response_text": response.text,
                     "response_cookie": cookies,
-                    "response_elapsed": str(response.elapsed.total_seconds()),
+                    "response_elapsed": f"{response.elapsed.total_seconds():.2f}",
                 }
             except AttributeError as e:
                 raise StepExecutionError(f"【HTTP请求】响应对象缺少必要属性, 错误详情: {e}") from e
@@ -3828,6 +3879,7 @@ class StepExecutorFactory:
         AutoTestStepType.IF: ConditionStepExecutor,
         AutoTestStepType.WAIT: WaitStepExecutor,
         AutoTestStepType.ASSERT: AssertStepExecutor,
+        AutoTestStepType.EXTRACT: ExtractStepExecutor,
         AutoTestStepType.QUOTE: QuoteCaseStepExecutor,
         AutoTestStepType.USER_VARIABLES: UserVariablesStepExecutor,
         AutoTestStepType.DIFF: DatagramDiffStepExecutor,
@@ -3977,7 +4029,7 @@ class AutoTestStepExecutionEngine:
             passed_ratio: float = (success_steps / total_steps * 100) if total_steps > 0 else 0.0
             case_end_time: datetime = datetime.now()
             case_ed_time_str: str = case_end_time.strftime("%Y-%m-%d %H:%M:%S")
-            case_elapsed: str = f"{(case_end_time - case_start_time).total_seconds():.3f}"
+            case_elapsed: str = f"{(case_end_time - case_start_time).total_seconds():.2f}"
             case_state: bool = failed_steps == 0
             defer_create_report: Optional[AutoTestReportCreate] = None
             pending_create_details: Optional[List[AutoTestDetailCreate]] = None

@@ -1,34 +1,31 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import os
-import tempfile
 import traceback
 from typing import Optional, List, Dict, Any, Set, Tuple
+from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Query, Depends, UploadFile, File
-from starlette.background import BackgroundTask
-from starlette.responses import FileResponse
+from starlette.responses import StreamingResponse
 from tortoise.expressions import Q
 
 from applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from applications.autotest.schemas.autotest_case_schema import (
     AutoTestCaseCreate,
+    AutoTestCaseScriptGenerate,
     AutoTestCaseSelect,
     AutoTestCaseUpdate
 )
 from applications.autotest.services.autotest_case_excel_service import (
     prepare_export_cases,
-    build_export_workbook,
-    build_export_file_name,
     prepare_script_export_rows,
-    build_script_workbook,
-    build_script_file_name,
     parse_script_workbook,
-    import_script_rows,
 )
 from celery_scheduler.tasks.task_export_case_datagram import export_testcases_task
 from celery_scheduler.tasks.task_export_case_script import export_case_scripts_task
-from configure import LOGGER
+from celery_scheduler.tasks.task_import_case_script import import_case_scripts_task
+from celery_scheduler.tasks.task_public_api_to_script import generate_case_scripts_task
+from configure import LOGGER, PROJECT_CONFIG
 from core.exceptions import (
     NotFoundException,
     ParameterException,
@@ -44,13 +41,11 @@ from core.responses import (
     DataAlreadyExistsResponse,
     FileExtensionResponse
 )
-from enums import AutoTestReportType, AutoTestCaseType, AutoTestStepType
+from enums import AutoTestReportType, AutoTestStepType, AutoTestCaseType
 from services import get_current_username
+from services.file_transfer import FileTransfer
 
 autotest_case = APIRouter()
-
-# 导出数量阈值：超过该值走异步Celery导出
-EXPORT_ASYNC_THRESHOLD = 10
 
 
 @autotest_case.post("/create", summary="新增用例", description="新增用例信息")
@@ -465,56 +460,40 @@ async def get_request_step_selected_project_ids(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_case.post("/export_case_datagram_sync", summary="导出公共接口报文", description="导出公共接口用例请求头与请求体为xlsx(同步)")
-async def export_case_datagram_sync(
-        case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
-        services: AutoTestServices = Depends(get_autotest_api_services),
-):
+@autotest_case.post("/import_template_download", summary="公共接口导入模板下载", description="公共接口数据导入模板文件xlsx下载")
+async def public_api_import_template_download():
     """
-    同步导出公共接口用例的请求头与请求体为xlsx，数量不超过EXPORT_ASYNC_THRESHOLD。
+    公共接口导入模板下载。
 
-    :param case_ids: 用例主键列表
-    :param services: 自动化测试CRUD依赖聚合
+    分发仓库内置于output/template的xlsx（HTTP/TCP请求步骤共用）；流式读取，不加UTF-8 BOM，避免损坏二进制格式。
+
     :return: 文件流响应
     """
-    try:
-        if not case_ids:
-            return ParameterResponse(message="请至少选择一个用例(公共接口)")
-        if len(case_ids) > EXPORT_ASYNC_THRESHOLD:
-            return ParameterResponse(message=f"选择的用例(公共接口)数量超过{EXPORT_ASYNC_THRESHOLD}个，请使用异步导出")
-        cases_data, invalid = await prepare_export_cases(case_ids=case_ids, services=services)
-        if invalid:
-            return ParameterResponse(message="选择的用例(公共接口)存在不合规，已取消导出", data={"invalid": invalid})
-        workbook = build_export_workbook(cases_data=cases_data)
-        # 先落临时文件再以FileResponse分块流式返回，避免整文件驻留内存OOM；发送后自动清理
-        temp = tempfile.NamedTemporaryFile(prefix="temp_export_", suffix=".xlsx", delete=False)
-        temp_path = temp.name
-        temp.close()
-        workbook.save(temp_path)
-        return FileResponse(
-            path=temp_path,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            filename=build_export_file_name(get_current_username()),
-            background=BackgroundTask(os.remove, temp_path),
-        )
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"导出公共接口用例请求头与请求体为xlsx(同步)失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"导出失败，异常描述: {e}")
+    filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "公共接口模板.xlsx"))
+    if not filepath.startswith(PROJECT_CONFIG.OUTPUT_DIR) or not os.path.isfile(filepath):
+        LOGGER.error(f"导入模板文件不存在: {filepath}")
+        return NotFoundResponse(message="导入模板文件不存在，请联系管理员部署")
+    file_name = os.path.basename(filepath)
+    quoted_name = quote(file_name)
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"
+    }
+    return StreamingResponse(
+        FileTransfer.iter_download_file_chunks(download_file=filepath, add_bom=False),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
 
 
-@autotest_case.post("/export_case_datagram_async", summary="导出公共接口报文(异步)", description="异步导出公共接口用例请求头与请求体为xlsx")
+@autotest_case.post("/export_case_datagram_async", summary="导出公共接口报文(异步)", description="导出公共接口用例请求头与请求体为xlsx(统一异步)")
 async def export_case_datagram_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
-    异步导出公共接口用例，数量超过EXPORT_ASYNC_THRESHOLD。
+    异步导出公共接口用例(统一异步，不再区分数量阈值)。
 
-    校验通过后下发Celery任务，任务生成xlsx并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
+    校验通过后下发Celery任务，任务生成xlsx并将产物落入执行记录(task_summary)，在异步中心查询与下载。
 
     :param case_ids: 用例主键列表
     :param services: 自动化测试CRUD依赖聚合
@@ -535,7 +514,7 @@ async def export_case_datagram_async(
             expires=3600,
         )
         return SuccessResponse(
-            message="导出任务已提交后台执行，请稍后在执行记录中查看结果",
+            message="导出任务已提交后台执行，请稍后在异步中心查看结果",
             data={"celery_task_id": apply_async_result.task_id, "count": len(case_ids)},
             total=1,
         )
@@ -548,58 +527,16 @@ async def export_case_datagram_async(
         return FailureResponse(message=f"下发导出任务失败，异常描述: {e}")
 
 
-@autotest_case.post("/export_case_scripts_sync", summary="导出公共接口脚本", description="导出公共接口脚本为模板xlsx(同步)")
-async def export_case_scripts_sync(
-        case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
-        services: AutoTestServices = Depends(get_autotest_api_services),
-):
-    """
-    同步导出公共接口脚本，数量不超过EXPORT_ASYNC_THRESHOLD。
-
-    复制模板副本写入数据行，产出文件可直接用于导入脚本、更新或新增公共接口。
-
-    :param case_ids: 用例主键列表
-    :param services: 自动化测试CRUD依赖聚合
-    :return: 文件流响应
-    """
-    try:
-        if not case_ids:
-            return ParameterResponse(message="请至少选择一个用例(公共接口)")
-        if len(case_ids) > EXPORT_ASYNC_THRESHOLD:
-            return ParameterResponse(message=f"选择的用例(公共接口)数量超过{EXPORT_ASYNC_THRESHOLD}个，请使用异步导出")
-        rows, invalid = await prepare_script_export_rows(case_ids=case_ids, services=services)
-        if invalid:
-            return ParameterResponse(message="选择的用例(公共接口)存在不合规，已取消导出", data={"invalid": invalid})
-        workbook = build_script_workbook(rows)
-        # 先落临时文件再以 FileResponse 分块流式返回，避免整文件驻留内存OOM；发送后自动清理
-        temp = tempfile.NamedTemporaryFile(prefix="temp_export_", suffix=".xlsx", delete=False)
-        temp_path = temp.name
-        temp.close()
-        workbook.save(temp_path)
-        return FileResponse(
-            path=temp_path,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            filename=build_script_file_name(get_current_username()),
-            background=BackgroundTask(os.remove, temp_path),
-        )
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"导出公共接口脚本为模板xlsx(同步)失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"导出失败，异常描述: {e}")
-
-
-@autotest_case.post("/export_case_scripts_async", summary="导出公共接口脚本(异步)", description="异步导出公共接口脚本为模板xlsx")
+@autotest_case.post("/export_case_scripts_async", summary="导出公共接口脚本(异步)", description="导出公共接口脚本为模板xlsx(统一异步)")
 async def export_case_scripts_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
-    异步导出公共接口脚本，数量超过EXPORT_ASYNC_THRESHOLD。
+    异步导出公共接口脚本(统一异步，不再区分数量阈值)。
 
-    校验通过后下发Celery任务，任务生成xlsx并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
+    校验通过后下发Celery任务，任务生成xlsx并将产物落入执行记录(task_summary)，在异步中心查询与下载；
+    产出文件可直接用于导入脚本、更新或新增公共接口。
 
     :param case_ids: 用例主键列表
     :param services: 自动化测试CRUD依赖聚合
@@ -620,7 +557,7 @@ async def export_case_scripts_async(
             expires=3600,
         )
         return SuccessResponse(
-            message="导出任务已提交后台执行，请稍后在执行记录中查看结果",
+            message="导出任务已提交后台执行，请稍后在异步中心查看结果",
             data={"celery_task_id": apply_async_result.task_id, "count": len(case_ids)},
             total=1,
         )
@@ -633,18 +570,75 @@ async def export_case_scripts_async(
         return FailureResponse(message=f"下发导出任务失败，异常描述: {e}")
 
 
-@autotest_case.post("/import_case_scripts", summary="导入公共接口脚本", description="从模板xlsx导入公共接口脚本")
-async def import_case_scripts(
-        file: UploadFile = File(..., description="公共接口导入导出模板xlsx(仅读取第1个sheet页)"),
+@autotest_case.post("/generate_case_scripts_async", summary="公共接口生成脚本(异步)", description="公共接口批量生成独立脚本用例(统一异步)")
+async def generate_case_scripts_async(
+        generate_in: AutoTestCaseScriptGenerate = Body(..., description="脚本生成入参"),
         services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
-    导入公共接口脚本。
+    将勾选的公共接口复制生成为脚本用例。
 
-    解析模板文件逐行校验，根据所属应用+接口名称匹配，存在更新、不存在新增；用例类型固定公共接口、用例属性固定正案例；全部行校验通过才在单事务内落库。
+    校验全部入参用例均为公共接口后下发Celery任务；命名规则：脚本名称=接口名称，
+    同应用下已有同名记录时按「{接口名称}-{时间戳}」命名；生成结果在异步中心查询。
+
+    :param generate_in: 脚本生成入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        case_ids = generate_in.case_ids
+        if not case_ids:
+            return ParameterResponse(message="请至少选择一个用例(公共接口)")
+        case_models = await services.case_curd.model.filter(id__in=list(dict.fromkeys(case_ids)), state__not=1)
+        case_map = {instance.id: instance for instance in case_models}
+        invalid: List[Dict[str, Any]] = []
+        for case_id in dict.fromkeys(case_ids):
+            instance = case_map.get(case_id)
+            if not instance:
+                invalid.append({"case_id": case_id, "case_name": str(case_id), "reason": "用例不存在"})
+            elif instance.case_type != AutoTestCaseType.PUBLIC_API:
+                invalid.append({"case_id": case_id, "case_name": instance.case_name, "reason": "非公共接口用例"})
+
+        if invalid:
+            return ParameterResponse(message="选择的用例(公共接口)存在不合规，已取消生成", data={"invalid": invalid})
+
+        apply_async_result = generate_case_scripts_task.apply_async(
+            kwargs={
+                "case_ids": case_ids,
+                "case_project": generate_in.case_project,
+                "case_type": generate_in.case_type.value,
+                "case_attr": generate_in.case_attr.value,
+                "case_tags": generate_in.case_tags,
+                "created_user": get_current_username(),
+                "report_type": AutoTestReportType.ASYNC_EXEC.value,
+            },
+            expires=3600,
+        )
+        return SuccessResponse(
+            message="脚本生成任务已提交后台执行，请稍后在异步中心查看结果",
+            data={"celery_task_id": apply_async_result.task_id, "count": len(case_ids)},
+            total=1,
+        )
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"公共接口转脚本任务下发失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"下发脚本生成任务失败，异常描述: {e}")
+
+
+@autotest_case.post("/import_case_scripts_async", summary="导入公共接口脚本(异步)", description="解析模板xlsx文件并生成公共接口脚本(统一异步)")
+async def import_case_scripts_async(
+        file: UploadFile = File(..., description="公共接口导入导出模板xlsx(仅读取第1个sheet页)"),
+):
+    """
+    异步导入公共接口脚本(统一异步)。
+
+    模板解析与行格式校验同步完成(不合规行明细即时返回便于修稿重试)，校验通过后下发Celery任务；
+    行级匹配校验与落库在后台执行(存在更新、不存在新增)，结果与不合规明细落入执行记录(task_summary)，在异步中心查询。
 
     :param file: 模板xlsx文件
-    :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     if not (file.filename or "").endswith(".xlsx"):
@@ -654,12 +648,18 @@ async def import_case_scripts(
         rows, parse_invalid = parse_script_workbook(content)
         if parse_invalid:
             return ParameterResponse(message="文件存在不合规行，已取消导入", data={"invalid": parse_invalid})
-        result, resolve_invalid = await import_script_rows(rows=rows, services=services)
-        if resolve_invalid:
-            return ParameterResponse(message="存在无法落库的行，已取消导入", data={"invalid": resolve_invalid})
+        apply_async_result = import_case_scripts_task.apply_async(
+            kwargs={
+                "rows": rows,
+                "file_name": file.filename,
+                "created_user": get_current_username(),
+                "report_type": AutoTestReportType.ASYNC_EXEC.value,
+            },
+            expires=3600,
+        )
         return SuccessResponse(
-            message=f"导入成功: 新增{result['created_count']}个, 更新{result['updated_count']}个公共接口",
-            data=result,
+            message="导入任务已提交后台执行，请稍后在异步中心查看结果",
+            data={"celery_task_id": apply_async_result.task_id, "count": len(rows)},
             total=1,
         )
     except NotFoundException as e:
@@ -667,5 +667,5 @@ async def import_case_scripts(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"从模板xlsx导入公共接口脚本失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"导入失败，异常描述: {e}")
+        LOGGER.error(f"下发导入公共接口脚本任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"下发导入任务失败，异常描述: {e}")
