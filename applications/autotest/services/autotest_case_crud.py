@@ -150,7 +150,6 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             self,
             case_project: int,
             case_name: str,
-            case_type: Optional[AutoTestCaseType],
             owner_user: Optional[str],
             exclude_id: Optional[int] = None,
     ) -> Optional[AutoTestCaseModel]:
@@ -159,7 +158,6 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
 
         :param case_project: 所属应用
         :param case_name: 用例名称
-        :param case_type: 用例类型
         :param owner_user: 所属人员
         :param exclude_id: 更新时排除自身
         :return: 命中的用例或None
@@ -171,7 +169,6 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         query = self.model.filter(
             case_project=case_project,
             case_name=case_name,
-            case_type=case_type,
             owner_user=owner_user,
         )
         if exclude_id:
@@ -222,11 +219,10 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         existing_case = await self._get_by_owner_key(
             case_project=case_project,
             case_name=case_name,
-            case_type=case_type,
             owner_user=owner_user,
         )
         if existing_case and existing_case.state != 1:
-            message_error: str = "相同应用下同类型同所属人用例名称不允许重复"
+            message_error: str = "相同应用及所属人时, 用例名称不允许重复"
             LOGGER.error(
                 f"{message_error}, "
                 f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}, owner_user={owner_user}]"
@@ -321,12 +317,11 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             existing_case = await self._get_by_owner_key(
                 case_project=case_project,
                 case_name=case_name,
-                case_type=unique_case_type,
                 owner_user=instance.owner_user,
                 exclude_id=case_id,
             )
             if existing_case:
-                message_error: str = "相同应用下同类型同所属人用例名称不允许重复"
+                message_error: str = "相同应用及所属人时, 用例名称不允许重复"
                 LOGGER.error(
                     f"{message_error}, "
                     f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={unique_case_type}, owner_user={instance.owner_user}]"
@@ -482,7 +477,6 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 existing_case_instance: Optional[AutoTestCaseModel] = await self._get_by_owner_key(
                     case_project=case_project,
                     case_name=case_name,
-                    case_type=case_type,
                     owner_user=owner_user,
                 )
                 create_case_dict: Dict[str, Any] = case_data.model_dump(
@@ -492,7 +486,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 )
                 create_case_dict["case_tags"] = case_tags
                 if existing_case_instance and existing_case_instance.state != 1:
-                    message_error: str = "相同应用下同类型同所属人用例名称不允许重复"
+                    message_error: str = "相同应用及所属人时, 用例名称不允许重复"
                     LOGGER.error(
                         f"第{cid}条用例新增失败, {message_error}, "
                         f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}, owner_user={owner_user}]"
@@ -571,12 +565,11 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                     existing_case_instance: Optional[AutoTestCaseModel] = await self._get_by_owner_key(
                         case_project=unique_project,
                         case_name=unique_case_name,
-                        case_type=unique_case_type,
                         owner_user=case_instance.owner_user,
                         exclude_id=case_id,
                     )
                     if existing_case_instance:
-                        message_error: str = "相同应用下同类型同所属人用例名称不允许重复"
+                        message_error: str = "相同应用及所属人时, 用例名称不允许重复"
                         LOGGER.error(
                             f"第{cid}条用例新增失败, {message_error}, "
                             f"查询条件: [case_project={unique_project}, case_name={unique_case_name}, case_type={unique_case_type}, owner_user={case_instance.owner_user}]"
