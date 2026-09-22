@@ -290,7 +290,7 @@ class DBConnPoolFromConfig:
             env_name: str,
             config_name: str,
             database_name: str,
-            max_retries: int = 3,
+            max_retries: int = 1,
     ) -> bool:
         """
         按配置创建数据库连接池；已存在则不重复创建。
@@ -391,9 +391,9 @@ class DBConnPoolFromConfig:
                 pool: Any
                 if database_type in ("mysql", "tdsql"):
                     pool = await aiomysql.create_pool(
-                        minsize=1,
-                        maxsize=100,
-                        connect_timeout=60,
+                        minsize=10,
+                        maxsize=40,
+                        connect_timeout=5,
                         pool_recycle=3600,
                         charset="utf8mb4",
                         host=config_host,
@@ -413,9 +413,10 @@ class DBConnPoolFromConfig:
                             user=config_username,
                             password=config_password,
                             dsn=oracle_dsn,
-                            min=1,
-                            max=100,
+                            min=10,
+                            max=40,
                             increment=1,
+                            tcp_connect_timeout=5,
                         )
 
                     pool = await event_loop.run_in_executor(None, _create_oracle_pool)
@@ -446,7 +447,7 @@ class DBConnPoolFromConfig:
                     )
                     await asyncio.sleep(3)
 
-        error_message = f"数据库连接失败：{last_error_detail}"
+        error_message = f"数据库连接失败, {last_error_detail}"
         self.logger.error(error_message)
         self._set_error(
             cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
