@@ -19,13 +19,15 @@ from core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
+    DataAlreadyExistsException,
 )
 from core.responses import (
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
     NotFoundResponse,
-    DataBaseStorageResponse
+    DataBaseStorageResponse,
+    DataAlreadyExistsResponse
 )
 
 autotest_env = APIRouter()
@@ -44,12 +46,14 @@ async def create_environment(
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_curd.create_env(env_in=env_in)
+        instance = await services.env_curd.create_env(env_in=env_in, strict_duplicate=True)
         data = await services.env_curd.serialize_env(instance)
         LOGGER.info(f"新增环境成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except DataBaseStorageException as e:
