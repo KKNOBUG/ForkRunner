@@ -90,6 +90,7 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestC
         existing_case = await case_crud._get_by_owner_key(
             case_project=case_instance.case_project,
             case_name=case_instance.case_name,
+            case_type=case_instance.case_type,
             owner_user=next_owner_user,
         )
         if existing_case:
