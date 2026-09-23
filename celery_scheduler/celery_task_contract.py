@@ -26,15 +26,15 @@ CELERY_TASK_META: Dict[str, Dict[str, Any]] = {
     },
     "celery_scheduler.tasks.task_export_case_datagram.export_testcases_task": {
         "task_type": AutoTestTaskType.EXPORT_PUBLIC_API_DATAGRAM,
-        "task_name": "公共接口报文导出",
+        "task_name": "接口报文导出",
     },
     "celery_scheduler.tasks.task_export_case_script.export_case_scripts_task": {
         "task_type": AutoTestTaskType.EXPORT_PUBLIC_API_SCRIPT,
-        "task_name": "公共接口导出",
+        "task_name": "接口导出",
     },
     "celery_scheduler.tasks.task_import_case_script.import_case_scripts_task": {
         "task_type": AutoTestTaskType.IMPORT_PUBLIC_API_SCRIPT,
-        "task_name": "公共接口导入",
+        "task_name": "接口导入",
     },
     "celery_scheduler.tasks.task_public_api_to_script.generate_case_scripts_task": {
         "task_type": AutoTestTaskType.PUBLIC_API_TO_SCRIPT,
