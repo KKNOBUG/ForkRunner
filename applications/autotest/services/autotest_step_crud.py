@@ -679,7 +679,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
 
         instance = await self.soft_delete(id=instance.id)
         # 同步硬删除该步骤关联的数据源与数据生成记录（延迟导入避免循环依赖）
-        from applications.autotest.services.autotest_data_source_crud import delete_step_create
+        from backend.applications.autotest.services.autotest_data_source_crud import delete_step_create
         await delete_step_create(case_id=instance.case_id, step_code_list=[instance.step_code])
         return instance
 
@@ -771,7 +771,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
 
         # 步骤软删除提交后，同步清理对应用例下被删步骤的数据源与数据生成记录
         if deleted_by_case:
-            from applications.autotest.services.autotest_data_source_crud import delete_step_create
+            from backend.applications.autotest.services.autotest_data_source_crud import delete_step_create
             for ds_case_id, step_codes in deleted_by_case.items():
                 await delete_step_create(case_id=ds_case_id, step_code_list=step_codes)
 
@@ -831,7 +831,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     )
                     only_step.request_project_id = case_project
         for step_data in cls._iter_tree_steps(steps_data):
-            if step_data.step_type == AutoTestStepType.QUOTE:
+            if step_data.step_type in (AutoTestStepType.QUOTE_PUBLIC_SCRIPT, AutoTestStepType.QUOTE_PUBLIC_API):
                 error_message: str = f"用例类型为({case_type.value})时不允许引用其他脚本"
                 LOGGER.error(error_message)
                 raise ParameterException(message=error_message)
@@ -1029,7 +1029,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 # 复制来的步骤携带数据源时，同步复制为新步骤的独立数据源（仅复制解析数据，文件字段置空）
                 source_data_source_id = getattr(step_data, "data_source_id", None)
                 if source_data_source_id:
-                    from applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
+                    from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
                     new_data_source_id: Optional[int] = None
                     try:
                         new_data_source_id = await AutoTestDataSourceCrud().copy_data_source_for_step(

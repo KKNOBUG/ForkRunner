@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 
 from applications.autotest.services.autotest_runtime.protocol_http import (
     assemble_http_body_payloads,
-    build_absolute_http_url,
     build_httpx_request_kwargs,
+    build_absolute_http_url,
     is_absolute_http_url,
 )
 from applications.autotest.services.autotest_runtime.protocol_tcp import (
@@ -34,10 +34,10 @@ from applications.autotest.services.autotest_runtime.protocol_tcp import (
     tcp_body_source_for_assert
 )
 from applications.autotest.services.autotest_runtime.datagram.datagram_diff import compare_messages
+from applications.autotest.services.autotest_runtime.builtin_variables import collect_builtin_step_variables
 from applications.autotest.schemas.autotest_detail_schema import AutoTestDetailCreate
 from applications.autotest.schemas.autotest_report_schema import AutoTestReportCreate
 from applications.autotest.schemas.autotest_datagram_diff_schema import DatagramFieldCompareItem
-from applications.autotest.services.autotest_runtime.builtin_variables import collect_builtin_step_variables
 from applications.autotest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateItem,
     ConditionsBase,
@@ -71,7 +71,7 @@ from enums import (
     AutoTestStepType,
     AutoTestReportType,
     AutoTestLoopMode,
-    PUBLIC_CASE_TYPES,
+    AutoTestCaseType,
     AutoTestLoopErrorStrategy,
     AutoTestReqArgsType,
     AutoTestConfigNodeType,
@@ -458,7 +458,7 @@ class StepExecutionContext:
                     f"状态代码: {response.status_code}\n\t"
                     f"响应字符: {response.encoding}\n\t"
                     f"响应版本: {response.http_version}\n\t"
-                    f"响应耗时: {response.elapsed.total_seconds():.3f}s"
+                    f"响应耗时: {response.elapsed.total_seconds():.2f}s"
                 )
                 return response
             except httpx.InvalidURL as e:
@@ -1334,7 +1334,7 @@ class BaseStepExecutor:
         """
         step_end_time: datetime = datetime.now()
         step_ed_time_str: str = step_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
-        step_elapsed: str = f"{result.elapsed:.3f}" if result.elapsed is not None else "0.000"
+        step_elapsed: str = f"{result.elapsed:.2f}" if result.elapsed is not None else "0.00"
         step_logs: List[str] = self.context.logs.get(self.step_code, [])
         step_exec_logger: Optional[str] = "\n".join(step_logs) if step_logs else None
         response_body = None
@@ -2355,7 +2355,7 @@ class PythonStepExecutor(BaseStepExecutor):
                     result.extract_variables = extract_items
                     result.response = {
                         "response_body": executive_result,
-                        "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
+                        "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.2f}",
                     }
                 except Exception as e:
                     raise StepExecutionError(f"【执行代码(Python)】提取结果失败: {e}") from e
@@ -2459,7 +2459,7 @@ class AssertStepExecutor(BaseStepExecutor):
                 "assert_count": len(assert_validators),
                 "assert_passed": sum(1 for item in result.assert_validators if item.get("success")),
                 "assert_failed": sum(1 for item in result.assert_validators if not item.get("success")),
-                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
+                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.2f}",
             }
         except StepExecutionError:
             raise
@@ -2510,7 +2510,7 @@ class ExtractStepExecutor(BaseStepExecutor):
                 "extract_count": len(extract_variables),
                 "extract_passed": sum(1 for item in result.extract_variables if item.get("success")),
                 "extract_failed": sum(1 for item in result.extract_variables if not item.get("success")),
-                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
+                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.2f}",
             }
         except StepExecutionError:
             raise
@@ -2547,12 +2547,19 @@ class UserVariablesStepExecutor(BaseStepExecutor):
             raise StepExecutionError(result.error) from e
 
 
-class QuoteCaseStepExecutor(BaseStepExecutor):
+class BaseQuoteCaseStepExecutor(BaseStepExecutor):
     """
-    引用公共脚本/接口执行器：加载引用用例根步骤树，根据step_no顺序执行并挂到result.children。
+    引用类步骤执行器基类：加载被引用公共用例根步骤树，根据step_no顺序执行并挂到result.children。
 
+    子类通过quote_step_label声明日志/错误前缀、allowed_quote_case_types声明可引用的用例类型，
+    加载被引用用例时按该类型过滤，实现「引用公共脚本」「引用公共接口」两类步骤的分流。
     本步step_is_skipped时由BaseStepExecutor.execute直接返回，不会进入本执行器。
     """
+
+    # 日志/错误信息前缀（由子类覆盖）
+    quote_step_label: str = "引用公共步骤"
+    # 允许引用的用例类型集合（由子类覆盖，加载被引用用例时按此过滤）
+    allowed_quote_case_types: Tuple[AutoTestCaseType, ...] = ()
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
@@ -2561,12 +2568,13 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
         :param result: 本步执行结果，子步骤结果写入children
         :return: None
         """
+        allowed_types_desc: str = "、".join(t.value for t in self.allowed_quote_case_types)
         previous_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
         previous_parent_step_id: Optional[int] = getattr(self.context, "executing_parent_step_id", None)
         try:
             quote_case_id = self.step.quote_case_id
             if not quote_case_id:
-                raise StepExecutionError("【引用公共脚本/接口】缺少必要配置: quote_case_id")
+                raise StepExecutionError(f"【{self.quote_step_label}】缺少必要配置: quote_case_id")
 
             database_crud_services = await self.get_services()
             # 将当前引用的公共脚本ID在步骤执行器上下文中标记，用于判断是否来自引用链
@@ -2578,13 +2586,15 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     only_one=True,
                     on_error=True,
                     id=quote_case_id,
-                    case_type__in=[t.value for t in PUBLIC_CASE_TYPES],
+                    case_type__in=[t.value for t in self.allowed_quote_case_types],
                     state__not=1,
                 )
             except (ParameterException, NotFoundException) as e:
-                raise StepExecutionError(f"【引用公共脚本/接口】引用用例ID: {quote_case_id}不存在\n\t错误描述: {e.message}") from e
+                raise StepExecutionError(
+                    f"【{self.quote_step_label}】引用用例ID: {quote_case_id}不存在或用例类型不属于({allowed_types_desc})\n\t错误描述: {e.message}"
+                ) from e
             except Exception as e:
-                raise StepExecutionError(f"【引用公共脚本/接口】引用用例ID: {quote_case_id})查询异常\n\t错误描述: {e}") from e
+                raise StepExecutionError(f"【{self.quote_step_label}】引用用例ID: {quote_case_id})查询异常\n\t错误描述: {e}") from e
 
             quote_case_dict = await quote_case_instance.to_dict(
                 include_fields={"id", "case_code", "case_name"},
@@ -2596,17 +2606,17 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                 quote_roots = load.root_steps
                 if not quote_roots:
                     self.context.log(
-                        f"【引用公共脚本/接口】用例(id={quote_case_id})暂无任何可执行步骤数据",
+                        f"【{self.quote_step_label}】用例(id={quote_case_id})暂无任何可执行步骤数据",
                         step_code=self.step_code
                     )
                     return
             except Exception as e:
                 raise StepExecutionError(
-                    f"【引用公共脚本/接口】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}"
+                    f"【{self.quote_step_label}】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}"
                 ) from e
 
             self.context.log(
-                f"【引用公共脚本/接口】执行用例(id={quote_case_id}, name={quote_case_name})开始",
+                f"【{self.quote_step_label}】执行用例(id={quote_case_id}, name={quote_case_name})开始",
                 step_code=self.step_code
             )
             ordered_steps = sorted(
@@ -2646,7 +2656,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     )
                     result.append_child(failed_result)
             self.context.log(
-                f"【引用公共脚本/接口】执行用例(id={quote_case_id}, name={quote_case_name})结束",
+                f"【{self.quote_step_label}】执行用例(id={quote_case_id}, name={quote_case_name})结束",
                 step_code=self.step_code
             )
         except StepExecutionError:
@@ -2660,8 +2670,27 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             # 恢复上一级引用脚本标识（支持嵌套引用时的正确回退）
             try:
                 self.context.executing_quote_case_id = previous_quote_case_id
+                self.context.executing_parent_step_id = previous_parent_step_id
             except Exception:
                 pass
+
+
+class QuotePublicApiStepExecutor(BaseQuoteCaseStepExecutor):
+    """
+    引用公共接口执行器：仅允许引用用例类型为「公共接口」的公共用例。
+    """
+
+    quote_step_label = "引用公共接口"
+    allowed_quote_case_types = (AutoTestCaseType.PUBLIC_API,)
+
+
+class QuotePublicScriptStepExecutor(BaseQuoteCaseStepExecutor):
+    """
+    引用公共脚本执行器：仅允许引用用例类型为「公共脚本」的公共用例。
+    """
+
+    quote_step_label = "引用公共脚本"
+    allowed_quote_case_types = (AutoTestCaseType.PUBLIC_SCRIPT,)
 
 
 class TcpStepExecutor(BaseStepExecutor):
@@ -2867,10 +2896,10 @@ class TcpStepExecutor(BaseStepExecutor):
                 resp_text = parsed.response_text
                 response_json = parsed.response_json
 
-            elapsed = round(time.perf_counter() - start, 6)
+            elapsed = round(time.perf_counter() - start, 2)
             result.response = {
                 "response_text": resp_text,
-                "response_elapsed": str(elapsed),
+                "response_elapsed": f"{elapsed:.2f}",
                 "response_bytes": len(resp_bytes) if isinstance(resp_bytes, (bytes, bytearray)) else None,
             }
 
@@ -3112,7 +3141,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
             result.response = {
                 "response_body": database_operates_response,
                 "response_text": response_text_str,
-                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
+                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.2f}",
             }
 
             session_lookup_extra: Dict[str, Any] = {}
@@ -3400,7 +3429,7 @@ class RedisStepExecutor(BaseStepExecutor):
             result.response = {
                 "response_body": redis_operates_response,
                 "response_text": response_text_str,
-                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.3f}",
+                "response_elapsed": f"{(executive_ed_time - executive_st_time).total_seconds():.2f}",
             }
 
             session_lookup_extra: Dict[str, Any] = {}
@@ -3638,7 +3667,7 @@ class HttpStepExecutor(BaseStepExecutor):
                     "response_header": {k: unquote(v) for k, v in dict(response.headers).items()},
                     "response_text": response.text,
                     "response_cookie": cookies,
-                    "response_elapsed": str(response.elapsed.total_seconds()),
+                    "response_elapsed": f"{response.elapsed.total_seconds():.2f}",
                 }
             except AttributeError as e:
                 raise StepExecutionError(f"【HTTP请求】响应对象缺少必要属性, 错误详情: {e}") from e
@@ -3879,8 +3908,8 @@ class StepExecutorFactory:
         AutoTestStepType.IF: ConditionStepExecutor,
         AutoTestStepType.WAIT: WaitStepExecutor,
         AutoTestStepType.ASSERT: AssertStepExecutor,
-        AutoTestStepType.EXTRACT: ExtractStepExecutor,
-        AutoTestStepType.QUOTE: QuoteCaseStepExecutor,
+        AutoTestStepType.QUOTE_PUBLIC_SCRIPT: QuotePublicScriptStepExecutor,
+        AutoTestStepType.QUOTE_PUBLIC_API: QuotePublicApiStepExecutor,
         AutoTestStepType.USER_VARIABLES: UserVariablesStepExecutor,
         AutoTestStepType.DIFF: DatagramDiffStepExecutor,
     }
@@ -4029,7 +4058,7 @@ class AutoTestStepExecutionEngine:
             passed_ratio: float = (success_steps / total_steps * 100) if total_steps > 0 else 0.0
             case_end_time: datetime = datetime.now()
             case_ed_time_str: str = case_end_time.strftime("%Y-%m-%d %H:%M:%S")
-            case_elapsed: str = f"{(case_end_time - case_start_time).total_seconds():.3f}"
+            case_elapsed: str = f"{(case_end_time - case_start_time).total_seconds():.2f}"
             case_state: bool = failed_steps == 0
             defer_create_report: Optional[AutoTestReportCreate] = None
             pending_create_details: Optional[List[AutoTestDetailCreate]] = None
