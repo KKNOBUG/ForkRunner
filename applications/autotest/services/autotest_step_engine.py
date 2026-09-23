@@ -2680,7 +2680,7 @@ class QuotePublicApiStepExecutor(BaseQuoteCaseStepExecutor):
     引用公共接口执行器：仅允许引用用例类型为「公共接口」的公共用例。
     """
 
-    quote_step_label = "引用公共接口"
+    quote_step_label = "引用接口"
     allowed_quote_case_types = (AutoTestCaseType.PUBLIC_API,)
 
 

@@ -39,7 +39,7 @@ class AutoTestStepType(StringEnum):
     DATABASE = "数据库请求"
     REDIS = "Redis请求"
     QUOTE_PUBLIC_SCRIPT = "引用公共脚本"
-    QUOTE_PUBLIC_API = "引用公共接口"
+    QUOTE_PUBLIC_API = "引用接口"
     DIFF = "报文比对"
     ASSERT = "断言"
     EXTRACT = "提取"
