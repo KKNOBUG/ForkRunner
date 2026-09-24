@@ -476,6 +476,24 @@ class AutoTestStepTreeUpdateItem(AutoTestStepBase):
     quote_steps: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="引用步骤列表")
     quote_case: Optional[Any] = Field(None, description="引用公共脚本/引用公共接口的用例信息")
 
+    @field_validator("quote_steps", mode="before")
+    @classmethod
+    def _normalize_custom_var_first_quote(cls, v: Any) -> Any:
+        """
+        ！！！前端中没有“用户变量”类型步骤, 而是自挂数据, 因此需要在请求前进行参数处理；！！！
+        特征规则：content、step_type、step_name字段值为"用户变量"且step_id为字符串，将其step_id/request_body归一为None。
+        """
+        if not isinstance(v, list) or not v:
+            return v
+        quote_step_first = v[0]
+        if isinstance(quote_step_first, dict):
+            content = quote_step_first.get("content")
+            step_type = quote_step_first.get("step_type")
+            step_name = quote_step_first.get("step_name")
+            if content == step_type == step_name == "用户变量":
+                quote_step_first["step_id"] = None
+                quote_step_first["request_body"] = None
+        return v
 
 class StepTreeCounter(BaseModel):
     """步骤树统计：与历史 get_case_tree 末尾元数据字段一致。"""
