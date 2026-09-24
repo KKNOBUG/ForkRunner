@@ -495,6 +495,7 @@ class AutoTestStepTreeUpdateItem(AutoTestStepBase):
                 quote_step_first["request_body"] = None
         return v
 
+
 class StepTreeCounter(BaseModel):
     """步骤树统计：与历史 get_case_tree 末尾元数据字段一致。"""
     direct_steps: int = 0
