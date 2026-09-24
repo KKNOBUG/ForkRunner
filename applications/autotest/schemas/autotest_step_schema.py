@@ -472,14 +472,14 @@ class AutoTestStepTreeUpdateItem(AutoTestStepBase):
 
     case: NON_DICT_TYPE = Field(None, description="用例信息")
     children: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="子步骤列表")
-    quote_steps: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="引用步骤列表(与 children 同型；更新时忽略)")
-    quote_case: Optional[Any] = Field(None, description="引用公共脚本/接口信息(更新时忽略)")
+    quote_steps: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="引用步骤列表")
+    quote_case: Optional[Any] = Field(None, description="引用公共脚本/引用公共接口的用例信息")
 
     @field_validator("quote_steps", mode="before")
     @classmethod
     def _normalize_custom_var_first_quote(cls, v: Any) -> Any:
         """
-        KD前端中没有“用户变量”类型步骤, 而是自挂数据；
+        ！！！前端中没有“用户变量”类型步骤, 而是自挂数据, 因此需要在请求前进行参数处理；！！！
         特征规则：content、step_type、step_name字段值为"用户变量"且step_id为字符串，将其step_id/request_body归一为None。
         """
         if not isinstance(v, list) or not v:
