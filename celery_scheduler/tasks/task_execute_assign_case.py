@@ -81,6 +81,7 @@ async def _execute_step_tree_impl(
             report_type=report_type,
             batch_code=batch_code,
             dataset_name=None,
+            round_no=1 if batch_code else None,
         )
         result["dataset_name"] = None
         case_ok = bool(result.get("success"))
@@ -104,6 +105,7 @@ async def _execute_step_tree_impl(
             report_type=report_type,
             batch_code=batch_code,
             dataset_name=dataset_name,
+            round_no=1,
         )
         single_data["dataset_name"] = dataset_name
         details.append(single_data)
