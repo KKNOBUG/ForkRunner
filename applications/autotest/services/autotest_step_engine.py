@@ -3908,6 +3908,7 @@ class StepExecutorFactory:
         AutoTestStepType.IF: ConditionStepExecutor,
         AutoTestStepType.WAIT: WaitStepExecutor,
         AutoTestStepType.ASSERT: AssertStepExecutor,
+        AutoTestStepType.EXTRACT: ExtractStepExecutor,
         AutoTestStepType.QUOTE_PUBLIC_SCRIPT: QuotePublicScriptStepExecutor,
         AutoTestStepType.QUOTE_PUBLIC_API: QuotePublicApiStepExecutor,
         AutoTestStepType.USER_VARIABLES: UserVariablesStepExecutor,
