@@ -435,7 +435,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     def fill_created_user(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
         """
-        创建时自动写入created_user；有登录上下文时以服务端当前用户为准，无登录上下文时保留显式传入值。
+        创建时自动写入created_user，并同步回填updated_user(与created_user同值)。
 
         :param obj_dict: 待写入字段字典
         :param model: 目标模型；默认self.model
@@ -448,10 +448,14 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         username = get_current_username()
         if username:
             obj_dict["created_user"] = username
-            return
-        existing = obj_dict.get("created_user")
-        if isinstance(existing, str) and existing.strip():
-            obj_dict["created_user"] = existing.strip().upper()[:16]
+        else:
+            existing = obj_dict.get("created_user")
+            if isinstance(existing, str) and existing.strip():
+                obj_dict["created_user"] = existing.strip().upper()[:16]
+        if hasattr(target, "updated_user") and not obj_dict.get("updated_user"):
+            created = obj_dict.get("created_user")
+            if created:
+                obj_dict["updated_user"] = created
 
     def fill_updated_user(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
         """
