@@ -85,7 +85,7 @@ class KvUtils:
     @staticmethod
     def get_value_from_list(variables: Optional[Sequence[StepVariablesBase]], name: str) -> Any:
         """
-        从StepVariablesBase列表中取key为name的项的value。
+        从StepVariablesBase列表中取key为name的项的value，同名key取最后一次出现的值。
 
         :param variables: 变量列表
         :param name: 变量名
@@ -93,7 +93,7 @@ class KvUtils:
         """
         if variables is None:
             return None
-        for variable in variables:
+        for variable in reversed(variables):
             if isinstance(variable, StepVariablesBase) and getattr(variable, "key", None) and variable.key == name:
                 return variable.value
         return None
