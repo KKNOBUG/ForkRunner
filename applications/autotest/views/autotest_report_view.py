@@ -10,6 +10,7 @@ from applications.autotest.schemas.autotest_report_schema import (
     AutoTestReportCreate,
     AutoTestReportSelect,
     AutoTestReportUpdate,
+    AutoTestReportBatchDetailSelect,
     AutoTestReportBatchSelect,
     AutoTestReportBatchScriptSelect,
     AutoTestReportScriptReportSelect,
@@ -242,7 +243,39 @@ async def search_reports(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_report.post("/search_task_batches", summary="查询任务执行历史", description="按task_code聚合batch_code计算成功/部分成功/失败状态")
+@autotest_report.post("/search_batch_reports", summary="查询同批次报告列表", description="根据batch_code精确分页查询同批次报告")
+async def search_batch_reports(
+        batch_detail_in: AutoTestReportBatchDetailSelect = Body(..., description="批次报告查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
+):
+    """
+    批次报告下钻查询(报告维度)：面向“执行报告”抽屉, 按批次标识精确分页返回同一次执行的全部报告, 一行=一条报告。
+
+    :param batch_detail_in: 批次报告查询入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        state = 0 if batch_detail_in.state is None else batch_detail_in.state
+        total, data = await services.report_curd.search_batch_reports(
+            page=batch_detail_in.page,
+            page_size=batch_detail_in.page_size,
+            order=batch_detail_in.order,
+            batch_code=batch_detail_in.batch_code,
+            case_id=batch_detail_in.case_id,
+            state=state,
+        )
+        return SuccessResponse(message="批次报告列表查询成功", data=data, total=total)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"按batch_code查询批次报告列表失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+
+
+@autotest_report.post("/search_task_batches", summary="查询任务执行历史", description="按task_code聚合batch_code计算状态")
 async def search_task_batches(
         batch_in: AutoTestReportBatchSelect = Body(..., description="批次查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -267,8 +300,7 @@ async def search_task_batches(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_report.post("/search_batch_scripts", summary="查询批次脚本执行信息",
-                      description="按batch_code聚合脚本维度执行信息并分页, 脚本行携带轮次元数据")
+@autotest_report.post("/search_batch_scripts", summary="查询批次脚本执行信息", description="按batch_code聚合脚本维度执行信息并分页")
 async def search_report_batch_scripts(
         script_in: AutoTestReportBatchScriptSelect = Body(..., description="批次脚本查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -295,7 +327,7 @@ async def search_report_batch_scripts(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_report.post("/search_script_round_reports", summary="查询轮次执行明细", description="按batch_code+case_id+round_no分页返回该轮次内执行报告")
+@autotest_report.post("/search_script_round_reports", summary="查询轮次执行明细", description="按batch_code+case_id+round_no分页执行报告")
 async def search_script_round_reports(
         report_in: AutoTestReportScriptReportSelect = Body(..., description="轮次明细查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
