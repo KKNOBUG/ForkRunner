@@ -68,6 +68,7 @@ from core.exceptions import (
 )
 from enums import (
     AutoTestStepType,
+    AutoTestBranchType,
     AutoTestReportType,
     AutoTestLoopMode,
     AutoTestCaseType,
@@ -2251,7 +2252,7 @@ class ConditionStepExecutor(BaseStepExecutor):
             result.request = {"branch_items": None, "branch_match": None}
 
             for i, branch in enumerate(branch_items):
-                if branch.branch_type == "else":
+                if branch.branch_type == AutoTestBranchType.ELSE:
                     matched = True
                 else:
                     if not branch.branch_conditions:

@@ -84,6 +84,13 @@ class AutoTestAssertionOperation(StringEnum):
     IS_EMPTY = "为空"
 
 
+class AutoTestBranchType(StringEnum):
+    """条件分支步骤branch_items[].branch_type的合法取值，存储值与存量数据小写形态保持一致。"""
+    IF = "if"
+    ELIF = "elif"
+    ELSE = "else"
+
+
 class AutoTestTaskType(StringEnum):
     """
     任务业务类型：Task定义分类、Beat扫描过滤、执行记录分类均根据此区分。
