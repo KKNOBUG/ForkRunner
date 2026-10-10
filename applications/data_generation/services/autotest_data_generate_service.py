@@ -354,15 +354,23 @@ def _append_scenario(
 
 def _overlength_value(original_value: Any, generated_length: int) -> str:
     """
-        用于生成制定长度的测试值，主要用于生成超过长度的反向测试数据
+    根据原始标量值生成指定长度的字段长度反向测试文本。
+
+    字符串和无类型参考的 ``None`` 使用数字1填充，数值使用数字9填充；
+    布尔值及容器等非标量值不支持字段长度测试。
+
+    :param original_value: 请求报文字段的原始值；``None`` 按文本字段处理。
+    :param generated_length: 需要生成的文本长度，允许范围为1到最大字段长度。
+    :return: 长度等于 ``generated_length`` 的测试文本。
+    :raises TestDataGenerationError: 生成长度越界或原始值类型不受支持时抛出。
     """
     if generated_length < 1 or generated_length > MAX_GENERATED_FIELD_LENGTH:
         raise TestDataGenerationError(
             f"生成字段长度必须在1到{MAX_GENERATED_FIELD_LENGTH}之间"
         )
-    if isinstance(original_value, str):
+    if isinstance(original_value, str) or original_value is None:
         return "1" * generated_length
-    if isinstance(original_value, bool) or original_value is None:
+    if isinstance(original_value, bool):
         raise TestDataGenerationError("原始报文字段格式不支持，请检查")
     if isinstance(original_value, (int, float)):
         return "9" * generated_length
@@ -395,9 +403,19 @@ def _decimal_overlength_values(
         decimal_length: int,
 ) -> Tuple[str, str]:
     """
-        构造超出长度的decimal测试数据
+    构造分别超出整数位和小数位配置的字段长度反向测试文本。
+
+    该函数只服务字段长度校验，因此允许原始值为 ``None``；其他原始值仍按
+    小数字段支持类型校验，小数边界值由独立函数按其规则处理。
+
+    :param original_value: 请求报文字段的原始值；``None`` 表示无类型参考。
+    :param integer_length: 接口文档配置的整数位数，必须大于0。
+    :param decimal_length: 接口文档配置的小数位数，必须不小于0。
+    :return: 整数位超长文本与小数位超长文本组成的二元组。
+    :raises TestDataGenerationError: 原始值类型不受支持或长度配置越界时抛出。
     """
-    _validate_decimal_original_value(original_value)
+    if original_value is not None:
+        _validate_decimal_original_value(original_value)
     if integer_length < 1 or decimal_length < 0:
         raise TestDataGenerationError("小数字段长度必须保证整数位大于0且小数位不小于0")
     if integer_length + decimal_length + 1 > MAX_GENERATED_FIELD_LENGTH:
@@ -480,7 +498,20 @@ def _decimal_boundary_values(
         integer_length: int,
         decimal_length: int,
 ) -> List[Tuple[str, str]]:
-    _validate_decimal_original_value(original_value)
+    """
+    根据接口文档的小数长度配置生成六个小数边界测试值。
+
+    原始值用于排除布尔值和容器等不支持的字段类型；原始值为 ``None`` 时
+    没有类型参考，但不影响依据长度配置计算边界值，因此按文本结果继续生成。
+
+    :param original_value: 请求报文字段的原始值；``None`` 表示无类型参考。
+    :param integer_length: 接口文档配置的整数位数，必须大于0。
+    :param decimal_length: 接口文档配置的小数位数，必须大于0。
+    :return: 按固定顺序排列的正反场景标识及其小数边界文本。
+    :raises TestDataGenerationError: 原始值类型不受支持或长度配置越界时抛出。
+    """
+    if original_value is not None:
+        _validate_decimal_original_value(original_value)
     if integer_length < 1 or decimal_length < 1:
         raise TestDataGenerationError("小数边界值要求整数位和小数位均大于0")
     if integer_length + decimal_length > MAX_GENERATED_FIELD_LENGTH:
@@ -504,7 +535,7 @@ def _decimal_boundary_values(
     result: List[Tuple[str, str]] = []
     for polarity, decimal_value in values:
         text_value = _format_decimal(decimal_value, decimal_length)
-        # 先以文本保留小数位；执行时会根据原报文字段类型恢复JSON数字语义。
+        # 非空数值字段执行时按原类型恢复；原始null没有类型参考，沿用边界文本。
         result.append((polarity, text_value))
     return result
 
