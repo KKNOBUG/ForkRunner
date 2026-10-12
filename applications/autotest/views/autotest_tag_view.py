@@ -66,7 +66,7 @@ async def create_tag(
         return FailureResponse(message=f"新增失败，异常描述: {str(e)}")
 
 
-@autotest_tag.delete("/delete", summary="删除标签", description="根据id或code删除标签信息")
+@autotest_tag.post("/delete", summary="批量删除标签", description="根据id或code列表删除标签信息")
 async def delete_tag(
         tag_id: Optional[int] = Query(None, description="标签ID"),
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
