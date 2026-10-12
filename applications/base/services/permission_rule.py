@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-from backend.applications.base.models.menu_model import Menu
-from backend.applications.base.models.role_model import Role
-from backend.applications.base.models.router_model import Router
-from backend.configure import LOGGER
+from applications.base.models.menu_model import Menu
+from applications.base.models.role_model import Role
+from applications.base.models.router_model import Router
+from configure import LOGGER
 
 
 class PermissionRule:
