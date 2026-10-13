@@ -37,7 +37,7 @@ class EnumAIModelConfig(BaseModel):
     def validate_model_endpoint(self) -> Self:
         if not self.api_key.get_secret_value().strip():
             raise ValueError(f"枚举抽取AI模型[{self.name}]的api_key不能为空")
-        if not self.base_url.strip().lower().startswith("https://"):
+        if not self.base_url.strip().lower().startswith("http"):
             raise ValueError(f"枚举抽取AI模型[{self.name}]的base_url必须使用HTTPS")
         return self
 
