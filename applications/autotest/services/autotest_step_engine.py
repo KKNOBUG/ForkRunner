@@ -22,9 +22,7 @@ if TYPE_CHECKING:
 
 from applications.autotest.services.autotest_runtime.protocol_http import (
     assemble_http_body_payloads,
-    build_absolute_http_url,
     build_httpx_request_kwargs,
-    is_absolute_http_url,
 )
 from applications.autotest.services.autotest_runtime.protocol_tcp import (
     select_tcp_payload,
@@ -34,10 +32,10 @@ from applications.autotest.services.autotest_runtime.protocol_tcp import (
     tcp_body_source_for_assert
 )
 from applications.autotest.services.autotest_runtime.datagram.datagram_diff import compare_messages
+from applications.autotest.services.autotest_runtime.builtin_variables import collect_builtin_step_variables
 from applications.autotest.schemas.autotest_detail_schema import AutoTestDetailCreate
 from applications.autotest.schemas.autotest_report_schema import AutoTestReportCreate
 from applications.autotest.schemas.autotest_datagram_diff_schema import DatagramFieldCompareItem
-from applications.autotest.services.autotest_runtime.builtin_variables import collect_builtin_step_variables
 from applications.autotest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateItem,
     ConditionsBase,
@@ -48,6 +46,7 @@ from applications.autotest.schemas.autotest_step_schema import (
     StepsExecuteConfigBase,
     StepExtractVariableItem,
     prepare_step_tree_item_for_execution,
+    step_variables_list_from_storage,
 )
 from applications.autotest.services.autotest_runtime.sandbox import (
     RE_PLACEHOLDER,
@@ -62,6 +61,7 @@ from applications.base.services.scaffold import unique_identify
 from common import AioTcpClient, TcpFrameMode
 from common.cache.redis_connection_pool import get_app_redis_pool, RedisConnPoolFromConfig
 from common.database.database_connection_pool import get_app_database_pool, DBConnPoolFromConfig
+from common.url_utils import build_absolute_http_url, is_absolute_http_url
 from configure import LOGGER
 from core.exceptions import (
     NotFoundException,
@@ -69,9 +69,10 @@ from core.exceptions import (
 )
 from enums import (
     AutoTestStepType,
+    AutoTestBranchType,
     AutoTestReportType,
     AutoTestLoopMode,
-    PUBLIC_CASE_TYPES,
+    AutoTestCaseType,
     AutoTestLoopErrorStrategy,
     AutoTestReqArgsType,
     AutoTestConfigNodeType,
@@ -320,14 +321,9 @@ class StepExecutionContext:
             "session_variables": AutoTestToolService.list_to_dict(self.session_variables),
         }
 
-    def update_variables(
-            self,
-            variables: List[StepVariablesBase],
-            *,
-            scope: str = "defined_variables"
-    ) -> None:
+    def update_variables(self, variables: List[StepVariablesBase], *, scope: str = "defined_variables") -> None:
         """
-        根据作用域更新变量：variables为StepVariablesBase列表，同key覆盖，新key追加。
+        根据作用域更新变量：variables为StepVariablesBase列表，同key覆盖，新key追加；key为空的项过滤跳过。
 
         :param variables: 待更新的变量列表
         :param scope: 目标作用域（defined_variables 或 session_variables）
@@ -348,9 +344,12 @@ class StepExecutionContext:
 
         target_update_scope: List[StepVariablesBase] = self.defined_variables if scope == "defined_variables" else self.session_variables
         for variable in variables:
-            if not isinstance(variable, StepVariablesBase) or not getattr(variable, "key", False):
+            if not isinstance(variable, StepVariablesBase):
                 raise ValueError("【更新变量】失败: 每项必须为 StepVariablesBase 类型且含非空 key")
             key: str = variable.key
+            if not key or not key.strip():
+                # 健壮性过滤：key为空的变量项不入池，不中断步骤
+                continue
             already_found: bool = False
             for existing_index, existing_item in enumerate(target_update_scope):
                 if isinstance(existing_item, StepVariablesBase) and existing_item.key == key:
@@ -382,9 +381,10 @@ class StepExecutionContext:
             ("defined_variables", self.defined_variables),
             ("session_variables", self.session_variables),
         ]:
-            value = AutoTestToolService.get_value_from_list(scope_list, name)
-            if value is not None:
-                return value
+            # 按key存在性判断而非value非空：null是合法变量值，且defined必须遮蔽同名session变量
+            item = AutoTestToolService.get_item_from_list(scope_list, name)
+            if item is not None:
+                return item.value
 
         raise KeyError(f"【获取变量】变量({name})未定义: \n\t请检查变量名是否正确, 或确认变量是否已在之前的步骤中定义")
 
@@ -976,6 +976,9 @@ class BaseStepExecutor:
     步骤执行器基类：持有step与context，执行后合并extract_variables到session、可选保存明细。
     """
 
+    # 是否在执行前解析本步骤defined_variables并注入变量池。
+    resolve_own_defined_variables: bool = True
+
     def __init__(self, step: AutoTestStepTreeUpdateItem, context: StepExecutionContext):
         """
         初始化步骤执行器。
@@ -1242,19 +1245,24 @@ class BaseStepExecutor:
         # 保证同名查找时用户变量优先命中（内置变量不覆盖用户主动定义的变量）
         builtin_variables: List[StepVariablesBase] = self.collect_builtin_variables()
         self.context.defined_variables = builtin_variables
-        # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
-        step_defined_variables: List[StepVariablesBase] = self.step.defined_variables
-        resolved_defined_variables: List[StepVariablesBase] = self.context.resolve_placeholders(
-            variables=step_defined_variables,
-            step_code=self.step_code
-        ) or []
-        resolved_keys: Set[str] = {
-            item.key for item in resolved_defined_variables
-            if isinstance(item, StepVariablesBase) and item.key
-        }
-        self.context.defined_variables = resolved_defined_variables + [
-            item for item in builtin_variables if item.key not in resolved_keys
-        ]
+        if self.resolve_own_defined_variables:
+            # 注入前剔除key为空的变量项（与前端保存校验同口径），避免空键数据进入变量池参与发送
+            step_defined_variables: List[StepVariablesBase] = [
+                item for item in (self.step.defined_variables or [])
+                if isinstance(item, StepVariablesBase) and item.key and item.key.strip()
+            ]
+            # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
+            resolved_defined_variables: List[StepVariablesBase] = self.context.resolve_placeholders(
+                variables=step_defined_variables,
+                step_code=self.step_code
+            ) or []
+            resolved_keys: Set[str] = {
+                item.key for item in resolved_defined_variables
+                if isinstance(item, StepVariablesBase) and item.key
+            }
+            self.context.defined_variables = resolved_defined_variables + [
+                item for item in builtin_variables if item.key not in resolved_keys
+            ]
         try:
             await self._execute(result)
         except Exception as e:  # 会导致重复异常的信息展示在log中
@@ -2245,7 +2253,7 @@ class ConditionStepExecutor(BaseStepExecutor):
             result.request = {"branch_items": None, "branch_match": None}
 
             for i, branch in enumerate(branch_items):
-                if branch.branch_type == "else":
+                if branch.branch_type == AutoTestBranchType.ELSE:
                     matched = True
                 else:
                     if not branch.branch_conditions:
@@ -2547,12 +2555,83 @@ class UserVariablesStepExecutor(BaseStepExecutor):
             raise StepExecutionError(result.error) from e
 
 
-class QuoteCaseStepExecutor(BaseStepExecutor):
+class BaseQuoteCaseStepExecutor(BaseStepExecutor):
     """
-    引用公共脚本/接口执行器：加载引用用例根步骤树，根据step_no顺序执行并挂到result.children。
+    引用类步骤执行器基类：加载被引用公共用例根步骤树，根据step_no顺序执行并挂到result.children。
 
-    本步step_is_skipped时由BaseStepExecutor.execute直接返回，不会进入本执行器。
+    子类通过quote_step_label声明日志/错误前缀；allowed_quote_case_types声明可引用的用例类型，加载被引用用例时按该类型过滤，实现引用公共脚本、引用公共接口两类步骤的分流。
     """
+
+    # 日志/错误信息前缀
+    quote_step_label: str = "引用公共步骤"
+    # 允许引用的用例类型集合，加载被引用用例时按此变量过滤
+    allowed_quote_case_types: Tuple[AutoTestCaseType, ...] = ()
+    # 引用步骤自身追加的三容器字段名，可合并并重写进内层HTTP/TCP请求步骤执行的字段集合
+    allowed_append_fields_container: Tuple[str, ...] = ("defined_variables", "extract_variables", "assert_validators")
+    # 引用步骤自身追加的三容器字段是否合并进内层HTTP/TCP请求步骤执行（引用公共接口开启：追加数据保存于引用步骤、随本次引用执行生效； 引用公共脚本关闭：被引用内容保持原样只读复用）
+    allowed_merge_and_override_fields: bool = False
+    # 容器层不解析自身defined_variables（追加数据由内层HTTP/TCP步骤合并后解析，容器层缺少SERVER_*/TARGET_*内置变量，会误报变量未定义）
+    resolve_own_defined_variables = False
+    # 会话变量池半隔离：开启后引用域执行前以被引用用例聚合结果替换上下文变量池（独享、宿主池不可见），执行结束后整个引用池按key回灌宿主（引用覆盖宿主同名）
+    use_isolated_session_pool: bool = False
+
+    def _merge_and_override_fields(self, quote_step: AutoTestStepTreeUpdateItem) -> AutoTestStepTreeUpdateItem:
+        """
+        将引用步骤自身追加的defined_variables/extract_variables/assert_validators合并进内层HTTP/TCP请求步骤。
+
+        仅merge_and_override_fields开启且步骤类型具有响应上下文（HTTP/TCP）时合并；
+        合并顺序为原数据在前、追加在后；同名变量由追加项覆盖（剔除同名原变量，避免占位符解析按列表顺序取首个命中时读到原值）；同名提取按执行先后自然覆盖。
+
+        :param quote_step: 被引用用例的待执行根步骤模型
+        :return: 合并追加字段后的步骤模型；开关关闭/类型不匹配/无可合并字段时原样返回
+        """
+        if not self.allowed_merge_and_override_fields:
+            return quote_step
+        if quote_step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+            return quote_step
+        update: Dict[str, Any] = {}
+        for field_name in self.allowed_append_fields_container:
+            appended: List[Any] = list(getattr(self.step, field_name) or [])
+            if not appended:
+                continue
+            original: List[Any] = list(getattr(quote_step, field_name) or [])
+            if field_name == "defined_variables":
+                appended_keys = {v.key for v in appended if isinstance(v, StepVariablesBase) and v.key}
+                original = [v for v in original if not (isinstance(v, StepVariablesBase) and v.key in appended_keys)]
+            update[field_name] = original + appended
+        if not update:
+            return quote_step
+        return quote_step.model_copy(update=update)
+
+    def _build_quote_session_pool(self, quote_case_instance: Any, quote_roots: List[AutoTestStepTreeUpdateItem]) -> List[StepVariablesBase]:
+        """
+        初始化引用域独立变量池，聚合顺序与宿主用例保持一致（用例级session_variables在前、树内用户变量在后，同名后者覆盖）。
+
+        :param quote_case_instance: 被引用用例模型实例（取其case级session_variables存储数据）
+        :param quote_roots: 被引用用例根步骤列表（收集其中用户变量步骤的产出）
+        :return: 按key去重后的引用域初始变量池
+        """
+        stored: List[StepVariablesBase] = step_variables_list_from_storage(getattr(quote_case_instance, "session_variables", None))
+        collected: List[StepVariablesBase] = AutoTestToolService.collect_session_variables(quote_roots)
+        merged: Dict[str, StepVariablesBase] = {}
+        for item in [*stored, *collected]:
+            if item.key:
+                merged[item.key] = item
+        return list(merged.values())
+
+    def _merge_back_session_pool(self, host_pool: List[StepVariablesBase], quote_pool: List[StepVariablesBase]) -> List[StepVariablesBase]:
+        """
+        将执行后的引用池整体回灌宿主池（C2口径：整个执行后引用池按key合并，引用值覆盖宿主同名）。
+
+        :param host_pool: 引用域执行前的宿主变量池（未被引用域污染的原始引用）
+        :param quote_pool: 引用域执行结束后的完整变量池（含引用域初始变量与执行产出）
+        :return: 回灌后的宿主变量池
+        """
+        merged: Dict[str, StepVariablesBase] = {v.key: v for v in host_pool if v.key}
+        for item in quote_pool:
+            if item.key:
+                merged[item.key] = item
+        return list(merged.values())
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
@@ -2561,12 +2640,15 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
         :param result: 本步执行结果，子步骤结果写入children
         :return: None
         """
+        allowed_types_desc: str = "、".join(t.value for t in self.allowed_quote_case_types)
         previous_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
         previous_parent_step_id: Optional[int] = getattr(self.context, "executing_parent_step_id", None)
+        host_pool: List[StepVariablesBase] = []
+        quote_pool: Optional[List[StepVariablesBase]] = None
         try:
             quote_case_id = self.step.quote_case_id
             if not quote_case_id:
-                raise StepExecutionError("【引用公共脚本/接口】缺少必要配置: quote_case_id")
+                raise StepExecutionError(f"【{self.quote_step_label}】缺少必要配置: quote_case_id")
 
             database_crud_services = await self.get_services()
             # 将当前引用的公共脚本ID在步骤执行器上下文中标记，用于判断是否来自引用链
@@ -2578,13 +2660,15 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     only_one=True,
                     on_error=True,
                     id=quote_case_id,
-                    case_type__in=[t.value for t in PUBLIC_CASE_TYPES],
+                    case_type__in=[t.value for t in self.allowed_quote_case_types],
                     state__not=1,
                 )
             except (ParameterException, NotFoundException) as e:
-                raise StepExecutionError(f"【引用公共脚本/接口】引用用例ID: {quote_case_id}不存在\n\t错误描述: {e.message}") from e
+                raise StepExecutionError(
+                    f"【{self.quote_step_label}】引用用例ID: {quote_case_id}不存在或用例类型不属于({allowed_types_desc})\n\t错误描述: {e.message}"
+                ) from e
             except Exception as e:
-                raise StepExecutionError(f"【引用公共脚本/接口】引用用例ID: {quote_case_id})查询异常\n\t错误描述: {e}") from e
+                raise StepExecutionError(f"【{self.quote_step_label}】引用用例ID: {quote_case_id})查询异常\n\t错误描述: {e}") from e
 
             quote_case_dict = await quote_case_instance.to_dict(
                 include_fields={"id", "case_code", "case_name"},
@@ -2596,17 +2680,27 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                 quote_roots = load.root_steps
                 if not quote_roots:
                     self.context.log(
-                        f"【引用公共脚本/接口】用例(id={quote_case_id})暂无任何可执行步骤数据",
+                        f"【{self.quote_step_label}】用例(id={quote_case_id})暂无任何可执行步骤数据",
                         step_code=self.step_code
                     )
                     return
             except Exception as e:
                 raise StepExecutionError(
-                    f"【引用公共脚本/接口】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}"
+                    f"【{self.quote_step_label}】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}"
                 ) from e
 
+            if self.use_isolated_session_pool:
+                # 半隔离：整段替换变量池引用（禁止就地update_variables，否则会污染宿主池）；宿主池仅存引用，不被引用域读写
+                host_pool = self.context.session_variables
+                quote_pool = self._build_quote_session_pool(quote_case_instance, quote_roots)
+                self.context.session_variables = quote_pool
+                self.context.log(
+                    f"【{self.quote_step_label}】初始化引用域独立变量池({len(quote_pool)}项), 宿主变量池已隔离",
+                    step_code=self.step_code
+                )
+
             self.context.log(
-                f"【引用公共脚本/接口】执行用例(id={quote_case_id}, name={quote_case_name})开始",
+                f"【{self.quote_step_label}】执行用例(id={quote_case_id}, name={quote_case_name})开始",
                 step_code=self.step_code
             )
             ordered_steps = sorted(
@@ -2615,7 +2709,8 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             )
             for quote_step in ordered_steps:
                 try:
-                    executor = StepExecutorFactory.create_executor(quote_step, self.context)
+                    merged_step = self._merge_and_override_fields(quote_step)
+                    executor = StepExecutorFactory.create_executor(merged_step, self.context)
                     child_result = await executor.execute()
                     if child_result is None:
                         continue
@@ -2646,7 +2741,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     )
                     result.append_child(failed_result)
             self.context.log(
-                f"【引用公共脚本/接口】执行用例(id={quote_case_id}, name={quote_case_name})结束",
+                f"【{self.quote_step_label}】执行用例(id={quote_case_id}, name={quote_case_name})结束",
                 step_code=self.step_code
             )
         except StepExecutionError:
@@ -2657,11 +2752,44 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
             self.context.log(result.error, step_code=self.step_code)
             raise StepExecutionError(result.error) from e
         finally:
+            # 半隔离收口：整个执行后引用池按key回灌宿主（引用覆盖宿主同名），无论内层步骤成功或异常
+            if quote_pool is not None:
+                merged_host_pool: List[StepVariablesBase] = self._merge_back_session_pool(
+                    host_pool=host_pool, quote_pool=quote_pool
+                )
+                self.context.session_variables = merged_host_pool
+                self.context.log(
+                    f"【{self.quote_step_label}】引用域变量池整体回灌宿主池({len(merged_host_pool)}项), 同名变量以引用域为准",
+                    step_code=self.step_code
+                )
             # 恢复上一级引用脚本标识（支持嵌套引用时的正确回退）
             try:
                 self.context.executing_quote_case_id = previous_quote_case_id
+                self.context.executing_parent_step_id = previous_parent_step_id
             except Exception:
                 pass
+
+
+class QuotePublicApiStepExecutor(BaseQuoteCaseStepExecutor):
+    """
+    引用公共接口执行器：仅允许引用用例类型为公共接口的公共用例。
+    引用步骤自身追加的局部变量/提取/断言合并进内层HTTP/TCP请求步骤执行（原数据在前、追加在后）。
+    """
+
+    quote_step_label = "引用公共接口"
+    allowed_quote_case_types = (AutoTestCaseType.PUBLIC_API,)
+    allowed_merge_and_override_fields = True
+
+
+class QuotePublicScriptStepExecutor(BaseQuoteCaseStepExecutor):
+    """
+    引用公共脚本执行器：仅允许引用用例类型为公共脚本的公共用例。
+    开启会话变量池半隔离：引用域独享被引用用例聚合出的变量池，执行后整个引用池回灌宿主池。
+    """
+
+    quote_step_label = "引用公共脚本"
+    allowed_quote_case_types = (AutoTestCaseType.PUBLIC_SCRIPT,)
+    use_isolated_session_pool = True
 
 
 class TcpStepExecutor(BaseStepExecutor):
@@ -3880,7 +4008,8 @@ class StepExecutorFactory:
         AutoTestStepType.WAIT: WaitStepExecutor,
         AutoTestStepType.ASSERT: AssertStepExecutor,
         AutoTestStepType.EXTRACT: ExtractStepExecutor,
-        AutoTestStepType.QUOTE: QuoteCaseStepExecutor,
+        AutoTestStepType.QUOTE_PUBLIC_SCRIPT: QuotePublicScriptStepExecutor,
+        AutoTestStepType.QUOTE_PUBLIC_API: QuotePublicApiStepExecutor,
         AutoTestStepType.USER_VARIABLES: UserVariablesStepExecutor,
         AutoTestStepType.DIFF: DatagramDiffStepExecutor,
     }
@@ -4028,7 +4157,7 @@ class AutoTestStepExecutionEngine:
             failed_steps: int = total_steps - success_steps
             passed_ratio: float = (success_steps / total_steps * 100) if total_steps > 0 else 0.0
             case_end_time: datetime = datetime.now()
-            case_ed_time_str: str = case_end_time.strftime("%Y-%m-%d %H:%M:%S")
+            case_ed_time_str: str = case_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
             case_elapsed: str = f"{(case_end_time - case_start_time).total_seconds():.2f}"
             case_state: bool = failed_steps == 0
             defer_create_report: Optional[AutoTestReportCreate] = None

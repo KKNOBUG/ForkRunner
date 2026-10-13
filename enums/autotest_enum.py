@@ -38,7 +38,8 @@ class AutoTestStepType(StringEnum):
     PYTHON = "代码请求(Python)"
     DATABASE = "数据库请求"
     REDIS = "Redis请求"
-    QUOTE = "引用公共脚本/接口"
+    QUOTE_PUBLIC_SCRIPT = "引用公共脚本"
+    QUOTE_PUBLIC_API = "引用接口"
     DIFF = "报文比对"
     ASSERT = "断言"
     EXTRACT = "提取"
@@ -83,6 +84,13 @@ class AutoTestAssertionOperation(StringEnum):
     IS_EMPTY = "为空"
 
 
+class AutoTestBranchType(StringEnum):
+    """条件分支步骤branch_items[].branch_type的合法取值，存储值与存量数据小写形态保持一致。"""
+    IF = "if"
+    ELIF = "elif"
+    ELSE = "else"
+
+
 class AutoTestTaskType(StringEnum):
     """
     任务业务类型：Task定义分类、Beat扫描过滤、执行记录分类均根据此区分。
@@ -107,6 +115,12 @@ class AutoTestTaskExecuteMode(StringEnum):
     """任务执行模式：存储值与存量数据中文文案保持一致。"""
     PARALLEL = "并行执行"
     SERIAL = "串行执行"
+
+
+class AutoTestSessionTransfer(StringEnum):
+    """变量池传递开关：用例级全局设置，仅多条数据源执行时有意义。"""
+    DISABLE = "禁用"
+    ENABLED = "启用"
 
 
 class AutoTestEnvMode(StringEnum):

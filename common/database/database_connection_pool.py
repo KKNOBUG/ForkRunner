@@ -500,7 +500,8 @@ class DBConnPoolFromConfig:
                         sql_data = {"count": sql_count}
                     return {"sql_data": sql_data, "sql_count": sql_count}
             except Exception as e:
-                await connection.rollback()
+                # autocommit=True下无显式事务，原rollback在脏连接上会先抛1156掩盖真实错误
+                connection.close()
                 error_message = f"SQL执行失败：{e}"
                 self.logger.error(f"{error_message}\n{traceback.format_exc()}")
                 raise RuntimeError(error_message) from e

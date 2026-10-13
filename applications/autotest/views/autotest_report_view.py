@@ -10,7 +10,10 @@ from applications.autotest.schemas.autotest_report_schema import (
     AutoTestReportCreate,
     AutoTestReportSelect,
     AutoTestReportUpdate,
-    AutoTestReportBatchSelect, AutoTestReportBatchDetailSelect,
+    AutoTestReportBatchDetailSelect,
+    AutoTestReportBatchSelect,
+    AutoTestReportBatchScriptSelect,
+    AutoTestReportScriptReportSelect,
 )
 from configure import LOGGER
 from core.exceptions import (
@@ -172,13 +175,13 @@ async def get_report(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_report.post("/search", summary="查询报告列表", description="根据条件分页查询报告列表信息(Body)")
+@autotest_report.post("/search", summary="查询报告列表", description="分页查询手工执行报告列表(Body)")
 async def search_reports(
         report_in: AutoTestReportSelect = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
-    执行历史主查询(执行维度)：一次执行唯一化为一行, 多数据源批次行携带批次标识供下钻报告明细; 任务调度报告不在此范围(由/search_batches查询)。
+    执行历史主查询(执行维度)：一次执行唯一化为一行, 多数据源批次行携带批次标识供下钻报告明细; 任务调度报告不在此范围(由/search_task_batches查询)。
 
     :param report_in: 报告查询入参
     :param services: 自动化测试CRUD依赖聚合
@@ -205,7 +208,7 @@ async def search_reports(
             q &= Q(report_code__contains=report_in.report_code)
         if report_in.report_type:
             q &= Q(report_type=report_in.report_type.value)
-        # 接口固定只查手工执行报告(任务调度报告由/search_batches按task维度聚合查询)
+        # 接口固定只查手工执行报告(任务调度报告由/search_task_batches按task维度聚合查询)
         q &= Q(task_code__isnull=True) | Q(task_code="")
         if report_in.batch_code:
             q &= Q(batch_code__contains=report_in.batch_code)
@@ -226,7 +229,7 @@ async def search_reports(
         if report_in.date_to:
             date_to = report_in.date_to.strip()
             if len(date_to) == 10:
-                date_to = f"{date_to} 23:59:59"
+                date_to = f"{date_to} 23:59:59.999999"
             q &= Q(case_st_time__lte=date_to)
         q &= Q(state=report_in.state)
         total, data = await services.report_curd.search_reports(search=q, report_in=report_in)
@@ -259,6 +262,7 @@ async def search_batch_reports(
             page_size=batch_detail_in.page_size,
             order=batch_detail_in.order,
             batch_code=batch_detail_in.batch_code,
+            case_id=batch_detail_in.case_id,
             state=state,
         )
         return SuccessResponse(message="批次报告列表查询成功", data=data, total=total)
@@ -271,20 +275,20 @@ async def search_batch_reports(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_report.post("/search_batches", summary="查询任务执行历史", description="按task_code聚合batch_code计算成功/部分成功/失败状态")
-async def search_report_batches(
+@autotest_report.post("/search_task_batches", summary="查询任务执行历史", description="按任务聚合批次执行历史并计算结果")
+async def search_task_batches(
         batch_in: AutoTestReportBatchSelect = Body(..., description="批次查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
-    任务执行历史查询(任务维度)：面向任务执行历史列表, 按任务标识聚合报告批次并计算执行结果, 一行=一个批次。
+    任务执行历史查询(任务维度)：面向任务执行历史列表, 按任务标识聚合报告批次并计算执行结果, 一行=一个批次, 批次行不内嵌报告明细。
 
     :param batch_in: 含必填task_code；page/page_size针对批次数
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        total, batches = await services.report_curd.search_batches(batch_in)
+        total, batches = await services.report_curd.search_task_batches(batch_in)
         data = [item.model_dump(mode="json") for item in batches]
         return SuccessResponse(message="查询成功", data=data, total=total)
     except NotFoundException as e:
@@ -293,4 +297,58 @@ async def search_report_batches(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"按task_code聚合batch_code计算成功/部分成功/失败状态失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+
+
+@autotest_report.post("/search_batch_scripts", summary="查询批次脚本执行信息", description="按批次分页查询脚本执行信息")
+async def search_report_batch_scripts(
+        script_in: AutoTestReportBatchScriptSelect = Body(..., description="批次脚本查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
+):
+    """
+    批次脚本维度下钻查询(脚本维度)：面向“脚本执行信息”抽屉, 按批次标识聚合脚本执行信息并分页, 一行记录代表一个脚本。
+    执行次数case_execute_count=任务配置的执行轮次数(round_no去重数, 一轮内多数据源产生多条报告仅计1次), 供前端构建轮次列表; 历史数据无round_no时为报告行数。
+    has_multiple_dataset=数据源名称去重数>1, 语义对齐/search_reports; 多数据源脚本行由前端触发报告批次下钻(/search_batch_reports)。
+
+    :param script_in: 含必填batch_code；page/page_size针对脚本数
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        total, items = await services.report_curd.search_batch_scripts(script_in)
+        data = [item.model_dump(mode="json") for item in items]
+        return SuccessResponse(message="查询成功", data=data, total=total)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"按batch_code聚合脚本维度执行信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+
+
+@autotest_report.post("/search_script_round_reports", summary="查询轮次执行明细",
+                      description="按批次与用例分页查询执行报告；round_no可选：传入时按轮次过滤，缺省时返回全部轮次明细")
+async def search_script_round_reports(
+        report_in: AutoTestReportScriptReportSelect = Body(..., description="轮次明细查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
+):
+    """
+    脚本执行明细分页查询(报告维度)：面向“脚本执行明细”抽屉, 按批次标识+用例ID分页返回执行报告, 一行=一次场景执行(含dataset_no)。
+
+    双形态：传入round_no时按轮次过滤(轮次内明细)；缺省时返回全部轮次明细(执行次数模式无数据源场景), 统一按执行时间升序排列。
+
+    :param report_in: 含必填batch_code、case_id, 可选round_no
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        total, data = await services.report_curd.search_script_round_reports(report_in)
+        return SuccessResponse(message="查询成功", data=data, total=total)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"按batch_code+case_id查询脚本执行明细失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

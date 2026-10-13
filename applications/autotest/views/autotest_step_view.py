@@ -28,11 +28,8 @@ from applications.autotest.schemas.autotest_step_schema import (
     StepsExecuteConfigBase,
 )
 from applications.autotest.services.autotest_data_source_crud import delete_step_create
-from applications.autotest.services.autotest_data_source_service import (
-    data_source_duplicate_scene_names,
-    data_source_scene_names,
-)
-from applications.autotest.services.autotest_step_debug_service import StepDebugException, StepDebugService
+from applications.autotest.services.autotest_data_source_service import DataSourceService
+from applications.autotest.services.autotest_step_debug_service import StepDebugService, StepDebugException
 from applications.autotest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from applications.autotest.services.autotest_tool_service import AutoTestToolService
 from configure import LOGGER
@@ -424,7 +421,7 @@ async def batch_update_steps_tree(
                 for s in http_tcp_steps if s.data_source_id
             }
             for ds in ds_records:
-                current_names = data_source_scene_names(ds)
+                current_names = DataSourceService.data_source_scene_names(ds)
                 if current_names is None:
                     continue
                 step_label = (
@@ -433,7 +430,7 @@ async def batch_update_steps_tree(
                         or f"步骤ID:{ds.step_id}"
                 )
                 # 同一数据源内场景列名称重复：先拒绝，再做跨步骤一致性比对
-                duplicate_names = data_source_duplicate_scene_names(ds)
+                duplicate_names = DataSourceService.data_source_duplicate_scene_names(ds)
                 if duplicate_names:
                     error_detail = (
                         f"步骤[{step_label}]的数据源场景名称重复: {duplicate_names}"
@@ -683,7 +680,7 @@ async def debug_tcp_request(
         return FailureResponse(message=f"TCP请求调试失败，异常描述: {e}")
 
 
-@autotest_step.post("/python_code_debugging", summary="调试Python代码请求", description="调试Python代码步骤")
+@autotest_step.post("/python_code_debugging", summary="调试Python代码", description="调试Python代码步骤")
 async def debug_python_code(
         debug_in: AutoTestPythonCodeDebugRequest = Body(..., description="Python代码步骤数据"),
 ):
@@ -735,7 +732,7 @@ async def debug_redis_request(
         return FailureResponse(message=f"Redis请求调试失败，异常描述: {e}")
 
 
-@autotest_step.post("/execute_or_debugging", summary="执行步骤树结构", description="执行或调试步骤树结构")
+@autotest_step.post("/execute_or_debugging", summary="执行或调试步骤树", description="执行或调试步骤树结构")
 async def execute_step_tree(
         exec_in: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -792,6 +789,8 @@ async def execute_step_tree(
                         initial_variables=initial_variables,
                         report_type=AutoTestReportType.ASYNC_EXEC,
                     )
+                    # 单次执行无"下一条数据源"，剔除变量池保持响应结构不变
+                    result_data.pop("session_variables", None)
                     total_steps: int = int(result_data.get("total_steps") or 0)
                     success_steps: int = int(result_data.get("success_steps") or 0)
                     failed_steps: int = int(result_data.get("failed_steps") or 0)
@@ -842,10 +841,7 @@ async def execute_step_tree(
                     f"dataset_count={len(selected_dataset_names)}"
                 )
                 return SuccessResponse(
-                    message=(
-                        f"参数化执行任务已提交后台, 共{len(selected_dataset_names)}个数据集, "
-                        f"请稍后在报告中心/执行记录查看结果"
-                    ),
+                    message="执行任务已提交后台执行，请稍后在异步中心查看结果",
                     data={
                         "parameterized": True,
                         "async": True,

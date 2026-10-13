@@ -47,6 +47,7 @@ class AutoTestToolService:
     convert_list_to_dict_for_http = KvUtils.convert_list_to_dict_for_http
     merge_mapping_dicts = KvUtils.merge_mapping_dicts
     get_value_from_list = KvUtils.get_value_from_list
+    get_item_from_list = KvUtils.get_item_from_list
     try_serialize_request_body = KvUtils.try_serialize_request_body
     format_step_error_message = KvUtils.format_step_error_message
     parse_cookie_header = KvUtils.parse_cookie_header
