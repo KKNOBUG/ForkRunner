@@ -27,21 +27,9 @@ from applications.data_generation.services.autotest_project_interface_workbook_s
     ProjectInterfaceWorkbookError,
     resolve_uploaded_interface_document_path,
 )
-from applications.autotest.services.autotest_data_source_parser import (
-    AXIS_HORIZONTAL,
-    AXIS_VERTICAL,
-    extract_scene_names_from_matrix,
-    normalize_dataset_record,
-    resolve_matrix_axis,
-)
+from applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
 from applications.autotest.schemas.autotest_data_source_schema import AutoTestDataSourceUpdate
-from applications.autotest.services.autotest_data_source_service import (
-    build_vertical_matrix_from_step,
-    ensure_case_allows_data_source,
-    ensure_request_step,
-    resolve_case_and_step,
-    sync_step_data_source_meta,
-)
+from applications.autotest.services.autotest_data_source_service import DataSourceService
 from core.exceptions import ParameterException
 from enums import AutoTestDataGenerateStatus
 from services import get_current_username
@@ -114,10 +102,10 @@ def append_generated_scenarios(
         raise ParameterException(message="当前任务没有可应用的有效测试场景")
 
     appended_matrix = _pad_matrix(matrix)
-    used_axis = resolve_matrix_axis(appended_matrix, declared_axis=axis)
-    existing_names = extract_scene_names_from_matrix(appended_matrix, used_axis)
+    used_axis = DataSourceMatrixParser.resolve_matrix_axis(appended_matrix, declared_axis=axis)
+    existing_names = DataSourceMatrixParser.extract_scene_names_from_matrix(appended_matrix, used_axis)
     if existing_names == [_DEFAULT_EMPTY_SCENE_NAME]:
-        if used_axis == AXIS_VERTICAL:
+        if used_axis == DataSourceMatrixParser.AXIS_VERTICAL:
             scene_column = next(
                 index
                 for index, cell in enumerate(appended_matrix[0][1:], start=1)
@@ -137,12 +125,12 @@ def append_generated_scenarios(
         existing_dataset = {}
     used_names = set(existing_names)
     dataset: Dict[str, Dict[str, Any]] = {
-        str(name): normalize_dataset_record(record if isinstance(record, dict) else {})
+        str(name): DataSourceMatrixParser.normalize_dataset_record(record if isinstance(record, dict) else {})
         for name, record in (existing_dataset or {}).items()
     }
     appended_names: List[str] = []
 
-    if used_axis == AXIS_VERTICAL:
+    if used_axis == DataSourceMatrixParser.AXIS_VERTICAL:
         body_rows: Dict[str, int] = {}
         current_section = ""
         for row_index, row in enumerate(appended_matrix[1:], start=1):
@@ -170,9 +158,9 @@ def append_generated_scenarios(
                     body[path] = value
                 else:
                     row.append("")
-            dataset[name] = normalize_dataset_record({"body": body})
+            dataset[name] = DataSourceMatrixParser.normalize_dataset_record({"body": body})
             appended_names.append(name)
-    elif used_axis == AXIS_HORIZONTAL:
+    elif used_axis == DataSourceMatrixParser.AXIS_HORIZONTAL:
         header = appended_matrix[0]
         body_columns: Dict[str, int] = {}
         current_section = ""
@@ -198,7 +186,7 @@ def append_generated_scenarios(
                     row[column_index] = value
                     body[path] = value
             appended_matrix.append(row)
-            dataset[name] = normalize_dataset_record({"body": body})
+            dataset[name] = DataSourceMatrixParser.normalize_dataset_record({"body": body})
             appended_names.append(name)
 
     return dataset, [*existing_names, *appended_names], appended_matrix, used_axis
@@ -249,13 +237,13 @@ class AutoTestDataGenerateRecordService:
         if task.task_status != AutoTestDataGenerateStatus.SUCCESS:
             raise ParameterException(message="只有生成成功的任务可以应用")
 
-        case, step = await resolve_case_and_step(
+        case, step = await DataSourceService.resolve_case_and_step(
             services,
             case_id=task.case_id,
             step_id=task.step_id,
         )
-        ensure_request_step(step)
-        ensure_case_allows_data_source(case)
+        DataSourceService.ensure_request_step(step)
+        DataSourceService.ensure_case_allows_data_source(case)
 
         results = await self.result_crud.list_by_task_id(task.id)
         async with in_transaction() as connection:
@@ -274,11 +262,11 @@ class AutoTestDataGenerateRecordService:
             base_matrix = (
                 existing.dataframe
                 if existing and isinstance(existing.dataframe, list) and existing.dataframe
-                else build_vertical_matrix_from_step(step)
+                else DataSourceService.build_vertical_matrix_from_step(step)
             )
             dataset, dataset_names, dataframe, axis = append_generated_scenarios(
                 base_matrix,
-                existing.axis if existing else AXIS_VERTICAL,
+                existing.axis if existing else DataSourceMatrixParser.AXIS_VERTICAL,
                 existing.dataset if existing else None,
                 results,
             )
@@ -307,7 +295,7 @@ class AutoTestDataGenerateRecordService:
                     axis=axis,
                     created_user=get_current_username(),
                 )
-            await sync_step_data_source_meta(
+            await DataSourceService.sync_step_data_source_meta(
                 services,
                 case_id=case.id,
                 step_code=step.step_code,

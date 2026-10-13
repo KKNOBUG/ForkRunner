@@ -39,11 +39,7 @@ from applications.data_generation.services.autotest_data_generate_record_service
     resolve_interface_document_path,
 )
 from applications.data_generation.services.autotest_data_generate_task_crud import AutoTestDataGenerateTaskCrud
-from applications.autotest.services.autotest_data_source_service import (
-    ensure_case_allows_data_source,
-    ensure_request_step,
-    resolve_case_and_step,
-)
+from applications.autotest.services.autotest_data_source_service import DataSourceService
 from applications.data_generation.services.autotest_interface_document_parser import (
     InterfaceDocumentParseError,
     MAX_DOCUMENT_SIZE,
@@ -181,14 +177,14 @@ async def create_task(
     file_path: Optional[str] = None
     task = None
     try:
-        case, step = await resolve_case_and_step(
+        case, step = await DataSourceService.resolve_case_and_step(
             services,
             case_id=case_id,
             step_id=step_id,
             step_code=step_code,
         )
-        ensure_request_step(step)
-        ensure_case_allows_data_source(case)
+        DataSourceService.ensure_request_step(step)
+        DataSourceService.ensure_case_allows_data_source(case)
         request_snapshot = _request_body_snapshot(step)
 
         content = await file.read(MAX_DOCUMENT_SIZE + 1)
