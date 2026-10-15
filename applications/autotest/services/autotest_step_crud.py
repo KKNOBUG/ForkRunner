@@ -37,11 +37,20 @@ from core.exceptions import (
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType, AutoTestTaskExecuteMode, AutoTestSessionTransfer, PUBLIC_CASE_TYPES
+from enums import (
+    AutoTestCaseType,
+    AutoTestStepType,
+    AutoTestReportType,
+    AutoTestTaskExecuteMode,
+    AutoTestSessionTransfer,
+    PUBLIC_CASE_TYPES
+)
 
 STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
-    "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file", "request_body",
-    "session_variables", "defined_variables", "extract_variables", "assert_validators", "database_operates", "redis_operates",
+    "request_header", "request_params", "request_form_data",
+    "request_form_urlencoded", "request_form_file", "request_body",
+    "session_variables", "defined_variables", "extract_variables",
+    "assert_validators", "database_operates", "redis_operates",
     "loop_conditions",
 )
 
