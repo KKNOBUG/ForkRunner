@@ -28,8 +28,9 @@ from applications.autotest.services.autotest_runtime.protocol_tcp import (
     select_tcp_payload,
     parse_tcp_response,
     parse_tcp_timeouts,
+    resolve_tcp_frame_config,
     resolve_tcp_request_extract_sources,
-    tcp_body_source_for_assert
+    TCP_MAX_RESPONSE_BYTES,
 )
 from applications.autotest.services.autotest_runtime.datagram.datagram_diff import compare_messages
 from applications.autotest.services.autotest_runtime.builtin_variables import collect_builtin_step_variables
@@ -58,7 +59,7 @@ from applications.autotest.services.autotest_runtime.sandbox import (
 )
 from applications.autotest.services.autotest_tool_service import AutoTestToolService
 from applications.base.services.scaffold import unique_identify
-from common import AioTcpClient, TcpFrameMode
+from common import AioTcpClient
 from common.cache.redis_connection_pool import get_app_redis_pool, RedisConnPoolFromConfig
 from common.database.database_connection_pool import get_app_database_pool, DBConnPoolFromConfig
 from common.url_utils import build_absolute_http_url, is_absolute_http_url
@@ -199,6 +200,9 @@ class StepExecutionContext:
         self.executing_quote_case_id: Optional[int] = None
         # 引用链执行中容器步骤ID：被引用用例根步骤的parent_step_id为None，落明细时回落到此值归属引用容器
         self.executing_parent_step_id: Optional[int] = None
+        # 引用公共接口自身挂载的数据源快照：由引用执行器预载（宿主case_id+引用步骤step_code查表），供引用链内层HTTP/TCP步骤消费；引用公共脚本链中恒为None（屏蔽外层引用接口数据源）
+        self.quote_dataset_name: Optional[str] = None
+        self.quote_dataset_snapshot: Optional[Dict[str, Dict[str, Any]]] = None
         self._http_client = http_client
         self._exit_stack = AsyncExitStack()
         self.defined_variables: List[StepVariablesBase] = []
@@ -2836,14 +2840,10 @@ class TcpStepExecutor(BaseStepExecutor):
         - request_url 为 TCP host（如 127.0.0.1 或域名）
         - request_port 为 TCP port（字符串或数字，范围 1~65535），二者均必填。
         - request_args_type 为 RAW 时发送 request_text（str/bytes），为 JSON 时发送 request_body（dict 或 JSON 字符串），其它或未配置时优先 request_text、否则 request_body。
-        - 额外可选字段（不在 schema 中也可透传到 step dict）：
-            - tcp_frame_mode 取 "length_prefix_json" 或 "raw"（对应 TcpFrameMode，默认 length_prefix_json）；
-            - tcp_length_field_size 为长度前缀宽度（默认 8）；
-            - tcp_encoding 为文本编码（默认 utf-8）；
-            - tcp_connect_timeout 为连接超时秒数（float）；
-            - tcp_read_timeout 为读写超时秒数（float）；
-            - tcp_max_response_bytes 为最大响应体限制（默认 10MB）；
-            - tcp_response_type 取 "json"、"xml"、"text" 或 "bytes"（默认 text，json/xml 失败会降级为 text）。
+        - TCP帧配置（tcp_radix/tcp_radix_length/tcp_datagram_length/tcp_request_end_symbol/tcp_response_end_symbol/
+          tcp_connect_type/tcp_encoding/tcp_hex_string/tcp_response_timeout 等）由 resolve_tcp_frame_config 统一推导，
+          帧模式三选一：长度前缀 / 结束符 / RAW；进制数与结束符互斥由 schema 校验。
+        - 连接超时与最大读取字节数对齐JMeter不向用户暴露，由引擎按内部默认值兜底（TCP_MAX_RESPONSE_BYTES）。
     """
 
     def collect_builtin_variables(self) -> List[StepVariablesBase]:
@@ -2896,12 +2896,16 @@ class TcpStepExecutor(BaseStepExecutor):
             # 参数化驱动：与HTTP步骤一致（当存在 dataset_name 且不是引用公共脚本时）
             dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
             executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
-            step_struct = await AutoTestToolService.load_dataset_for_request_step(
-                case_id=self.case_id,
-                step_code=self.step_code,
-                dataset_name=dataset_name,
-                executing_quote_case_id=executing_quote_case_id,
-            )
+            if executing_quote_case_id:
+                # 引用链内层步骤：loader对引用链短路，数据驱动取引用公共接口自身挂载的数据源快照（引用公共脚本链中恒为None）
+                step_struct = getattr(self.context, "quote_dataset_snapshot", None)
+            else:
+                step_struct = await AutoTestToolService.load_dataset_for_request_step(
+                    case_id=self.case_id,
+                    step_code=self.step_code,
+                    dataset_name=dataset_name,
+                    executing_quote_case_id=executing_quote_case_id,
+                )
             result.dataset_snapshot = step_struct
             result.dataset_name = dataset_name
 
@@ -2981,53 +2985,65 @@ class TcpStepExecutor(BaseStepExecutor):
                 request_args_type_raw, request_text=request_text, request_body=request_body
             )
 
+            frame_config = resolve_tcp_frame_config(self.step)
+            max_response_bytes = TCP_MAX_RESPONSE_BYTES
+            connect_td, read_td = parse_tcp_timeouts(None, self.step.tcp_response_timeout)
+
             # 写入result.request，便于落库与排障
             result.request = {
                 "request_url": request_url,
                 "request_port": request_port,
                 "request_env_name": env_name,
                 "request_args_type": request_args_type_raw,
-                "tcp_frame_mode": self.step.tcp_frame_mode or "length_prefix_json",
-                "tcp_length_field_size": self.step.tcp_length_field_size or 8,
-                "tcp_encoding": self.step.tcp_encoding or "utf-8",
-                "tcp_connect_timeout": self.step.tcp_connect_timeout,
-                "tcp_read_timeout": self.step.tcp_read_timeout,
-                "tcp_response_type": self.step.tcp_response_type or "text",
+                "tcp_frame_mode": frame_config.frame_mode.value,
+                "tcp_radix": self.step.tcp_radix,
+                "tcp_radix_length": frame_config.radix_length,
+                "tcp_datagram_length": self.step.tcp_datagram_length,
+                "tcp_request_end_symbol": self.step.tcp_request_end_symbol,
+                "tcp_response_end_symbol": self.step.tcp_response_end_symbol,
+                "tcp_connect_type": self.step.tcp_connect_type,
+                "tcp_encoding": frame_config.encoding,
+                "tcp_hex_string": frame_config.hex_string,
+                "tcp_response_timeout": self.step.tcp_response_timeout,
                 "request_body": request_body,
                 "request_text": request_text,
                 "payload": payload,
             }
 
-            frame_mode_raw = (self.step.tcp_frame_mode or "length_prefix_json").strip().lower()
-            frame_mode = TcpFrameMode.RAW if frame_mode_raw == "raw" else TcpFrameMode.LENGTH_PREFIX_JSON
-
-            length_field_size = self.step.tcp_length_field_size or 8
-            encoding = self.step.tcp_encoding or "utf-8"
-            max_response_bytes = self.step.tcp_max_response_bytes or (10 * 1024 * 1024)
-            response_type = (self.step.tcp_response_type or "text").strip().lower()
-            connect_td, read_td = parse_tcp_timeouts(
-                self.step.tcp_connect_timeout, self.step.tcp_read_timeout
-            )
+            if frame_config.long_connection:
+                # 长连接暂未实现：按短连接降级执行，避免阻断步骤
+                self.context.log("【TCP请求】连接方式为长连接, 暂未实现, 已按短连接降级执行", step_code=self.step_code)
 
             start = time.perf_counter()
             async with AioTcpClient(
                     timeout=read_td or timedelta(seconds=30),
                     connect_timeout=connect_td,
-                    length_field_size=int(length_field_size),
-                    max_response_bytes=int(max_response_bytes),
+                    length_field_size=frame_config.radix_length,
+                    max_response_bytes=max_response_bytes,
             ) as client:
                 utils = await client.tcp(
                     request_url,
                     int(request_port),
                     payload,
-                    frame_mode=frame_mode,
-                    encoding=encoding,
+                    frame_mode=frame_config.frame_mode,
+                    length_field_size=frame_config.radix_length,
+                    radix=frame_config.radix,
+                    include_length_prefix=frame_config.include_length_prefix,
+                    request_end_symbol=frame_config.request_end_symbol,
+                    response_end_symbol=frame_config.response_end_symbol,
+                    hex_string=frame_config.hex_string,
+                    send_only=frame_config.send_only,
+                    encoding=frame_config.encoding,
                     connect_timeout=connect_td,
                     read_timeout=read_td,
                 )
                 # 只请求一次：获取原始字节后本地解析，避免解析失败时重发TCP请求
                 resp_bytes = await utils.bytes_resp()
-                parsed = parse_tcp_response(resp_bytes, encoding=encoding, response_type=response_type)
+                parsed = parse_tcp_response(
+                    resp_bytes,
+                    encoding=frame_config.encoding,
+                    hex_string=frame_config.hex_string,
+                )
                 resp_text = parsed.response_text
                 response_json = parsed.response_json
 
@@ -3049,7 +3065,7 @@ class TcpStepExecutor(BaseStepExecutor):
                 request_text=request_text_for_extract,
                 request_json=request_json_for_extract,
                 step_struct=step_struct,
-                body_source=tcp_body_source_for_assert(response_type),
+                body_source="response text",
             )
         except StepExecutionError:
             raise

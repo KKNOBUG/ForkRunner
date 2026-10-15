@@ -24,6 +24,10 @@ from .autotest_enum import (
     AutoTestDataBaseType,
     AutoTestConfigNodeType,
     AutoTestInterfaceStyle,
+    AutoTestTcpRadix,
+    AutoTestTcpDatagramLength,
+    AutoTestTcpConnectType,
+    AutoTestTcpEndSymbol,
 )
 from .base_error_enum import BaseErrorEnum
 from .file_size_enum import FileSizeEum
@@ -62,4 +66,8 @@ __all__ = (
     AutoTestDataBaseType,
     AutoTestConfigNodeType,
     AutoTestInterfaceStyle,
+    AutoTestTcpRadix,
+    AutoTestTcpDatagramLength,
+    AutoTestTcpConnectType,
+    AutoTestTcpEndSymbol,
 )
