@@ -18,6 +18,7 @@ from applications.data_generation.schemas.autotest_data_generate_schema import (
     AutoTestDataGenerateTaskCreate,
     AutoTestDataGenerateTaskSelect,
     AutoTestDataGenerateTaskUpdate,
+    AutoTestIntelligentDataGenerateTaskCreate,
 )
 from applications.base.services.scaffold import ScaffoldCrud
 from configure import LOGGER
@@ -63,14 +64,22 @@ class AutoTestDataGenerateTaskCrud(ScaffoldCrud[
 
     async def create_task(
             self,
-            data: Union[AutoTestDataGenerateTaskCreate, Dict[str, Any]],
+            data: Union[
+                AutoTestDataGenerateTaskCreate,
+                AutoTestIntelligentDataGenerateTaskCreate,
+            ],
     ) -> AutoTestDataGenerateTaskModel:
+        """持久化已经按生成方式校验过的普通或智能任务输入。
+
+        :param data: 普通或智能生成任务的 Pydantic 创建对象。
+        :return: 已保存的数据生成任务记录。
+        :raises TypeError: 传入字典或其他未经创建契约校验的对象。
+        :raises DataBaseStorageException: 任务标识冲突导致入库失败。
         """
-            创建任务
-        """
-        task_in = data if isinstance(data, AutoTestDataGenerateTaskCreate) else AutoTestDataGenerateTaskCreate.model_validate(data)
+        if not isinstance(data, (AutoTestDataGenerateTaskCreate, AutoTestIntelligentDataGenerateTaskCreate)):
+            raise TypeError("创建数据生成任务必须传入已校验的任务创建对象")
         try:
-            return await self.create(task_in.create_dict())
+            return await self.create(data.create_dict())
         except IntegrityError as exc:
             LOGGER.exception("创建数据生成任务失败")
             raise DataBaseStorageException(message="创建数据生成任务失败, 任务标识重复") from exc

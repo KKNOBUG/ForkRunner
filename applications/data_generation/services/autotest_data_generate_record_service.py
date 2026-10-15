@@ -43,7 +43,7 @@ from applications.autotest.services.autotest_data_source_service import (
     sync_step_data_source_meta,
 )
 from core.exceptions import ParameterException
-from enums import AutoTestDataGenerateStatus
+from enums import AutoTestDataGenerateMode, AutoTestDataGenerateStatus
 from services import get_current_username
 
 
@@ -95,14 +95,17 @@ def append_generated_scenarios(
         axis: Optional[int],
         existing_dataset: Optional[Mapping[str, Any]],
         results: List[Any],
+        intelligent: bool = False,
 ) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]], int]:
-    """
-        核心功能函数：在不新增、不删除、不重排的情况下，把所有有效生成场景追加到已有的数据编辑表格中
-        matrix：数据编辑页面当前表格的二维数组，外层list表示整个表格，内层list表示一行
-        axis：表示数据编辑表格中场景的排列方向，即转置
-        existing_dataset：数据编辑页面中已经保存的场景数据集合，与matrix表示同一份业务数据的不同结构
-        results：当前数据生成任务产生的所有测试场景
-        返回值：[更新后的完整数据集，场景名称列表，更新后的二维矩阵，实际识别出的矩阵方向]
+    """把有效生成场景追加到现有数据编辑矩阵，不改变已有场景顺序。
+
+    :param matrix: 数据编辑页面当前二维矩阵。
+    :param axis: 已声明的场景排列方向；实际方向以矩阵结构为准。
+    :param existing_dataset: 已存场景数据；与矩阵表示同一份业务数据。
+    :param results: 当前任务产生的场景及字段值。
+    :param intelligent: 智能结果按HEAD/BODY分区；普通结果是平铺BODY字段。
+    :return: 更新后的数据集、场景名、二维矩阵和实际方向。
+    :raises ParameterException: 没有有效场景、矩阵无BODY字段或场景名无效。
     """
     #过滤无效场景
     results = [
@@ -143,6 +146,7 @@ def append_generated_scenarios(
     appended_names: List[str] = []
 
     if used_axis == AXIS_VERTICAL:
+        head_rows: Dict[str, int] = {}
         body_rows: Dict[str, int] = {}
         current_section = ""
         for row_index, row in enumerate(appended_matrix[1:], start=1):
@@ -150,30 +154,41 @@ def append_generated_scenarios(
             marker = first_cell.upper()
             if marker in _SECTION_MARKERS:
                 current_section = marker
+            elif current_section == "HEAD" and first_cell and first_cell not in head_rows:
+                head_rows[first_cell] = row_index
             elif current_section == "BODY" and first_cell and first_cell not in body_rows:
                 body_rows[first_cell] = row_index
         if not body_rows:
             raise ParameterException(message="数据编辑表格中没有可匹配的BODY字段")
 
         body_row_indices = set(body_rows.values())
+        head_row_indices = set(head_rows.values())
         for result in results:
             name = _unique_scene_name(get_result_value(result, "scene_name"), used_names)
             scenario_data = get_result_value(result, "scenario_data")
             values = scenario_data if isinstance(scenario_data, Mapping) else {}
+            head_values = values.get("HEAD", {}) if intelligent else {}
+            body_values = values.get("BODY", {}) if intelligent else values
             appended_matrix[0].append(name)
+            head: Dict[str, Any] = {}
             body: Dict[str, Any] = {}
             for row_index, row in enumerate(appended_matrix[1:], start=1):
                 path = str(row[0] or "").strip()
-                if row_index in body_row_indices and path in values:
-                    value = values[path]
+                if row_index in head_row_indices and path in head_values:
+                    value = head_values[path]
+                    row.append(value)
+                    head[path] = value
+                elif row_index in body_row_indices and path in body_values:
+                    value = body_values[path]
                     row.append(value)
                     body[path] = value
                 else:
                     row.append("")
-            dataset[name] = normalize_dataset_record({"body": body})
+            dataset[name] = normalize_dataset_record({"head": head, "body": body})
             appended_names.append(name)
     elif used_axis == AXIS_HORIZONTAL:
         header = appended_matrix[0]
+        head_columns: Dict[str, int] = {}
         body_columns: Dict[str, int] = {}
         current_section = ""
         for column_index, cell in enumerate(header[1:], start=1):
@@ -181,6 +196,8 @@ def append_generated_scenarios(
             marker = text.upper()
             if marker in _SECTION_MARKERS:
                 current_section = marker
+            elif current_section == "HEAD" and text and text not in head_columns:
+                head_columns[text] = column_index
             elif current_section == "BODY" and text and text not in body_columns:
                 body_columns[text] = column_index
         if not body_columns:
@@ -190,15 +207,23 @@ def append_generated_scenarios(
             name = _unique_scene_name(get_result_value(result, "scene_name"), used_names)
             scenario_data = get_result_value(result, "scenario_data")
             values = scenario_data if isinstance(scenario_data, Mapping) else {}
+            head_values = values.get("HEAD", {}) if intelligent else {}
+            body_values = values.get("BODY", {}) if intelligent else values
             row: List[Any] = [name, *([""] * (len(header) - 1))]
+            head: Dict[str, Any] = {}
             body: Dict[str, Any] = {}
+            for path, column_index in head_columns.items():
+                if path in head_values:
+                    value = head_values[path]
+                    row[column_index] = value
+                    head[path] = value
             for path, column_index in body_columns.items():
-                if path in values:
-                    value = values[path]
+                if path in body_values:
+                    value = body_values[path]
                     row[column_index] = value
                     body[path] = value
             appended_matrix.append(row)
-            dataset[name] = normalize_dataset_record({"body": body})
+            dataset[name] = normalize_dataset_record({"head": head, "body": body})
             appended_names.append(name)
 
     return dataset, [*existing_names, *appended_names], appended_matrix, used_axis
@@ -242,9 +267,19 @@ class AutoTestDataGenerateRecordService:
         task = await self.task_crud.get_by_id(task_id, on_error=True, state__not=1)
         if task.task_status != AutoTestDataGenerateStatus.SUCCESS:
             raise ParameterException(message="只有生成成功的任务可以下载数据生成文档")
+        if task.generation_mode == AutoTestDataGenerateMode.INTELLIGENT:
+            return self.export_service.get_task_file(task)
         return await self.export_service.export_task(task)
 
     async def apply(self, task_id: int, services: Any):
+        """将成功任务的场景按生成模式追加到目标步骤的数据编辑数据源。
+
+        :param task_id: 待应用的数据生成任务ID。
+        :param services: 提供步骤和数据源CRUD的自动化测试服务集合。
+        :return: 创建或更新后的数据源实例。
+        :raises ParameterException: 任务、目标步骤或生成数据不满足应用条件。
+        """
+
         task = await self.task_crud.get_by_id(task_id, on_error=True, state__not=1)
         if task.task_status != AutoTestDataGenerateStatus.SUCCESS:
             raise ParameterException(message="只有生成成功的任务可以应用")
@@ -281,6 +316,7 @@ class AutoTestDataGenerateRecordService:
                 existing.axis if existing else AXIS_VERTICAL,
                 existing.dataset if existing else None,
                 results,
+                intelligent=task.generation_mode == AutoTestDataGenerateMode.INTELLIGENT,
             )
 
             if existing:

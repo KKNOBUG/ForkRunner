@@ -43,6 +43,8 @@ class EnumAIModelConfig(BaseModel):
 
 
 class ProjectConfig(BaseSettings):
+    """加载项目环境配置，校验启动依赖并为数据库、缓存和任务服务组装连接参数。"""
+
     model_config = SettingsConfigDict(
         env_file=_PROJECT_CONF,
         env_file_encoding="utf-8",
@@ -294,7 +296,7 @@ class ProjectConfig(BaseSettings):
     )
     ENUM_AI_BATCH_MAX_CHARS: int = Field(default=12_000, ge=2_000, le=100_000)
     ENUM_AI_MAX_CONCURRENCY: int = Field(default=2, ge=1, le=5)
-    ENUM_AI_TOTAL_TIMEOUT_SECONDS: float = Field(default=60.0, gt=0, le=300)
+    ENUM_AI_TOTAL_TIMEOUT_SECONDS: float = Field(default=60.0, gt=0, le=6000)
     ENUM_AI_MAX_COMPLETION_TOKENS: int = Field(
         default=8192,
         ge=512,
@@ -305,8 +307,34 @@ class ProjectConfig(BaseSettings):
         description="按故障转移优先级排列的枚举抽取AI模型列表",
     )
 
+    # Claude Agent SDK：仅用于数据生成模块的智能生成分支
+    CLAUDE_AGENT_ENABLED: bool = False
+    CLAUDE_AGENT_AUTH_TOKEN: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices(
+            "CLAUDE_AGENT_AUTH_TOKEN",
+            "ANTHROPIC_AUTH_TOKEN",
+        ),
+    )
+    CLAUDE_AGENT_BASE_URL: str = ""
+    CLAUDE_AGENT_WORKSPACE_ID: str = ""
+    CLAUDE_AGENT_MODEL: str = Field(default="sonnet", min_length=1, max_length=128)
+    CLAUDE_AGENT_MAX_TURNS: int = Field(default=30, ge=1, le=100)
+    CLAUDE_AGENT_MAX_BUDGET_USD: float = Field(default=2.0, gt=0, le=100)
+    CLAUDE_AGENT_TIMEOUT_SECONDS: float = Field(default=4800, gt=0, le=6000)
+    CLAUDE_AGENT_CLI_PATH: str = ""
+
     @model_validator(mode="after")
     def validate_env_and_assemble_urls(self) -> Self:
+        """校验必需环境项、AI 配置及 Skill 资源，随后组装连接参数。
+
+        启用智能生成时，Skill 必须存在于 ``OUTPUT_DIR/skills`` 下；该资源
+        随项目发布，不属于可清理的任务上传或下载文件。
+
+        :return: 完成校验并更新连接参数的当前配置实例。
+        :raises ValueError: 必需配置缺失、AI 配置不合法或 Skill 文件不存在。
+        """
+
         if not self.AUTH_SECRET_KEY or len(self.AUTH_SECRET_KEY) < 64:
             raise ValueError("配置[AUTH_SECRET_KEY]不允许为空或少于64位")
 
@@ -327,6 +355,21 @@ class ProjectConfig(BaseSettings):
             names = [item.name for item in self.ENUM_AI_MODELS]
             if len(names) != len(set(names)):
                 raise ValueError("ENUM_AI_MODELS中的name不允许重复")
+
+        claude_base_url = self.CLAUDE_AGENT_BASE_URL.strip()
+        if claude_base_url and not claude_base_url.lower().startswith("https://"):
+            raise ValueError("CLAUDE_AGENT_BASE_URL必须使用HTTPS")
+        if self.CLAUDE_AGENT_ENABLED:
+            if not self.CLAUDE_AGENT_AUTH_TOKEN.get_secret_value().strip():
+                raise ValueError("未配置CLAUDE_AGENT_AUTH_TOKEN，无法启用智能生成")
+            skill_file = os.path.join(
+                self.OUTPUT_DIR,
+                "skills",
+                "test_data_generator",
+                "SKILL.md",
+            )
+            if not os.path.isfile(skill_file):
+                raise ValueError("智能生成Skill不存在，无法启用Claude Agent")
 
         return self.assemble_connection_urls()
 

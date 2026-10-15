@@ -19,6 +19,13 @@ from applications.data_generation.services.autotest_data_generate_task_service i
 from applications.data_generation.services.autotest_ai_enum_extraction_client import (
     AIEnumExtractionError,
 )
+from applications.data_generation.services.autotest_claude_agent_client import (
+    ClaudeAgentConfigurationError,
+    ClaudeAgentExecutionError,
+)
+from applications.data_generation.services.autotest_intelligent_data_generate_service import (
+    IntelligentDataGenerateInputError,
+)
 from applications.data_generation.services.autotest_project_enum_extraction_service import (
     ProjectEnumExtractionInputError,
 )
@@ -37,9 +44,9 @@ DATA_GENERATE_RECOVERY_TASK_NAME = (
     "celery_scheduler.tasks.task_autotest_data_generate.recover_timed_out_data_generate_tasks"
 )
 DATA_GENERATE_MAX_RETRIES = 2
-DATA_GENERATE_SOFT_TIME_LIMIT = 300
-DATA_GENERATE_TIME_LIMIT = 330
-DATA_GENERATE_RECOVERY_TIMEOUT = 600
+DATA_GENERATE_SOFT_TIME_LIMIT = 6000
+DATA_GENERATE_TIME_LIMIT = 6000
+DATA_GENERATE_RECOVERY_TIMEOUT = 6000
 
 
 def retry_countdown(retries: int) -> int:
@@ -49,9 +56,16 @@ def retry_countdown(retries: int) -> int:
 
 
 def is_permanent_generation_error(exc: BaseException) -> bool:
-    """业务输入错误不会因重试而恢复。"""
+    """识别相同输入下重试也不会恢复的业务或Agent执行错误。
+
+    :param exc: 本次数据生成抛出的异常。
+    :return: 应直接结束任务并回写失败时为``True``；其他异常可有限重试。
+    """
     return isinstance(exc, (
         DataGenerateTaskInputError,
+        IntelligentDataGenerateInputError,
+        ClaudeAgentConfigurationError,
+        ClaudeAgentExecutionError,
         TestDataGenerationError,
         AIEnumExtractionError,
         ProjectEnumExtractionInputError,
@@ -67,6 +81,8 @@ def generation_error_message(exc: BaseException) -> str:
         return f"数据生成任务执行超过{DATA_GENERATE_SOFT_TIME_LIMIT}秒，已中止本次尝试"
     if isinstance(exc, AIEnumExtractionError):
         return str(exc).strip()[:4000]
+    if isinstance(exc, ClaudeAgentExecutionError):
+        return exc.public_message.strip()[:4000]
     if is_permanent_generation_error(exc):
         return str(exc or "数据生成任务输入不合法").strip()[:4000]
     return f"数据生成任务执行异常({type(exc).__name__})"

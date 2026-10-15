@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence
@@ -43,10 +44,11 @@ def _write_cell(cell: Cell, value: Optional[str]) -> None:
 
 
 def _normalize_results(results: Sequence[Any]) -> List[Dict[str, Any]]:
-    """
-        在创建excel前统一检查和整理测试结果
-        results：全部测试场景
-        返回值：一个字典数组，键值对为字符串：任何类型，即经过检查整理的所有生成测试数据
+    """校验导出场景并原样保留名称，整理字段映射供工作簿写入。
+
+    :param results: 任务已保存的全部测试场景。
+    :return: 通过空名及重复校验的场景名称和字段映射列表。
+    :raises ParameterException: 场景列表为空、名称无效或字段映射不合法。
     """
     if not results:
         raise ParameterException(message="导出数据生成结果失败, 当前任务没有可导出的测试场景")
@@ -57,11 +59,11 @@ def _normalize_results(results: Sequence[Any]) -> List[Dict[str, Any]]:
 
     for result in results:
         #读取场景名称
-        name = str(get_result_value(result, "scene_name") or "").strip()
+        name = str(get_result_value(result, "scene_name") or "")
         #！：scenario_data必须是字典结构，允许空字典
         data = get_result_value(result, "scenario_data")
 
-        if not name:
+        if not name.strip():
             raise ParameterException(message="导出数据生成结果失败, 测试场景名称为空")
         if name in seen_names:
             raise ParameterException(message=f"导出数据生成结果失败, 测试场景名称重复: {name}")
@@ -194,6 +196,62 @@ class AutoTestDataGenerateExportService:
         if os.path.commonpath((self.output_root, target)) != self.output_root:
             raise ParameterException(message="数据生成导出目录越界")
         return target
+
+    def get_task_file(
+            self,
+            task: AutoTestDataGenerateTaskModel,
+            *,
+            require_exists: bool = True,
+    ) -> DataGenerateExportFile:
+        """返回任务固定下载文件；智能生成用它保留Agent原始工作簿。"""
+        file_name = self._safe_file_name(task.generated_file_name)
+        file_path = os.path.abspath(os.path.join(
+            self._task_output_dir(task.task_code),
+            file_name,
+        ))
+        if require_exists and not os.path.isfile(file_path):
+            raise ParameterException(message=f"数据生成文档[{file_name}]不存在")
+        storage_key = (
+            path_to_storage_key(file_path)
+            if self.output_root == os.path.abspath(PROJECT_CONFIG.OUTPUT_DOWNLOAD_DIR)
+            else os.path.relpath(file_path, self.output_root).replace("\\", "/")
+        )
+        return DataGenerateExportFile(
+            file_name=file_name,
+            file_path=file_path,
+            storage_key=storage_key,
+            size=os.path.getsize(file_path) if os.path.isfile(file_path) else 0,
+        )
+
+    def publish_task_file(
+            self,
+            task: AutoTestDataGenerateTaskModel,
+            source_path: str | os.PathLike[str],
+    ) -> DataGenerateExportFile:
+        """将已校验的Agent工作簿原子发布到任务下载目录。"""
+        source = os.path.realpath(os.fspath(source_path))
+        if not os.path.isfile(source):
+            raise ParameterException(message="待发布的智能生成工作簿不存在")
+        target = self.get_task_file(task, require_exists=False)
+        output_dir = os.path.dirname(target.file_path)
+        os.makedirs(output_dir, exist_ok=True)
+        temp_path: Optional[str] = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                    mode="wb",
+                    prefix=".intelligent_data_generate_",
+                    suffix=".xlsx",
+                    dir=output_dir,
+                    delete=False,
+            ) as temp_file:
+                temp_path = temp_file.name
+            shutil.copyfile(source, temp_path)
+            os.replace(temp_path, target.file_path)
+            temp_path = None
+        finally:
+            if temp_path and os.path.isfile(temp_path):
+                os.unlink(temp_path)
+        return self.get_task_file(task)
 
     async def export_task(
             self,

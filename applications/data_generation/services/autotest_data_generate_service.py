@@ -17,6 +17,7 @@ from xml.etree import ElementTree
 from applications.data_generation.constants import (
     MAX_ENUM_VALUES_PER_FIELD,
     MAX_GENERATED_SCENARIOS,
+    MAX_REQUEST_FIELDS,
     RULE_DECIMAL_BOUNDARY,
     RULE_ENUM,
     RULE_LENGTH,
@@ -28,7 +29,6 @@ from applications.data_generation.services.autotest_interface_document_parser im
     ParsedInterfaceField,   #单个字段输出结构
 )
 
-MAX_REQUEST_FIELDS = 10_000
 MAX_GENERATED_FIELD_LENGTH = 1_000
 
 _ENUM_SEPARATOR_RE = re.compile(r"[,，;；\r\n]+")

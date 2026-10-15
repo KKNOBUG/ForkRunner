@@ -33,7 +33,10 @@ from applications.data_generation.services.autotest_project_enum_extraction_serv
 from applications.data_generation.services.autotest_interface_workbook_service import (
     AutoTestInterfaceWorkbookService,
 )
-from enums import AutoTestInterfaceStyle
+from applications.data_generation.services.autotest_intelligent_data_generate_service import (
+    AutoTestIntelligentDataGenerateService,
+)
+from enums import AutoTestDataGenerateMode, AutoTestInterfaceStyle
 
 
 class DataGenerateTaskInputError(ValueError):
@@ -51,6 +54,7 @@ class AutoTestDataGenerateTaskService:
             export_service: Optional[AutoTestDataGenerateExportService] = None,
             enum_extraction_service: Optional[AutoTestProjectEnumExtractionService] = None,
             workbook_service: Optional[AutoTestInterfaceWorkbookService] = None,
+            intelligent_service: Optional[AutoTestIntelligentDataGenerateService] = None,
     ):
         """ 允许外部传入各个服务，也允许使用默认实现 """
         self.task_crud = task_crud or AutoTestDataGenerateTaskCrud()
@@ -62,6 +66,13 @@ class AutoTestDataGenerateTaskService:
             enum_extraction_service or AutoTestProjectEnumExtractionService()
         )
         self.workbook_service = workbook_service or AutoTestInterfaceWorkbookService()
+        self.intelligent_service = (
+            intelligent_service or AutoTestIntelligentDataGenerateService(
+                task_crud=self.task_crud,
+                result_crud=self.result_crud,
+                export_service=self.export_service,
+            )
+        )
 
     @staticmethod
     def _validate_snapshots(
@@ -103,6 +114,12 @@ class AutoTestDataGenerateTaskService:
             核心入口：生成、落库并导出；重复执行会原子替换同一任务的旧结果。
         """
         task = await self.task_crud.claim_attempt(task_id, celery_id, attempt)
+        if task.generation_mode == AutoTestDataGenerateMode.INTELLIGENT:
+            return await self.intelligent_service.execute(
+                task,
+                celery_id,
+                attempt=attempt,
+            )
         interface_document, request_snapshot, interface_style = self._validate_snapshots(task)
         enum_outcome: Optional[ProjectEnumExtractionOutcome] = None
         workbook_result = None

@@ -149,6 +149,12 @@ class AutoTestDataGenerateStatus(StringEnum):
     FAILURE = "失败"
 
 
+class AutoTestDataGenerateMode(StringEnum):
+    """测试数据生成方式。"""
+    NORMAL = "normal"
+    INTELLIGENT = "intelligent"
+
+
 class AutoTestInterfaceStyle(StringEnum):
     """测试数据生成支持的接口文档样式。"""
     ESB = "esb"

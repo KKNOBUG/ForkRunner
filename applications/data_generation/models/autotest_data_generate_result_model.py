@@ -8,7 +8,7 @@ from applications.base.services.scaffold import JSONTextField, ScaffoldModel
 """
 
 class AutoTestDataGenerateResultModel(ScaffoldModel):
-    """task:result = 1: n"""
+    """保存任务生成的场景及字段数据，并按任务 ID 和255字符场景名去重。"""
 
     """指向任务表主键，逻辑外键,数据库层没有约束，也没有自动的级联删除"""
     task_id = fields.BigIntField(ge=1, description="数据生成任务ID")

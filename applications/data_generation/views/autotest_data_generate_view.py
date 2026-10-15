@@ -12,11 +12,10 @@ import os
 import mimetypes#根据文件名推断下载文件类型
 import traceback#记录完整异常堆栈
 from datetime import datetime
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import quote#对下载文件名进行URL编码
 from zoneinfo import ZoneInfo#统一时区
 
-import orjson
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from pydantic import ValidationError
 from starlette.responses import StreamingResponse
@@ -32,14 +31,27 @@ from applications.data_generation.schemas.autotest_data_generate_schema import (
 )
 from applications.data_generation.services.autotest_data_generate_service import (
     TestDataGenerationError,
-    flatten_json_body_fields,
-    flatten_xml_body_fields,
+)
+from applications.data_generation.services.autotest_data_generate_file_utils import (
+    generated_document_name,
+)
+from applications.data_generation.services.autotest_data_generate_request_snapshot_service import (
+    build_request_body_snapshot,
+)
+from applications.data_generation.services.autotest_data_generate_submission_common import (
+    dispatch_and_load_task,
+    remove_uploaded_file_safely,
+    uploaded_file_storage_key,
 )
 from applications.data_generation.services.autotest_data_generate_record_service import (
     AutoTestDataGenerateRecordService,
     resolve_interface_document_path,
 )
 from applications.data_generation.services.autotest_data_generate_task_crud import AutoTestDataGenerateTaskCrud
+from applications.data_generation.services.autotest_intelligent_task_submission_service import (
+    AutoTestIntelligentTaskSubmissionService,
+    IntelligentTaskSubmissionError,
+)
 from applications.autotest.services.autotest_data_source_service import (
     ensure_case_allows_data_source,
     ensure_request_step,
@@ -54,6 +66,7 @@ from configure import LOGGER, PROJECT_CONFIG
 from core.exceptions import NotFoundException, ParameterException
 from core.responses import FailureResponse, NotFoundResponse, ParameterResponse, SuccessResponse
 from enums import (
+    AutoTestDataGenerateMode,
     AutoTestDataGenerateStatus,
     AutoTestInterfaceStyle,
     AutoTestReqArgsType,
@@ -70,49 +83,10 @@ _INTERFACE_TEMPLATE_FILES = {
     AutoTestInterfaceStyle.INTEGRATION: "整合接口文档模板.xlsx",
 }
 
-
-def _request_body_snapshot(step: Any) -> Dict[str, Any]:
-    """
-        读取步骤当前BODY，并转换为数据生成规则使用的字段路径快照。
-        step：当前用例/脚本中的一条具体步骤记录，具体的说就是一个AutoTestStepModel对象
-        返回值：请求体展开后的字段路径->当前字段值的字典
-    """
-    raw_request_type = getattr(step, "request_args_type", None)
-    request_type = str(getattr(raw_request_type, "value", raw_request_type) or "").strip()
-    if request_type == AutoTestReqArgsType.JSON.value:
-        payload = getattr(step, "request_body", None)
-        if isinstance(payload, str):
-            try:
-                payload = orjson.loads(payload)
-            except orjson.JSONDecodeError as exc:
-                raise ParameterException(message="当前步骤的JSON请求报文格式不正确") from exc
-        if not isinstance(payload, (Mapping, list)):
-            raise ParameterException(message="当前步骤没有可用于生成测试数据的JSON请求报文")
-        snapshot = flatten_json_body_fields(payload)
-    elif request_type == AutoTestReqArgsType.XML.value:
-        snapshot = flatten_xml_body_fields(getattr(step, "request_text", None) or "")
-    else:
-        raise ParameterException(message="测试数据生成目前只支持JSON或XML请求报文")
-    if not snapshot:
-        raise ParameterException(message="当前步骤的请求报文中没有可生成测试数据的BODY字段")
-    return snapshot
-
-
-def _generated_document_name(step_name: str, submitted_at: datetime) -> str:
-    timestamp = submitted_at.astimezone(ZoneInfo("Asia/Shanghai")).strftime(
-        "%Y%m%d%H%M%S"
-    )
-    return f"{str(step_name or '').strip()}-生成数据-{timestamp}.xlsx"
-
-
-def _remove_file_safely(file_path: Optional[str]) -> None:
-    if not file_path:
-        return
-    try:
-        if os.path.isfile(file_path):
-            os.remove(file_path)
-    except OSError as exc:
-        LOGGER.warning(f"清理数据生成接口文档失败, 文件={file_path}, 错误类型={type(exc).__name__}")
+_GENERATION_MODE_NAMES = {
+    AutoTestDataGenerateMode.NORMAL.value: "常规",
+    AutoTestDataGenerateMode.INTELLIGENT.value: "智能",
+}
 
 
 def _format_time(value: Optional[datetime]) -> Optional[str]:
@@ -123,12 +97,29 @@ def _format_time(value: Optional[datetime]) -> Optional[str]:
 
 
 def _serialize_task(task: Any) -> Dict[str, Any]:
-    """生成记录列表仅返回展示字段，避免暴露报文和文档解析快照。"""
+    """将生成任务转换为列表及提交响应使用的展示数据。
+
+    :param task: 包含生成方式、状态和文件名的任务记录；缺少方式时按常规生成处理。
+    :return: 包含稳定方式取值与简短中文展示名的字典，不暴露报文或解析快照。
+    """
+    raw_generation_mode = getattr(
+        task,
+        "generation_mode",
+        AutoTestDataGenerateMode.NORMAL,
+    )
+    generation_mode = str(
+        getattr(raw_generation_mode, "value", raw_generation_mode) or ""
+    )
     return {
         "task_id": task.id,
         "task_code": task.task_code,
         "generated_file_name": task.generated_file_name,
         "interface_file_name": task.interface_file_name,
+        "generation_mode": generation_mode,
+        "generation_mode_name": _GENERATION_MODE_NAMES.get(
+            generation_mode,
+            generation_mode,
+        ),
         "task_status": task.task_status.value,
         "generated_count": task.generated_count,
         "created_time": _format_time(task.created_time),
@@ -181,7 +172,20 @@ async def create_task(
         file: UploadFile = File(..., description="ESB、项目或整合接口文档，仅支持xlsx"),
         services: DataGenerationApiServices = Depends(get_data_generation_api_services),
 ):
-    """保存任务输入快照并投递Celery；解析失败也保留一条失败记录。"""
+    """校验并保存普通生成任务的输入快照，创建任务后投递 Celery。
+
+    :param case_id: 接口文档所属的测试用例 ID。
+    :param step_id: 当前请求步骤 ID。
+    :param step_code: 用于确认步骤归属的步骤编码。
+    :param interface_style: ESB、项目或整合接口的文档样式。
+    :param rule_codes: 普通生成任务使用的规则编码列表。
+    :param file: 用户上传的 XLSX 接口文档。
+    :param services: 提供用例、步骤和任务 CRUD 的接口服务集合。
+    :return: 创建结果的 HTTP 响应；解析失败时仍返回已记录的失败任务。
+
+    任务创建前发生错误会清理上传文件；投递异常只有在任务已回写失败时
+    才作为可查询的失败任务返回。
+    """
     submitted_at = datetime.now(ZoneInfo("Asia/Shanghai"))
     original_name = os.path.basename(str(file.filename or "").strip())
     if not original_name.lower().endswith(".xlsx"):
@@ -213,7 +217,7 @@ async def create_task(
                 and request_type != AutoTestReqArgsType.XML.value
         ):
             raise ParameterException(message="只支持xml格式的报文")
-        request_snapshot = _request_body_snapshot(step)
+        request_snapshot = build_request_body_snapshot(step)
 
         content = await file.read(MAX_DOCUMENT_SIZE + 1)
         await file.seek(0)
@@ -250,10 +254,10 @@ async def create_task(
         if not ok:
             return FailureResponse(message=f"接口文档上传失败: {path_or_error}")
         file_path = path_or_error
-        storage_key = os.path.relpath(
+        storage_key = uploaded_file_storage_key(
             file_path,
             PROJECT_CONFIG.OUTPUT_UPLOAD_DIR,
-        ).replace(os.sep, "/")
+        )
 
         task_in = AutoTestDataGenerateTaskCreate(
             case_id=case.id,
@@ -266,7 +270,7 @@ async def create_task(
             interface_file_name=original_name,
             interface_file_hash=hashlib.sha256(content).hexdigest(),
             interface_storage_key=storage_key,
-            generated_file_name=_generated_document_name(step.step_name, submitted_at),
+            generated_file_name=generated_document_name(step.step_name, submitted_at),
             created_user=get_current_username(),
         )
         task = await services.data_generate_task_curd.create_task(task_in)
@@ -282,40 +286,70 @@ async def create_task(
                 total=1,
             )
 
-        try:
-            await dispatch_data_generate_task(task.id)
-        except Exception:
-            # 投递函数已经将发布异常回写为失败，仍返回任务记录供前端展示。
-            task = await services.data_generate_task_curd.get_by_id(
-                task.id,
-                on_error=True,
-                state__not=1,
-            )
-            return SuccessResponse(
-                message="任务创建成功，但异步任务投递失败",
-                data=_serialize_task(task),
-                total=1,
-            )
-        task = await services.data_generate_task_curd.get_by_id(
+        # 原先的无条件失败响应在任务尚未回写失败时会误报；现在核实持久化状态。
+        task, dispatch_failed = await dispatch_and_load_task(
             task.id,
-            on_error=True,
-            state__not=1,
+            services.data_generate_task_curd,
+            dispatch_data_generate_task,
         )
-        return SuccessResponse(message="任务已提交", data=_serialize_task(task), total=1)
+        message = "任务创建成功，但异步任务投递失败" if dispatch_failed else "任务已提交"
+        return SuccessResponse(message=message, data=_serialize_task(task), total=1)
     except (ValidationError, ParameterException, TestDataGenerationError) as exc:
         if task is None:
-            _remove_file_safely(file_path)
+            remove_uploaded_file_safely(file_path, PROJECT_CONFIG.OUTPUT_UPLOAD_DIR)
         message = getattr(exc, "message", None) or str(exc)
         return ParameterResponse(message=message)
     except NotFoundException as exc:
         if task is None:
-            _remove_file_safely(file_path)
+            remove_uploaded_file_safely(file_path, PROJECT_CONFIG.OUTPUT_UPLOAD_DIR)
         return NotFoundResponse(message=str(exc.message))
     except Exception as exc:
         if task is None:
-            _remove_file_safely(file_path)
+            remove_uploaded_file_safely(file_path, PROJECT_CONFIG.OUTPUT_UPLOAD_DIR)
         LOGGER.error(f"创建数据生成任务失败, 错误类型={type(exc).__name__}\n{traceback.format_exc()}")
         return FailureResponse(message="创建数据生成任务失败")
+
+
+@autotest_data_generate.post("/tasks/intelligent", summary="创建智能测试数据生成任务")
+async def create_intelligent_task(
+        case_id: int = Form(..., ge=1),
+        step_id: int = Form(..., ge=1),
+        step_code: str = Form(..., min_length=1, max_length=64),
+        scenario_file: UploadFile = File(..., description="智能生成场景规则文档，仅支持xlsx"),
+        services: DataGenerationApiServices = Depends(get_data_generation_api_services),
+):
+    """调用业务服务提交智能生成任务，并映射为统一HTTP响应。"""
+    try:
+        result = await AutoTestIntelligentTaskSubmissionService().submit(
+            case_id=case_id,
+            step_id=step_id,
+            step_code=step_code,
+            scenario_file=scenario_file,
+            services=services,
+            created_user=get_current_username(),
+        )
+        message = (
+            "智能生成任务创建成功，但异步任务投递失败"
+            if result.dispatch_failed
+            else "智能生成任务已提交"
+        )
+        return SuccessResponse(
+            message=message,
+            data=_serialize_task(result.task),
+            total=1,
+        )
+    except (ValidationError, ParameterException, TestDataGenerationError) as exc:
+        message = getattr(exc, "message", None) or str(exc)
+        return ParameterResponse(message=message)
+    except NotFoundException as exc:
+        return NotFoundResponse(message=str(exc.message))
+    except IntelligentTaskSubmissionError as exc:
+        return FailureResponse(message=str(exc))
+    except Exception as exc:
+        LOGGER.error(
+            f"创建智能生成任务失败, 错误类型={type(exc).__name__}\n{traceback.format_exc()}"
+        )
+        return FailureResponse(message="创建智能生成任务失败")
 
 
 @autotest_data_generate.get("/records", summary="查询数据生成记录")

@@ -15,7 +15,7 @@ from applications.base.services.scaffold import (
     TimestampMixin,
     unique_identify,
 )
-from enums import AutoTestDataGenerateStatus
+from enums import AutoTestDataGenerateMode, AutoTestDataGenerateStatus
 
 
 class AutoTestDataGenerateTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
@@ -42,6 +42,11 @@ class AutoTestDataGenerateTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin
     case_id = fields.BigIntField(ge=1, description="用例ID")
     step_id = fields.BigIntField(ge=1, description="步骤ID")
     step_code = fields.CharField(max_length=64, description="步骤标识代码")
+    generation_mode = fields.CharEnumField(
+        AutoTestDataGenerateMode,
+        default=AutoTestDataGenerateMode.NORMAL,
+        description="生成方式(normal/intelligent)",
+    )
     interface_style = fields.CharField(
         max_length=16,
         description="接口样式(esb/project/integration)",
