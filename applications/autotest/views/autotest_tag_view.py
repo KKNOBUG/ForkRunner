@@ -66,7 +66,7 @@ async def create_tag(
         return FailureResponse(message=f"新增失败，异常描述: {str(e)}")
 
 
-@autotest_tag.delete("/delete", summary="删除标签", description="根据id或code删除标签信息")
+@autotest_tag.post("/delete", summary="批量删除标签", description="根据id或code列表删除标签信息")
 async def delete_tag(
         tag_id: Optional[int] = Query(None, description="标签ID"),
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
@@ -239,15 +239,22 @@ async def search_tags(
         )
         data = [
             await obj.to_dict(
-                exclude_fields={
-                    "state",
-                    "created_user", "created_time",
-                    "updated_user", "updated_time",
-                    "reserve_1", "reserve_2", "reserve_3"
-                },
+                exclude_fields={"state", "reserve_1", "reserve_2", "reserve_3"},
                 replace_fields={"id": "tag_id"}
             ) for obj in instances
         ]
+        # 批量查询应用名称映射，附加 tag_project_name
+        project_ids = list({item["tag_project"] for item in data if item.get("tag_project") is not None})
+        project_name_map = {}
+        if project_ids:
+            project_name_map = dict(
+                await services.project_curd.model.filter(
+                    id__in=project_ids,
+                    state__not=1
+                ).values_list("id", "project_name")
+            )
+        for item in data:
+            item["tag_project_name"] = project_name_map.get(item.get("tag_project"), "")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))

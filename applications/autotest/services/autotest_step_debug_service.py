@@ -27,21 +27,21 @@ from applications.autotest.services.autotest_runtime.builtin_variables import (
 )
 from applications.autotest.services.autotest_runtime.protocol_http import (
     assemble_http_body_payloads,
-    build_absolute_http_url,
     build_httpx_request_kwargs,
     format_byte_size,
-    infer_http_actual_body, is_absolute_http_url,
+    infer_http_actual_body,
 )
 from applications.autotest.services.autotest_runtime.protocol_tcp import (
+    build_tcp_debug_request_info_body,
     parse_tcp_response,
     parse_tcp_timeouts,
     resolve_tcp_debug_request_extract_sources,
-    build_tcp_debug_request_info_body,
     select_tcp_debug_payload,
 )
 from applications.autotest.services.autotest_tool_service import AutoTestToolService
 from common import AioTcpClient, TcpFrameMode
 from common.cache.redis_connection_pool import get_app_redis_pool
+from common.url_utils import build_absolute_http_url, is_absolute_http_url
 from configure import LOGGER
 from core.exceptions import NotFoundException, ParameterException, ReqInvalidException
 from enums import AutoTestConfigNodeType, AutoTestReqArgsType, AutoTestStepType
@@ -114,10 +114,10 @@ class StepDebugService:
         """
         merged: Dict[str, Any] = {}
         for item in defined_variables or []:
-            if isinstance(item, StepVariablesBase) and item.key:
+            if isinstance(item, StepVariablesBase) and item.key and item.key.strip():
                 merged[item.key] = item.value
         for item in session_variables or []:
-            if isinstance(item, StepVariablesBase) and item.key:
+            if isinstance(item, StepVariablesBase) and item.key and item.key.strip():
                 merged[item.key] = item.value
         initial_models = [StepVariablesBase(key=k, value=v, desc="") for k, v in merged.items()]
         return merged, initial_models
@@ -142,7 +142,7 @@ class StepDebugService:
             finished_variables={},
         )
         for item in finished_variables:
-            if isinstance(item, StepVariablesBase) and item.key:
+            if isinstance(item, StepVariablesBase) and item.key and item.key.strip():
                 merged_lookup[item.key] = item.value
         return finished_variables
 

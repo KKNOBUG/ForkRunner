@@ -5,7 +5,7 @@ import datetime
 import uuid
 from typing import Any, Dict, List, Optional
 
-from applications.autotest.schemas.autotest_step_schema import StepVariablesBase
+from applications.autotest.schemas.autotest_step_schema import StepVariablesBase, step_variables_list_from_storage
 from applications.autotest.services.autotest_step_crud import AutoTestStepCrud
 from celery_scheduler.celery_base import run_async
 from celery_scheduler.celery_worker import celery
@@ -81,8 +81,11 @@ async def _execute_step_tree_impl(
             report_type=report_type,
             batch_code=batch_code,
             dataset_name=None,
+            round_no=1 if batch_code else None,
         )
         result["dataset_name"] = None
+        # 单次执行无"下一条数据源"，剔除变量池避免膨胀返回结果
+        result.pop("session_variables", None)
         case_ok = bool(result.get("success"))
         return {
             "parameterized": False,
@@ -96,6 +99,7 @@ async def _execute_step_tree_impl(
         }
 
     details: List[Dict[str, Any]] = []
+    inherited_variables: List[StepVariablesBase] = []
     for dataset_name in selected_dataset_names:
         single_data = await step_crud.execute_single_case(
             case_id=case_id,
@@ -104,8 +108,16 @@ async def _execute_step_tree_impl(
             report_type=report_type,
             batch_code=batch_code,
             dataset_name=dataset_name,
+            round_no=1,
+            inherited_variables=inherited_variables or None,
         )
         single_data["dataset_name"] = dataset_name
+        # 串联决策读取本条执行返回的用例级开关(session_transfer)，避免额外查询用例表
+        inherited_variables = (
+            step_variables_list_from_storage(single_data.get("session_variables"))
+            if single_data.get("session_transfer") else []
+        )
+        single_data.pop("session_variables", None)
         details.append(single_data)
 
     execute_runs = len(details)

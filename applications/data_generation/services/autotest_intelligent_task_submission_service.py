@@ -15,11 +15,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import UploadFile
 
-from applications.autotest.services.autotest_data_source_service import (
-    ensure_case_allows_data_source,
-    ensure_request_step,
-    resolve_case_and_step,
-)
+from applications.autotest.services.autotest_data_source_service import DataSourceService
 from applications.data_generation.constants import MAX_DOCUMENT_SIZE
 from applications.data_generation.dependencies import DataGenerationApiServices
 from applications.data_generation.schemas.autotest_data_generate_schema import (
@@ -116,14 +112,14 @@ class AutoTestIntelligentTaskSubmissionService:
         file_path: Optional[str] = None
         task = None
         try:
-            case, step = await resolve_case_and_step(
+            case, step = await DataSourceService.resolve_case_and_step(
                 services,
                 case_id=case_id,
                 step_id=step_id,
                 step_code=step_code,
             )
-            ensure_request_step(step)
-            ensure_case_allows_data_source(case)
+            DataSourceService.ensure_request_step(step)
+            DataSourceService.ensure_case_allows_data_source(case)
             request_snapshot = build_intelligent_request_snapshot(step)
 
             destination = os.path.join(

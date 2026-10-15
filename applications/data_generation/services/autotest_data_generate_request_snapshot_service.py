@@ -12,9 +12,7 @@ from applications.data_generation.services.autotest_data_generate_service import
     flatten_json_body_fields,
     flatten_xml_body_fields,
 )
-from applications.autotest.services.autotest_data_source_service import (
-    collect_step_report_original,
-)
+from applications.autotest.services.autotest_data_source_service import DataSourceService
 from core.exceptions import ParameterException
 from enums import AutoTestReqArgsType
 
@@ -63,5 +61,5 @@ def build_intelligent_request_snapshot(step: Any) -> Dict[str, Dict[str, Any]]:
     """
 
     body = build_request_body_snapshot(step)
-    head = collect_step_report_original(step)["HEAD"]
+    head = DataSourceService.collect_step_report_original(step)["HEAD"]
     return {"HEAD": head, "BODY": body}

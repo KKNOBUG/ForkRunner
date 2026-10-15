@@ -37,7 +37,7 @@ from core.exceptions import (
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType, AutoTestTaskExecuteMode, PUBLIC_CASE_TYPES
+from enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType, AutoTestTaskExecuteMode, AutoTestSessionTransfer, PUBLIC_CASE_TYPES
 
 STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
     "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file", "request_body",
@@ -140,12 +140,12 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
 
     async def get_by_unique(self, step_id: int, step_code: str, **kwargs) -> Optional[AutoTestStepModel]:
         """
-        根据step_id优先、否则step_code定位启用中的用例。
+        根据step_id优先、否则step_code定位启用中的步骤。
 
         :param step_id: 步骤主键ID
         :param step_code: 步骤标识代码
         :param kwargs: 额外过滤条件
-        :return: 数据源实例或None
+        :return: 步骤实例或None
         """
         if step_id:
             return await self.get_by_id(step_id=step_id, on_error=True, **kwargs)
@@ -831,7 +831,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     )
                     only_step.request_project_id = case_project
         for step_data in cls._iter_tree_steps(steps_data):
-            if step_data.step_type == AutoTestStepType.QUOTE:
+            if step_data.step_type in (AutoTestStepType.QUOTE_PUBLIC_SCRIPT, AutoTestStepType.QUOTE_PUBLIC_API):
                 error_message: str = f"用例类型为({case_type.value})时不允许引用其他脚本"
                 LOGGER.error(error_message)
                 raise ParameterException(message=error_message)
@@ -1307,8 +1307,10 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             task_code: Optional[str] = None,
             batch_code: Optional[str] = None,
             dataset_name: Optional[str] = None,
+            round_no: Optional[int] = None,
             preloaded_case: Optional[AutoTestCaseModel] = None,
             preloaded_tree: Optional[AutoTestCaseStepTreeLoadResult] = None,
+            inherited_variables: Optional[List[StepVariablesBase]] = None,
     ) -> Dict[str, Any]:
         """
         执行单个用例：创建报告、拉取步骤树、调用执行引擎并写明细。
@@ -1320,9 +1322,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :param task_code: 任务标识代码，可选
         :param batch_code: 批次标识代码，可选
         :param dataset_name: 参数化执行时本次数据集名称，写入报告；数据由HTTP步骤执行器内查表获取
+        :param round_no: 执行轮次(外层执行次数序号, 1起)，写入报告供执行历史按轮次下钻；单次执行为空
         :param preloaded_case: 调用方已查询的用例实例，传入时跳过用例查询(多轮执行复用)
         :param preloaded_tree: 调用方已加载的步骤树数据，传入时跳过步骤树查询(多轮执行复用)
-        :return: 含success、步骤指标(total/success/failed_steps、passed_ratio%)、report_code等
+        :param inherited_variables: 变量池传递模式下上一条数据源执行后的累积变量池，合并优先级最高(后者同名覆盖)
+        :return: 含success、步骤指标(total/success/failed_steps、passed_ratio%)、session_transfer(用例级变量池传递开关)、session_variables(执行后变量池字典列表)等
         """
         if not initial_variables or not isinstance(initial_variables, list):
             LOGGER.info(f"初始化变量[initial_variables]为空或非列表类型")
@@ -1339,6 +1343,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             replace_fields={"id": "case_id"}
         )
         LOGGER.info(f"查询用例[id={case_id}]成功, 结果: {case_dict}")
+
+        # 变量池传递为用例级全局设置：从用例实例推导开关，供调用方决定是否串联累积池到下一条数据源
+        session_transfer_enabled: bool = getattr(
+            case_instance, "session_transfer", AutoTestSessionTransfer.DISABLE
+        ) == AutoTestSessionTransfer.ENABLED
 
         # 2.查询步骤树数据(调用方已预载时直接复用，多轮执行不重复查询)
         load: AutoTestCaseStepTreeLoadResult = (
@@ -1361,11 +1370,14 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                         merged[it.key] = it
             return list(merged.values())
 
-        # 3.聚合会话变量
+        # 3.聚合会话变量：inherited_variables(上一条数据源累积池)放末位，同名变量覆盖前序来源
+        # 任务侧task_kwargs的initial_variables为JSON字典列表，统一在此边界转StepVariablesBase；
+        # dict项对引擎按key查找不可见(isinstance过滤)，且会使变量池合并的item.key访问直接报错
         merge_all_variables: List[StepVariablesBase] = _merge_session_variables(
             step_variables_list_from_storage(getattr(case_instance, "session_variables", None)),
             AutoTestToolService.collect_session_variables(load.root_steps),
-            list(initial_variables or []),
+            step_variables_list_from_storage(initial_variables),
+            list(inherited_variables or []),
         )
         LOGGER.info(f"检查用例[id={case_id}]步骤树数据规范成功, 收集会话变量成功")
 
@@ -1378,7 +1390,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
 
         # 5.执行用例，延迟落库: 执行阶段不保持事务，落库阶段单持事务；保证「要么全部成功要么全部失败」且不长时间占锁
         engine = AutoTestStepExecutionEngine(save_report=True, task_code=task_code, batch_code=batch_code)
-        results, logs, _, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
+        results, logs, _, statistics, engine_session_variables, defer_create_report, pending_create_details = await engine.execute_case(
             case=case_dict,
             steps=root_steps,
             initial_variables=merge_all_variables,
@@ -1386,6 +1398,9 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             report_type=report_type,
             dataset_name=dataset_name,
         )
+        # 轮次号由调用方(批次循环)传入后补入报告快照: 引擎不感知批次轮次结构
+        if defer_create_report is not None and round_no:
+            defer_create_report.round_no = round_no
         async with in_transaction():
             report_instance = await AutoTestReportCrud().create_report(report_in=defer_create_report)
             await AutoTestDetailCrud().create_details(details_in=list(pending_create_details or []))
@@ -1407,6 +1422,10 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             "case_id": case_id,
             "case_code": case_dict.get("case_code"),
             "case_name": case_dict.get("case_name"),
+            # 执行后变量池(字典列表)：供变量池传递模式下串联下一条数据源；调用方消费后应剔除以免膨胀批量结果
+            "session_variables": [v.model_dump() for v in (engine_session_variables or [])],
+            # 用例级变量池传递开关：调用方据此决定是否将本条累积池串联给下一条数据源
+            "session_transfer": session_transfer_enabled,
         }
 
     @staticmethod
@@ -1420,6 +1439,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         """
         将同一用例多轮执行结果汇总为统一字段。
 
+        :param case_id: 用例主键ID
+        :param case_results: 多轮执行结果列表
+        :param case_ok: 用例整体是否成功
+        :param empty_error: 轮次结果为空时的失败原因
+        :return: 聚合后的单用例结果字典
         """
         if not case_results:
             return {
@@ -1551,6 +1575,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         执行单个用例的全部轮次(执行次数×数据场景)并聚合为统一结果。
 
         用例与步骤树仅预载一次供多轮复用；单用例异常兜底转失败结果，不中断批次内其他用例。
+        用例的变量池传递开关(启用)开启时，累积范围仅限同一轮次内的多条数据源(后者同名覆盖前者)，跨轮次重置回初始池。
 
         :param case_id: 用例主键ID
         :param report_type: 报告类型枚举
@@ -1590,11 +1615,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             )
             case_results: List[Dict[str, Any]] = []
             if dataset_names:
-                # 总轮次 = 执行次数 × 数据源数
-                run_idx = 0
-                for _ in range(execute_count):
+                # 总轮次 = 执行次数 × 数据源数；外层为轮次号, 与执行历史"第N次执行"下钻口径一致
+                for round_no in range(1, execute_count + 1):
+                    # 变量池传递按轮次重置：累积范围仅限同一轮次内的多条数据源
+                    inherited_variables: List[StepVariablesBase] = []
                     for ds_name in dataset_names:
-                        run_idx += 1
                         one = await self.execute_single_case(
                             case_id=case_id,
                             initial_variables=initial_variables,
@@ -1603,12 +1628,21 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                             task_code=task_code,
                             batch_code=batch_code,
                             dataset_name=ds_name,
+                            round_no=round_no,
                             preloaded_case=preloaded_case,
                             preloaded_tree=preloaded_tree,
+                            inherited_variables=inherited_variables or None,
                         )
+                        # 串联决策读取本条执行返回的用例级开关，避免额外查询用例表
+                        inherited_variables = (
+                            step_variables_list_from_storage(one.get("session_variables"))
+                            if one.get("session_transfer") else []
+                        )
+                        # 累积池已串联给下一条数据源，剔除后避免膨胀批量执行结果
+                        one.pop("session_variables", None)
                         case_results.append(one)
                         LOGGER.info(
-                            f"用例[id={case_id}]第[{run_idx + 1}/{execute_count}]次执行完成: "
+                            f"用例[id={case_id}]第[{round_no}/{execute_count}]次执行完成: "
                             f"[dataset={ds_name}, success={one.get('success', False)}]"
                         )
                 empty_error = "未执行任何数据集"
@@ -1621,6 +1655,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                         report_type=report_type,
                         task_code=task_code,
                         batch_code=batch_code,
+                        round_no=run_idx + 1,
                         preloaded_case=preloaded_case,
                         preloaded_tree=preloaded_tree,
                     )
@@ -1638,6 +1673,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     report_type=report_type,
                     task_code=task_code,
                     batch_code=batch_code,
+                    round_no=1,
                     preloaded_case=preloaded_case,
                     preloaded_tree=preloaded_tree,
                 ))

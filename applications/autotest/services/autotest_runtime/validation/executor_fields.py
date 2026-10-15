@@ -17,7 +17,7 @@ class ExecutorFieldsValidation:
         :param steps: 根步骤列表
         :return: 错误项列表，每项含step_code、step_name、step_type、missing（缺失字段名列表）、message
         """
-        from enums import AutoTestStepType, AutoTestLoopMode
+        from enums import AutoTestStepType, AutoTestBranchType, AutoTestLoopMode
 
         errors: List[Dict[str, Any]] = []
 
@@ -138,7 +138,7 @@ class ExecutorFieldsValidation:
                 else:
                     for bi, branch in enumerate(step.branch_items):
                         bt = branch.branch_type if hasattr(branch, "branch_type") else branch.get("branch_type")
-                        if bt in ("if", "elif"):
+                        if bt in (AutoTestBranchType.IF, AutoTestBranchType.ELIF):
                             cond = branch.branch_conditions if hasattr(branch, "branch_conditions") else branch.get("branch_conditions")
                             if not cond:
                                 missing.append(f"branch_items[{bi}].branch_conditions")
@@ -154,7 +154,7 @@ class ExecutorFieldsValidation:
                 if step.wait is None:
                     missing.append("wait")
 
-            elif step_type == AutoTestStepType.QUOTE:
+            elif step_type in (AutoTestStepType.QUOTE_PUBLIC_SCRIPT, AutoTestStepType.QUOTE_PUBLIC_API):
                 if not step.quote_case_id:
                     missing.append("quote_case_id")
 

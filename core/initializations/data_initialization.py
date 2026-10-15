@@ -20,13 +20,7 @@ from applications.base.models.role_model import Role
 from applications.base.schemas.menu_schema import MenuCreate
 from applications.base.schemas.role_schema import RoleCreate
 from applications.base.services.menu_crud import MenuCrud
-from applications.base.services.permission_rule import (
-    ROLE_CODE_USER,
-    ROLE_CODE_GUEST,
-    ROLE_CODE_ADMIN,
-    warn_unclassified_routers,
-    filter_routers_for_role
-)
+from applications.base.services.permission_rule import PermissionRule
 from applications.base.services.role_crud import RoleCrud
 from applications.base.services.router_crud import RouterCrud
 from applications.department.models.dept_model import Department
@@ -37,7 +31,7 @@ from applications.user.services.user_crud import UserCrud
 from configure import LOGGER
 from enums import MenuType
 
-# 初始化种子数据的创建人（管理员账号，大写）
+# 初始化种子数据的创建人
 INIT_CREATED_USER = "ADMIN"
 
 
@@ -51,7 +45,7 @@ async def init_database_role():
 
     admin_role = await role_crud.create_role(
         RoleCreate(
-            code=ROLE_CODE_ADMIN,
+            code=PermissionRule.ROLE_CODE_ADMIN,
             name="管理员",
             description="平台超管，拥有全部菜单与接口权限",
             created_user=INIT_CREATED_USER,
@@ -59,7 +53,7 @@ async def init_database_role():
     )
     user_role = await role_crud.create_role(
         RoleCreate(
-            code=ROLE_CODE_USER,
+            code=PermissionRule.ROLE_CODE_USER,
             name="标准用户",
             description="系统域只读，业务域增删改查全开；不可操作系统写操作与角色权限变更",
             created_user=INIT_CREATED_USER,
@@ -67,7 +61,7 @@ async def init_database_role():
     )
     guest_role = await role_crud.create_role(
         RoleCreate(
-            code=ROLE_CODE_GUEST,
+            code=PermissionRule.ROLE_CODE_GUEST,
             name="宾客用户",
             description="系统域只读，业务域仅查询与新增；禁止一切修改与删除",
             created_user=INIT_CREATED_USER,
@@ -85,10 +79,10 @@ async def init_database_role():
         LOGGER.info(f"三角色绑定菜单成功, 共计{len(all_menus)}个")
 
     all_routers = await Router.all()
-    warn_unclassified_routers(all_routers)
-    admin_routers = filter_routers_for_role(ROLE_CODE_ADMIN, all_routers)
-    user_routers = filter_routers_for_role(ROLE_CODE_USER, all_routers)
-    guest_routers = filter_routers_for_role(ROLE_CODE_GUEST, all_routers)
+    PermissionRule.warn_unclassified_routers(all_routers)
+    admin_routers = PermissionRule.filter_routers_for_role(PermissionRule.ROLE_CODE_ADMIN, all_routers)
+    user_routers = PermissionRule.filter_routers_for_role(PermissionRule.ROLE_CODE_USER, all_routers)
+    guest_routers = PermissionRule.filter_routers_for_role(PermissionRule.ROLE_CODE_GUEST, all_routers)
     if admin_routers:
         await admin_role.routers.add(*admin_routers)
     if user_routers:
@@ -141,9 +135,9 @@ async def init_database_user():
 
     default_dept = await Department.get_or_none(code="SYSTEM_DEPT")
     test_dept = await Department.get_or_none(code="AUTOTEST_DEPT")
-    admin_role = await Role.get_or_none(code=ROLE_CODE_ADMIN)
-    user_role = await Role.get_or_none(code=ROLE_CODE_USER)
-    guest_role = await Role.get_or_none(code=ROLE_CODE_GUEST)
+    admin_role = await Role.get_or_none(code=PermissionRule.ROLE_CODE_ADMIN)
+    user_role = await Role.get_or_none(code=PermissionRule.ROLE_CODE_USER)
+    guest_role = await Role.get_or_none(code=PermissionRule.ROLE_CODE_GUEST)
 
     if not all([default_dept, test_dept, admin_role, user_role, guest_role]):
         LOGGER.error("[用户]初始化失败: 部门或角色尚未就绪，请检查初始化顺序")
@@ -208,7 +202,7 @@ async def init_database_menu():
             path="/system",
             order=1,
             parent_id=0,
-            icon="garden:gear-stroke-12",
+            icon="gravity-ui:gear",
             is_hidden=False,
             component="Layout",
             keepalive=False,
@@ -223,7 +217,7 @@ async def init_database_menu():
             path="user",
             order=1,
             parent_id=system_parent_menu.id,
-            icon="tdesign:user-setting",
+            icon="gravity-ui:persons",
             is_hidden=False,
             component="/system/user",
             keepalive=False,
@@ -235,7 +229,7 @@ async def init_database_menu():
             path="role",
             order=2,
             parent_id=system_parent_menu.id,
-            icon="tdesign:user-transmit",
+            icon="gravity-ui:person-gear",
             is_hidden=False,
             component="/system/role",
             keepalive=False,
@@ -259,7 +253,7 @@ async def init_database_menu():
             path="router",
             order=4,
             parent_id=system_parent_menu.id,
-            icon="carbon:data-vis-1",
+            icon="gravity-ui:molecule",
             is_hidden=False,
             component="/system/router",
             keepalive=False,
@@ -271,7 +265,7 @@ async def init_database_menu():
             path="dept",
             order=5,
             parent_id=system_parent_menu.id,
-            icon="mingcute:department-line",
+            icon="gravity-ui:timestamps",
             is_hidden=False,
             component="/system/dept",
             keepalive=False,
@@ -283,7 +277,7 @@ async def init_database_menu():
             path="redis",
             order=6,
             parent_id=system_parent_menu.id,
-            icon="devicon:redis-wordmark",
+            icon="gravity-ui:layout-header-cells-large-thunderbolt",
             is_hidden=False,
             component="/system/redis",
             keepalive=False,
@@ -295,7 +289,7 @@ async def init_database_menu():
             path="database",
             order=7,
             parent_id=system_parent_menu.id,
-            icon="streamline:database-setting",
+            icon="gravity-ui:layout-header-cells-large-letter-d",
             is_hidden=False,
             component="/system/database",
             keepalive=False,
@@ -307,7 +301,7 @@ async def init_database_menu():
             path="auditlog",
             order=8,
             parent_id=system_parent_menu.id,
-            icon="carbon:flow-logs-vpc",
+            icon="gravity-ui:square-bars",
             is_hidden=False,
             component="/system/auditlog",
             keepalive=False,
@@ -325,7 +319,7 @@ async def init_database_menu():
             path="/program",
             order=2,
             parent_id=0,
-            icon="fluent:app-folder-28-filled",
+            icon="gravity-ui:box",
             is_hidden=False,
             component="Layout",
             keepalive=False,
@@ -340,7 +334,7 @@ async def init_database_menu():
             path="project",
             order=1,
             parent_id=program_parent_menu.id,
-            icon="fluent:apps-28-filled",
+            icon="gravity-ui:cube",
             is_hidden=False,
             component="/program/project",
             keepalive=False,
@@ -352,7 +346,7 @@ async def init_database_menu():
             path="environment",
             order=2,
             parent_id=program_parent_menu.id,
-            icon="eos-icons:env",
+            icon="gravity-ui:gear-branches",
             is_hidden=False,
             component="/program/environment",
             keepalive=False,
@@ -364,7 +358,7 @@ async def init_database_menu():
             path="tags",
             order=3,
             parent_id=program_parent_menu.id,
-            icon="tabler:tags",
+            icon="gravity-ui:tags",
             is_hidden=False,
             component="/program/tags",
             keepalive=False,
@@ -374,7 +368,7 @@ async def init_database_menu():
     await Menu.bulk_create(program_children_menu)
     LOGGER.info(f"创建[应用管理]目录及子菜单成功")
 
-    # 接口管理（FastAPI 内置 Swagger / ReDoc，由前端 iframe 嵌入展示）
+    # 接口管理
     interface_parent_menu = await menu_crud.create_menu(
         MenuCreate(
             menu_type=MenuType.CATALOG,
@@ -409,7 +403,7 @@ async def init_database_menu():
             path="redoc",
             order=2,
             parent_id=interface_parent_menu.id,
-            icon="mdi:file-document-outline",
+            icon="devicon:swagger",
             is_hidden=False,
             component="/interface/redoc",
             keepalive=False,
@@ -425,9 +419,9 @@ async def init_database_menu():
             menu_type=MenuType.CATALOG,
             name="自动化测试",
             path="/autotest",
-            order=3,
+            order=4,
             parent_id=0,
-            icon="garden:bot-sparkle-stroke-12",
+            icon="gravity-ui:rocket",
             is_hidden=False,
             component="Layout",
             keepalive=False,
@@ -442,7 +436,7 @@ async def init_database_menu():
             path="ui",
             order=1,
             parent_id=autotest_parent_menu.id,
-            icon="material-symbols:desktop-windows-outline",
+            icon="gravity-ui:display",
             is_hidden=False,
             component="/autotest/ui",
             keepalive=True
@@ -455,7 +449,7 @@ async def init_database_menu():
             path="ui",
             order=2,
             parent_id=autotest_parent_menu.id,
-            icon="streamline:phone-mobile-phone-remix",
+            icon="gravity-ui:smartphone",
             is_hidden=False,
             component="/autotest/ui",
             keepalive=True
@@ -511,13 +505,13 @@ async def init_database_menu():
             menu_type=MenuType.CATALOG,
             name="任务管理",
             path="/task",
-            order=4,
+            order=5,
             parent_id=0,
-            icon="fluent:clock-alarm-24-regular",
+            icon="gravity-ui:alarm",
             is_hidden=False,
             component="Layout",
             keepalive=False,
-            redirect="/task/record",
+            redirect="/task/async_center",
             created_user=INIT_CREATED_USER,
         ),
     )
@@ -528,7 +522,7 @@ async def init_database_menu():
             path="list",
             order=1,
             parent_id=task_parent_menu.id,
-            icon="fluent:document-text-clock-24-regular",
+            icon="gravity-ui:list-timeline",
             is_hidden=False,
             component="/task/list",
             keepalive=True
@@ -537,13 +531,26 @@ async def init_database_menu():
         ),
         Menu(
             menu_type=MenuType.MENU,
-            name="异步中心",
+            name="执行记录",
             path="record",
             order=2,
             parent_id=task_parent_menu.id,
-            icon="fluent:document-checkmark-24-regular",
+            icon="gravity-ui:clock-arrow-rotate-left",
             is_hidden=False,
             component="/task/record",
+            keepalive=True
+            ,
+            created_user=INIT_CREATED_USER
+        ),
+        Menu(
+            menu_type=MenuType.MENU,
+            name="异步中心",
+            path="async_center",
+            order=3,
+            parent_id=task_parent_menu.id,
+            icon="gravity-ui:layers",
+            is_hidden=False,
+            component="/task/async_center",
             keepalive=True
             ,
             created_user=INIT_CREATED_USER
@@ -558,9 +565,9 @@ async def init_database_menu():
             menu_type=MenuType.CATALOG,
             name="便捷工具",
             path="/toolbox",
-            order=5,
+            order=6,
             parent_id=0,
-            icon="tdesign:tools",
+            icon="gravity-ui:hammer",
             is_hidden=False,
             component="Layout",
             keepalive=False,
@@ -575,7 +582,7 @@ async def init_database_menu():
             path="pythonHelpDoc",
             order=1,
             parent_id=toolbox_parent_menu.id,
-            icon="vscode-icons:file-type-python",
+            icon="gravity-ui:logo-python",
             is_hidden=False,
             component="/toolbox/pythonHelpDoc",
             keepalive=False,
@@ -587,7 +594,7 @@ async def init_database_menu():
             path="generate",
             order=2,
             parent_id=toolbox_parent_menu.id,
-            icon="carbon:data-volume",
+            icon="tabler:image-generation",
             is_hidden=False,
             component="/toolbox/generate",
             keepalive=False,
@@ -599,7 +606,7 @@ async def init_database_menu():
             path="textAnalysis",
             order=3,
             parent_id=toolbox_parent_menu.id,
-            icon="fluent:text-underline-double-24-filled",
+            icon="gravity-ui:font-case",
             is_hidden=False,
             component="/toolbox/textAnalysis",
             keepalive=False,
@@ -611,7 +618,7 @@ async def init_database_menu():
             path="databaseSearch",
             order=4,
             parent_id=toolbox_parent_menu.id,
-            icon="material-symbols:database-search",
+            icon="gravity-ui:layout-header-cells-large-letter-d",
             is_hidden=False,
             component="/toolbox/databaseSearch",
             keepalive=False,
@@ -627,7 +634,7 @@ async def init_database_menu():
             menu_type=MenuType.MENU,
             name="一级菜单",
             path="/top-menu",
-            order=6,
+            order=7,
             parent_id=0,
             icon="material-symbols:featured-play-list-outline",
             is_hidden=False,
@@ -734,8 +741,8 @@ async def init_database_env_config():
             project_id=project_id,
             config_name="ToolBox工具箱后端1",
             env_name=env_name,
-            config_host="172.20.10.2",
-            config_port="8519",
+            config_host="192.168.245.76",
+            config_port="8518",
             config_desc="服务器1",
             created_user=INIT_CREATED_USER,
         ),
@@ -743,8 +750,8 @@ async def init_database_env_config():
             project_id=project_id,
             config_name="ToolBox工具箱后端2",
             env_name=env_name,
-            config_host="192.168.1.3",
-            config_port="8519",
+            config_host="192.168.245.77",
+            config_port="8518",
             config_desc="服务器2",
             created_user=INIT_CREATED_USER,
         ),
@@ -766,8 +773,8 @@ async def init_database_env_config():
             project_id=project_id,
             config_name="ToolBox工具箱后端2",
             env_name=env_name,
-            config_host="10.211.55.3",
-            config_port="3333",
+            config_host="10.211.55.4",
+            config_port="3306",
             database_name="tbx_runner",
             database_type="mysql",
             config_username="root",

@@ -37,7 +37,7 @@ class AutoTestStepModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     # 请求相关
     request_url = fields.CharField(max_length=2048, null=True, description="请求地址")
     request_port = fields.CharField(max_length=16, null=True, description="请求端口")
-    request_method = fields.CharField(max_length=16, null=True, description="请求方法(GET/POST/PUT/DELETE等)")
+    request_method = fields.CharField(max_length=16, null=True, description="请求方法")
     # request_header、request_params、request_form_data、request_form_urlencoded、request_form_file字段, 存储格式为列表嵌套字典, 每个元素包含key、value、desc项
     request_header = fields.JSONField(null=True, description="请求头信息")
     request_params = fields.JSONField(null=True, description="请求路径参数")
@@ -67,7 +67,7 @@ class AutoTestStepModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     loop_conditions = fields.JSONField(null=True, description="条件循环判断条件")
 
     # IF分支相关
-    # branch_items 存储为List[Dict[str, Any]]格式, 每个元素包含branch_type、branch_desc、branch_conditions{condition_expr,condition_compare,condition_value}项
+    # branch_items 存储为List[Dict[str, Any]]格式, 每个元素包含branch_type(AutoTestBranchType枚举: if|elif|else)、branch_desc、branch_conditions{condition_expr,condition_compare,condition_value}项
     branch_items = fields.JSONField(null=True, description="条件分支列表(仅条件分支步骤使用, 存储分支元数据)")
     branch_index = fields.IntField(null=True, description="所属分支序号(条件分支子步骤归属哪个分支)")
 
