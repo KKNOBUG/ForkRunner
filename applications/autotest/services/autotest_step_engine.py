@@ -2574,6 +2574,8 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
     resolve_own_defined_variables = False
     # 会话变量池半隔离：开启后引用域执行前以被引用用例聚合结果替换上下文变量池（独享、宿主池不可见），执行结束后整个引用池按key回灌宿主（引用覆盖宿主同名）
     use_isolated_session_pool: bool = False
+    # 引用步骤自身挂数据源：开启后执行内层步骤前按(宿主case_id, 引用步骤step_code)预载数据源快照注入context，供引用链内层HTTP/TCP步骤数据驱动（仅引用公共接口开启；引用公共脚本链中恒为None以屏蔽外层引用接口数据源）
+    allowed_own_dataset: bool = False
 
     def _merge_and_override_fields(self, quote_step: AutoTestStepTreeUpdateItem) -> AutoTestStepTreeUpdateItem:
         """
@@ -2645,6 +2647,10 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
         previous_parent_step_id: Optional[int] = getattr(self.context, "executing_parent_step_id", None)
         host_pool: List[StepVariablesBase] = []
         quote_pool: Optional[List[StepVariablesBase]] = None
+        previous_quote_dataset_name: Optional[str] = getattr(self.context, "quote_dataset_name", None)
+        previous_quote_dataset_snapshot: Optional[Dict[str, Dict[str, Any]]] = getattr(
+            self.context, "quote_dataset_snapshot", None
+        )
         try:
             quote_case_id = self.step.quote_case_id
             if not quote_case_id:
@@ -2699,6 +2705,31 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
                     step_code=self.step_code
                 )
 
+            if self.allowed_own_dataset and getattr(self.step, "data_source_id", None) and self.context.dataset_name:
+                # 引用步骤自身挂数据源：数据源行落在宿主用例(case_id+引用步骤step_code)，executing_quote_case_id传None绕过loader对引用链的短路
+                quote_snapshot: Optional[Dict[str, Dict[str, Any]]] = await AutoTestToolService.load_dataset_for_request_step(
+                    case_id=self.case_id,
+                    step_code=self.step_code,
+                    dataset_name=self.context.dataset_name,
+                    executing_quote_case_id=None,
+                )
+                self.context.quote_dataset_name = self.context.dataset_name
+                self.context.quote_dataset_snapshot = quote_snapshot
+                if quote_snapshot is not None:
+                    self.context.log(
+                        f"【{self.quote_step_label}】加载数据源场景({self.context.dataset_name})成功, 供内层请求步骤数据驱动",
+                        step_code=self.step_code
+                    )
+                else:
+                    self.context.log(
+                        f"【{self.quote_step_label}】数据源场景({self.context.dataset_name})在引用步骤数据源中未命中, 内层请求步骤不做数据驱动替换",
+                        step_code=self.step_code
+                    )
+            else:
+                # 开关关闭(引用公共脚本)、未挂数据源或本轮无数据场景：显式清空，屏蔽外层引用接口残留快照泄漏进本引用链
+                self.context.quote_dataset_name = None
+                self.context.quote_dataset_snapshot = None
+
             self.context.log(
                 f"【{self.quote_step_label}】执行用例(id={quote_case_id}, name={quote_case_name})开始",
                 step_code=self.step_code
@@ -2752,6 +2783,9 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
             self.context.log(result.error, step_code=self.step_code)
             raise StepExecutionError(result.error) from e
         finally:
+            # 恢复外层引用域数据源快照（嵌套引用时的正确回退）
+            self.context.quote_dataset_name = previous_quote_dataset_name
+            self.context.quote_dataset_snapshot = previous_quote_dataset_snapshot
             # 半隔离收口：整个执行后引用池按key回灌宿主（引用覆盖宿主同名），无论内层步骤成功或异常
             if quote_pool is not None:
                 merged_host_pool: List[StepVariablesBase] = self._merge_back_session_pool(
@@ -2774,11 +2808,13 @@ class QuotePublicApiStepExecutor(BaseQuoteCaseStepExecutor):
     """
     引用公共接口执行器：仅允许引用用例类型为公共接口的公共用例。
     引用步骤自身追加的局部变量/提取/断言合并进内层HTTP/TCP请求步骤执行（原数据在前、追加在后）。
+    开启引用步骤自身挂数据源：宿主侧挂载在引用步骤上的数据源快照注入引用链，供内层请求步骤数据驱动。
     """
 
     quote_step_label = "引用公共接口"
     allowed_quote_case_types = (AutoTestCaseType.PUBLIC_API,)
     allowed_merge_and_override_fields = True
+    allowed_own_dataset = True
 
 
 class QuotePublicScriptStepExecutor(BaseQuoteCaseStepExecutor):
@@ -3613,12 +3649,16 @@ class HttpStepExecutor(BaseStepExecutor):
             # 参数化驱动：根据 context.dataset_name + case_id/step_code 查 AutoTestDataSourceModel 取该步骤数据集
             dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
             executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
-            step_struct: Optional[Dict[str, Dict[str, Any]]] = await AutoTestToolService.load_dataset_for_request_step(
-                case_id=self.case_id,
-                step_code=self.step_code,
-                dataset_name=dataset_name,
-                executing_quote_case_id=executing_quote_case_id,
-            )
+            if executing_quote_case_id:
+                # 引用链内层步骤：loader对引用链短路，数据驱动取引用公共接口自身挂载的数据源快照（引用公共脚本链中恒为None）
+                step_struct: Optional[Dict[str, Dict[str, Any]]] = getattr(self.context, "quote_dataset_snapshot", None)
+            else:
+                step_struct = await AutoTestToolService.load_dataset_for_request_step(
+                    case_id=self.case_id,
+                    step_code=self.step_code,
+                    dataset_name=dataset_name,
+                    executing_quote_case_id=executing_quote_case_id,
+                )
             result.dataset_snapshot = step_struct
             result.dataset_name = dataset_name
             self.context.log(
