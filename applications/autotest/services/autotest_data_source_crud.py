@@ -333,7 +333,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        from backend.applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
+        from applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
 
         # 每个场景强制补齐 head/body/assert_head/assert_body 四键
         normalized_dataset = {
