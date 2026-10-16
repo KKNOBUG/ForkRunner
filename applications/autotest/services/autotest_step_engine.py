@@ -3016,7 +3016,7 @@ class TcpStepExecutor(BaseStepExecutor):
 
             start = time.perf_counter()
             async with AioTcpClient(
-                    timeout=read_td or timedelta(seconds=30),
+                    timeout=read_td or timedelta(seconds=10),
                     connect_timeout=connect_td,
                     length_field_size=frame_config.radix_length,
                     max_response_bytes=max_response_bytes,

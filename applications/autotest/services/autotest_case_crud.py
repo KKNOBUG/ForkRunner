@@ -238,7 +238,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             owner_user=owner_user,
         )
         if existing_case and existing_case.state != 1:
-            message_error: str = "相同应用下, 用例名称不允许重复"
+            message_error: str = "相同应用下, 脚本名称不允许重复"
             LOGGER.error(
                 f"{message_error}, "
                 f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}, owner_user={owner_user}]"
@@ -348,7 +348,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 exclude_id=case_id,
             )
             if existing_case:
-                message_error: str = "相同应用下, 用例名称不允许重复"
+                message_error: str = "相同应用下, 脚本名称不允许重复"
                 LOGGER.error(
                     f"{message_error}, "
                     f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={unique_case_type}, owner_user={instance.owner_user}]"
@@ -514,7 +514,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 )
                 create_case_dict["case_tags"] = case_tags
                 if existing_case_instance and existing_case_instance.state != 1:
-                    message_error: str = "相同应用下, 用例名称不允许重复"
+                    message_error: str = "相同应用下, 脚本名称不允许重复"
                     LOGGER.error(
                         f"第{cid}条用例新增失败, {message_error}, "
                         f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}, owner_user={owner_user}]"
@@ -607,7 +607,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                         exclude_id=case_id,
                     )
                     if existing_case_instance:
-                        message_error: str = "相同应用下, 用例名称不允许重复"
+                        message_error: str = "相同应用下, 脚本名称不允许重复"
                         LOGGER.error(
                             f"第{cid}条用例新增失败, {message_error}, "
                             f"查询条件: [case_project={unique_project}, case_name={unique_case_name}, case_type={unique_case_type}, owner_user={case_instance.owner_user}]"
