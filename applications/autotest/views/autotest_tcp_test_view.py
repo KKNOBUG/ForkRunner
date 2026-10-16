@@ -49,7 +49,7 @@ class _TcpTestServer:
 
     # -- 生命周期 ----------------------------------------------------------
 
-    async def start(self, host: str = "0.0.0.0", json_port: int = 9999, xml_port: int = 9998) -> None:
+    async def start(self, host: str = "0.0.0.0", json_port: int = 9991, xml_port: int = 9992) -> None:
         if self._is_running:
             await self.stop()
         self._host = host
@@ -482,28 +482,28 @@ class _TcpFrameServerStartIn(BaseModel):
 
 # 帧诊断端口内置组合：一键启动即覆盖用例帧链路验收所需的全部配置组合（端口与"TCP帧诊断*"环境配置对应）
 _DEFAULT_FRAME_CONFIGS: List[_TcpFrameServerStartIn] = [
-    # 十进制/8位/不包含长度位
+    # TCP协议：十进制/8位长度位/不包含长度位/无结束符
     _TcpFrameServerStartIn(
         port=9993,
         tcp_radix=AutoTestTcpRadix.DECIMAL,
         tcp_radix_length=8,
         tcp_datagram_length=AutoTestTcpDatagramLength.EXCLUDE
     ),
-    # 十六进制/4位/包含长度位
+    # TCP协议：十六进制/4位长度位/包含长度位
     _TcpFrameServerStartIn(
         port=9994,
         tcp_radix=AutoTestTcpRadix.HEX,
         tcp_radix_length=4,
         tcp_datagram_length=AutoTestTcpDatagramLength.INCLUDE
     ),
-    # 不使用+请求/响应\r\n
+    # TCP协议：进制数不使用，请求/响应结束符\r\n
     _TcpFrameServerStartIn(
         port=9995,
         tcp_radix=AutoTestTcpRadix.NONE,
         tcp_request_end_symbol=AutoTestTcpEndSymbol.CRLF,
         tcp_response_end_symbol="\\r\\n"
     ),
-    # 十进制/8位+HEX开启
+    # TCP协议：十进制/8位/不包含长度位/HEX开启
     _TcpFrameServerStartIn(
         port=9996,
         tcp_radix=AutoTestTcpRadix.DECIMAL,
@@ -511,7 +511,7 @@ _DEFAULT_FRAME_CONFIGS: List[_TcpFrameServerStartIn] = [
         tcp_datagram_length=AutoTestTcpDatagramLength.EXCLUDE,
         tcp_hex_string=True
     ),
-    # 十进制/8位+GBK编码
+    # TCP协议：十进制/8位/不包含长度位/GBK编码
     _TcpFrameServerStartIn(
         port=9997,
         tcp_radix=AutoTestTcpRadix.DECIMAL,
@@ -519,7 +519,7 @@ _DEFAULT_FRAME_CONFIGS: List[_TcpFrameServerStartIn] = [
         tcp_datagram_length=AutoTestTcpDatagramLength.EXCLUDE,
         tcp_encoding="GBK"
     ),
-    # 不使用/无结束符(RAW)
+    # TCP协议：进制数不使用且无结束符，报文原样收发
     _TcpFrameServerStartIn(
         port=9998,
         tcp_radix=AutoTestTcpRadix.NONE
@@ -609,7 +609,7 @@ async def get_json_sample():
     """
     获取JSON端口的请求报文示例（银行账户交易查询）。
 
-    将此报文通过TCP连接发送到JSON端口（默认9999），
+    将此报文通过TCP连接发送到JSON端口（默认9991），
     服务器将返回XML格式的交易明细响应。
 
     :return: 统一HTTP响应
@@ -646,7 +646,7 @@ async def get_xml_sample():
     """
     获取XML端口的请求报文示例（贷款申请）。
 
-    将此报文通过TCP连接发送到XML端口（默认9998），
+    将此报文通过TCP连接发送到XML端口（默认9992），
     服务器将返回XML格式的贷款审批结果。
 
     :return: 统一HTTP响应
