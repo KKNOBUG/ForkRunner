@@ -1039,7 +1039,7 @@ class BaseStepExecutor:
     @classmethod
     async def get_services(cls) -> AutoTestServices:
         """获取自动化测试依赖注入的CRUD服务聚合。"""
-        from backend.applications.autotest.dependencies import get_autotest_api_services
+        from applications.autotest.dependencies import get_autotest_api_services
         return await get_autotest_api_services()
 
     def get_execute_config(
