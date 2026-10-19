@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 import traceback
 import uuid
 from datetime import datetime
@@ -371,6 +372,7 @@ async def batch_update_steps_tree(
         # 获取用例信息和步骤数据
         case_data: AutoTestCaseUpdate = tree_in.case
         steps_data: List[AutoTestStepTreeUpdateItem] = tree_in.steps
+        LOGGER.error(f"steps_data--->{json.dumps(tree_in.model_dump(), ensure_ascii=False, indent=4)}")
 
         # 1. 校验步骤树结构合法性
         is_valid, error_msg = AutoTestToolService.validate_step_tree_structure(steps_data)
@@ -383,8 +385,9 @@ async def batch_update_steps_tree(
         def _walk_data_source_steps(steps: List[AutoTestStepTreeUpdateItem]) -> List[AutoTestStepTreeUpdateItem]:
             """收集步骤树中携带数据源的步骤：HTTP/TCP步骤与挂载数据源的引用壳等，含 children 与条件分支子步骤。"""
             collected: List[AutoTestStepTreeUpdateItem] = []
+            LOGGER.error(f"steps--->{steps}")
             for s in steps or []:
-                if s.step_type in (AutoTestStepType.HTTP, AutoTestStepType.TCP) or s.data_source_id:
+                if s.step_type in (AutoTestStepType.HTTP, AutoTestStepType.TCP) or (s.step_type == AutoTestStepType.QUOTE_PUBLIC_API and s.data_source_id):
                     collected.append(s)
                 if s.children:
                     collected.extend(_walk_data_source_steps(s.children))
@@ -394,6 +397,7 @@ async def batch_update_steps_tree(
             return collected
 
         ds_steps = _walk_data_source_steps(steps_data)
+        LOGGER.error(f"ds_steps--->{ds_steps}")
         if ds_steps:
             ds_ids = list({s.data_source_id for s in ds_steps if s.data_source_id})
             step_codes = {s.step_code for s in ds_steps if (s.step_code or "").strip()}
@@ -409,6 +413,7 @@ async def batch_update_steps_tree(
                     ds for ds in case_ds
                     if (ds.id in ds_ids) or ((ds.step_code or "") in step_codes)
                 ]
+                LOGGER.error(f"ds_records--->{ds_records}")
 
             baseline_names: Optional[List[str]] = None
             baseline_step_label: Optional[str] = None
@@ -420,8 +425,12 @@ async def batch_update_steps_tree(
                 s.data_source_id: (s.step_name or s.step_code or f"步骤ID:{s.step_id}")
                 for s in ds_steps if s.data_source_id
             }
+            LOGGER.error(f"step_label_by_code--->{step_label_by_code}")
+            LOGGER.error(f"step_label_by_ds_id--->{step_label_by_ds_id}")
             for ds in ds_records:
                 current_names = DataSourceService.data_source_scene_names(ds)
+                LOGGER.error(f"current_names--->{current_names}")
+
                 if current_names is None:
                     continue
                 step_label = (
