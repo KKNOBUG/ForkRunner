@@ -1045,21 +1045,31 @@ async def single_step_dataset_upload(
         return BadReqResponse(message="解析数据源文件结果为空, 第1个Sheet无有效数据")
     try:
         created_user = get_current_username()
-        instance = await services.data_source_curd.create_data_sources_from_parsed(
-            case_id=case_id,
-            case_code=case_instance.case_code,
-            step_id=int(step_id),
-            step_code=step_code,
-            file_name=file_name or None,
-            file_path=file_path,
-            file_hash=file_hash or None,
-            file_desc=(file_desc or "")[:2048].strip() or None,
-            parsed_data=step_data,
-            dataset_names=dataset_names,
-            dataframe=dataframe,
-            axis=axis,
-            created_user=created_user,
-        )
+        # create与指针同步同一事务：sync失败整体回滚，避免残留无指针数据源
+        async with in_transaction():
+            instance = await services.data_source_curd.create_data_sources_from_parsed(
+                case_id=case_id,
+                case_code=case_instance.case_code,
+                step_id=int(step_id),
+                step_code=step_code,
+                file_name=file_name or None,
+                file_path=file_path,
+                file_hash=file_hash or None,
+                file_desc=(file_desc or "")[:2048].strip() or None,
+                parsed_data=step_data,
+                dataset_names=dataset_names,
+                dataframe=dataframe,
+                axis=axis,
+                created_user=created_user,
+            )
+            await DataSourceService.sync_step_data_source_meta(
+                services,
+                case_id=case_id,
+                step_code=step_code,
+                data_source_id=instance.id,
+                file_name=file_name,
+                file_desc=file_desc,
+            )
     except NotFoundException as e:
         await _remove_upload_file(file_path)
         return NotFoundResponse(message=str(e.message))
@@ -1077,14 +1087,6 @@ async def single_step_dataset_upload(
         LOGGER.error(f"数据源文件保存失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"数据源文件保存失败，异常描述: {e}")
 
-    await DataSourceService.sync_step_data_source_meta(
-        services,
-        case_id=case_id,
-        step_code=step_code,
-        data_source_id=instance.id,
-        file_name=file_name,
-        file_desc=file_desc,
-    )
     data = await _serialize_data_source(instance)
     return SuccessResponse(message="数据源文件上传成功", data=data, total=1)
 
@@ -1335,7 +1337,8 @@ async def batch_step_dataset_upload(
                     file_hash=file_hash or None,
                     file_desc=(file_desc or "")[:2048].strip() or None,
                     parsed_data=step_data,
-                    dataset_names=sorted(step_data.keys()),
+                    # 场景序与dataset键序、跨sheet校验基准一致(文件列插入序)，不用排序序，避免场景名一致性比对错乱
+                    dataset_names=list(step_data.keys()),
                     dataframe=sheet_dataframes[sheet_name],
                     axis=sheet_axes.get(sheet_name, DataSourceMatrixParser.AXIS_VERTICAL),
                     created_user=created_user,

@@ -5,6 +5,10 @@ import traceback
 import uuid
 from typing import Optional, List, Dict, Any, Set, Tuple
 
+from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
+from tortoise.expressions import Q
+from tortoise.transactions import in_transaction
+
 from applications.autotest.models.autotest_case_model import AutoTestCaseModel
 from applications.autotest.models.autotest_data_source_model import AutoTestDataSourceModel
 from applications.autotest.models.autotest_step_model import AutoTestStepModel
@@ -20,7 +24,7 @@ from applications.autotest.schemas.autotest_step_schema import (
     step_tree_item_from_storage,
     step_variables_list_from_storage,
 )
-from applications.autotest.services.autotest_case_crud import AutoTestCaseCrud, _readd_explicit_null_fields
+from applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 from applications.autotest.services.autotest_detail_crud import AutoTestDetailCrud
 from applications.autotest.services.autotest_report_crud import AutoTestReportCrud
 from applications.autotest.services.autotest_step_engine import AutoTestStepExecutionEngine
@@ -42,9 +46,6 @@ from enums import (
     AutoTestTcpRadix,
     PUBLIC_CASE_TYPES
 )
-from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
-from tortoise.expressions import Q
-from tortoise.transactions import in_transaction
 
 # 列表/对象型JSON字段：schema已将空数组归一为None；payload显式给出这些字段时，None代表显式清空，需回补以落库NULL；
 # loop_*循环变量名支持用户清空，同样按显式置空语义回补
@@ -596,7 +597,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             exclude_unset=True,
             exclude={"step_id", "step_code"}
         )
-        _readd_explicit_null_fields(step_in, update_dict, STEP_CLEARABLE_JSON_FIELDS)
+        self.explicit_restored_null_fields(step_in, update_dict, STEP_CLEARABLE_JSON_FIELDS)
         _apply_tcp_frame_mutex(update_dict)
         if not update_dict:
             return instance
@@ -1133,7 +1134,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     exclude_unset=True,
                     exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code", "branch_items"},
                 )
-                _readd_explicit_null_fields(step_data, update_dict, STEP_CLEARABLE_JSON_FIELDS)
+                self.explicit_restored_null_fields(step_data, update_dict, STEP_CLEARABLE_JSON_FIELDS)
                 _apply_tcp_frame_mutex(update_dict)
                 # step_is_skipped=False 需显式落库（exclude_none 会保留 False，此处再兜底一次）
                 update_dict["step_is_skipped"] = bool(getattr(step_data, "step_is_skipped", False))
