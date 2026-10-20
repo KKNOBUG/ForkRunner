@@ -212,24 +212,6 @@ class AutoTestStepReqBase(BaseModel):
             return None
         return v
 
-    @model_validator(mode="after")
-    def _normalize_tcp_frame_fields(self):
-        """
-        帧模式由tcp_radix字段确定互斥。
-
-        进制数开启走长度前缀模式，结束符不适用，置为null值；
-        进制数为空或不使用走结束符/RAW模式，长度位参数不适用，置为null值；
-
-        :return: 当前模型实例
-        """
-        if self.tcp_radix in (None, AutoTestTcpRadix.NONE):
-            self.tcp_radix_length = None
-            self.tcp_datagram_length = None
-        else:
-            self.tcp_request_end_symbol = None
-            self.tcp_response_end_symbol = None
-        return self
-
 
 class AutoTestStepDbBase(BaseModel):
     """步骤数据库操作基础字段模型。"""
@@ -332,7 +314,7 @@ class AutoTestStepBase(AutoTestStepReqBase, AutoTestStepDbBase, AutoTestStepRedi
     loop_on_error: Optional[AutoTestLoopErrorStrategy] = Field(None, description="循环执行失败时的处理策略")
     loop_timeout: Optional[float] = Field(None, ge=0, le=300, description="条件循环超时时间")
     loop_conditions: Optional[ConditionsBase] = Field(None, description="条件循环判断条件")
-    # 循环变量名：允许用户自定义(嵌套循环时避免同名作用域冲突)，默认值由前端页面预填，后端以保存入库的为准
+    # 循环变量名：允许用户自定义(嵌套循环时避免同名作用域冲突)
     loop_index: Optional[str] = Field(None, max_length=64, description="循环索引变量名")
     loop_key: Optional[str] = Field(None, max_length=64, description="循环键名变量名")
     loop_value: Optional[str] = Field(None, max_length=64, description="循环数据变量名")
@@ -386,7 +368,7 @@ class AutoTestStepBase(AutoTestStepReqBase, AutoTestStepDbBase, AutoTestStepRedi
     @classmethod
     def _normalize_loop_var_name(cls, v: Any) -> Any:
         """
-        规范化循环变量名：strip后为空存None(默认值由前端预填，后端以保存入库的为准)；
+        规范化循环变量名：strip后为空存None；
         变量名需可安全用于${name}占位符，禁止包含空白符、'${'、'}'。
 
         :param v: 原始值
@@ -507,7 +489,9 @@ class AutoTestStepTreeUpdateItem(AutoTestStepBase):
     @classmethod
     def _normalize_custom_var_first_quote(cls, v: Any) -> Any:
         """
-        ！！！前端中没有“用户变量”类型步骤, 而是自挂数据, 因此需要在请求前进行参数处理；！！！
+        *=======================================================================*
+        *===  前端中没有“用户变量”类型步骤，而是自挂数据，因此需要在请求前进行参数处理； ===*
+        *=======================================================================*
         特征规则：content、step_type、step_name字段值为"用户变量"且step_id为字符串，将其step_id/request_body归一为None。
         """
         if not isinstance(v, list) or not v:
@@ -647,7 +631,7 @@ def step_tree_item_from_storage(data: Any) -> "AutoTestStepTreeUpdateItem":
     """
     将仓储层to_dict得到的单步JSON转为AutoTestStepTreeUpdateItem。
     已为目标模型时直接返回；递归处理children/quote_steps/branch_items。
-    TCP帧互斥脏数据由模型侧 _normalize_tcp_frame_fields 读取归一自愈，此处无需预处理。
+    TCP帧互斥由业务侧写入时归一（见step_crud._apply_tcp_frame_mutex），此处不做预处理。
     """
     if isinstance(data, AutoTestStepTreeUpdateItem):
         return data
