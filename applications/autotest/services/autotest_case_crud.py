@@ -409,7 +409,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
-        from backend.applications.autotest.services.autotest_step_crud import AutoTestStepCrud
+        from applications.autotest.services.autotest_step_crud import AutoTestStepCrud
         step_crud = AutoTestStepCrud()
         step_ids = await step_crud.model.filter(case_id=case_id, state__not=1).values_list("id", flat=True)
         await step_crud.soft_delete_batch(ids=list(step_ids))
