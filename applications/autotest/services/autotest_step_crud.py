@@ -24,7 +24,7 @@ from applications.autotest.schemas.autotest_step_schema import (
     step_tree_item_from_storage,
     step_variables_list_from_storage,
 )
-from applications.autotest.services.autotest_case_crud import AutoTestCaseCrud, _readd_explicit_null_fields
+from applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 from applications.autotest.services.autotest_detail_crud import AutoTestDetailCrud
 from applications.autotest.services.autotest_report_crud import AutoTestReportCrud
 from applications.autotest.services.autotest_step_engine import AutoTestStepExecutionEngine
@@ -37,12 +37,20 @@ from core.exceptions import (
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from enums import AutoTestCaseType, AutoTestStepType, AutoTestReportType, AutoTestTaskExecuteMode, AutoTestSessionTransfer, PUBLIC_CASE_TYPES
+from enums import (
+    AutoTestCaseType,
+    AutoTestStepType,
+    AutoTestReportType,
+    AutoTestTaskExecuteMode,
+    AutoTestSessionTransfer,
+    PUBLIC_CASE_TYPES
+)
 
 STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
     "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file", "request_body",
     "session_variables", "defined_variables", "extract_variables", "assert_validators", "database_operates", "redis_operates",
-    "loop_conditions",
+    "loop_conditions", "loop_index", "loop_key", "loop_value",
+    "tcp_response_end_symbol",
 )
 
 
@@ -226,8 +234,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         # 步骤计数器：用于统计该用例拥有的步骤总数
         # direct_steps: 直接属于该用例的步骤数（根步骤, parent_step_id为None）
         # child_steps: 所有子步骤数（递归统计, 不包括根步骤, parent_step_id不为None）
-        # quote_steps: 引用脚本的步骤数
-        # total_step: 总步骤数（direct_steps + child_steps + quote_steps）
+        # quote_steps: 引用步骤(被引用用例内部步骤)的步骤数
+        # total_step: 总步骤数（direct_steps + child_steps + quote_steps；引用壳步骤不计数，实际执行的是被引用的内部步骤）
         step_counter = {
             "direct_steps": 0,
             "child_steps": 0,
@@ -238,13 +246,15 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         # 递归构建步骤树
         async def build_step_tree(step: AutoTestStepModel, is_quote: bool = False) -> Dict[str, Any]:
             """递归构建单步及其子步骤、引用脚本步骤的树形字典并统计各类步骤数量。"""
-            step_counter["total_steps"] += 1
-            if is_quote:
-                step_counter["quote_steps"] += 1
-            elif step.parent_step_id is None:
-                step_counter["direct_steps"] += 1
-            else:
-                step_counter["child_steps"] += 1
+            # 引用壳步骤不计数：壳在用户侧不可执行，实际执行的是被引用用例的内部步骤(quote_steps)，避免双重计数
+            if not step.quote_case_id:
+                step_counter["total_steps"] += 1
+                if is_quote:
+                    step_counter["quote_steps"] += 1
+                elif step.parent_step_id is None:
+                    step_counter["direct_steps"] += 1
+                else:
+                    step_counter["child_steps"] += 1
 
             # 获取步骤基本信息(内存序列化, 无DB查询)
             step_dict = await step.to_dict(
@@ -563,7 +573,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             exclude_unset=True,
             exclude={"step_id", "step_code"}
         )
-        _readd_explicit_null_fields(step_in, update_dict, STEP_CLEARABLE_JSON_FIELDS)
+        self.explicit_restored_null_fields(
+            payload=step_in,
+            update_dict=update_dict,
+            field_names=STEP_CLEARABLE_JSON_FIELDS
+        )
         if not update_dict:
             return instance
 
@@ -1094,10 +1108,15 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             # 步骤存在，执行更新
             else:
                 update_dict = step_data.model_dump(
+                    exclude_none=True,
+                    exclude_unset=True,
                     exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code", "branch_items"},
-                    exclude_none=True
                 )
-                _readd_explicit_null_fields(step_data, update_dict, STEP_CLEARABLE_JSON_FIELDS)
+                self.explicit_restored_null_fields(
+                    payload=step_data,
+                    update_dict=update_dict,
+                    field_names=STEP_CLEARABLE_JSON_FIELDS
+                )
                 # step_is_skipped=False 需显式落库（exclude_none 会保留 False，此处再兜底一次）
                 update_dict["step_is_skipped"] = bool(getattr(step_data, "step_is_skipped", False))
                 if "parent_step_id" not in step_data.model_dump(exclude_unset=True) and parent_step_id is not None:

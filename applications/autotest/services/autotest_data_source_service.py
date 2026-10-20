@@ -36,6 +36,8 @@ class DataSourceService:
     DEFAULT_SCENE_NAMES: Tuple[str, ...] = ("场景1名称",)
     NORMAL_SCENE_NAME: str = "正交易场景"
     REQUEST_STEP_TYPES: Tuple = (AutoTestStepType.HTTP, AutoTestStepType.TCP)
+    # 数据源指针清理覆盖的步骤类型：在REQUEST_STEP_TYPES基础上纳入引用公共接口（用户脚本宿主的引用步骤可挂数据源，删除/解绑时须同步清指针防悬空）
+    CLEAR_META_STEP_TYPES: Tuple = (AutoTestStepType.HTTP, AutoTestStepType.TCP, AutoTestStepType.QUOTE_PUBLIC_API)
 
     # ==================== 通用工具 ====================
 
@@ -89,16 +91,76 @@ class DataSourceService:
         return case, step
 
     @classmethod
-    def ensure_request_step(cls, step: AutoTestStepModel) -> None:
-        """仅HTTP/TCP请求步骤允许绑定数据源。"""
-        if step.step_type not in cls.REQUEST_STEP_TYPES:
-            raise ParameterException(message="仅支持对HTTP/TCP请求步骤使用数据源")
+    def ensure_request_step(cls, step: AutoTestStepModel, case: Optional[AutoTestCaseModel] = None) -> None:
+        """
+        仅HTTP/TCP请求步骤允许绑定数据源；用户脚本宿主下的引用公共接口步骤除外（数据源挂载在宿主引用步骤上）。
+
+        :param step: 步骤模型实例
+        :param case: 步骤所属用例模型实例；传入时放行用户脚本宿主下的引用公共接口步骤，不传保持仅HTTP/TCP的历史口径
+        """
+        if step.step_type in cls.REQUEST_STEP_TYPES:
+            return
+        if case is not None and case.case_type not in PUBLIC_CASE_TYPES and step.step_type == AutoTestStepType.QUOTE_PUBLIC_API:
+            return
+        raise ParameterException(message="仅支持对HTTP/TCP请求步骤使用数据源")
 
     @staticmethod
     def ensure_case_allows_data_source(case: AutoTestCaseModel) -> None:
         """公共脚本/公共接口不允许绑定数据源。"""
         if case.case_type in PUBLIC_CASE_TYPES:
             raise ParameterException(message="公共脚本/公共接口不允许使用数据源")
+
+    @classmethod
+    async def ensure_data_source_writable(
+            cls,
+            services: AutoTestServices,
+            instance: AutoTestDataSourceModel,
+            case_id: Optional[int] = None,
+            case_code: Optional[str] = None,
+    ) -> None:
+        """
+        数据源写操作准入：归属用例不允许公共类型、归属步骤须可挂载；入参携带用例定位时须与归属一致。
+
+        按id/code定位的更新路径绕过了创建时的准入校验，更新/字段同步前必须调用。
+
+        :param services: CRUD聚合
+        :param instance: 已定位的启用中数据源
+        :param case_id: 入参用例ID(可选)
+        :param case_code: 入参用例标识(可选)
+        :raises ParameterException: 归属用例为公共类型、入参定位与归属不一致、归属步骤不可挂载
+        :raises NotFoundException: 归属用例不存在
+        """
+        owner_case = await services.case_curd.get_by_id(case_id=instance.case_id, on_error=True, state__not=1)
+        cls.ensure_case_allows_data_source(owner_case)
+        input_case_id = case_id if case_id else None
+        input_case_code = str(case_code).strip() if case_code else ""
+        if (input_case_id and input_case_id != instance.case_id) or (
+                input_case_code and input_case_code != owner_case.case_code
+        ):
+            raise ParameterException(message="数据源归属用例与入参定位不一致, 不允许操作")
+        owner_step = await services.step_curd.model.filter(
+            case_id=instance.case_id, step_code=instance.step_code, state__not=1
+        ).first()
+        if owner_step is not None:
+            cls.ensure_request_step(owner_step, case=owner_case)
+
+    @classmethod
+    async def resolve_datagram_source_step(cls, services: AutoTestServices, step: AutoTestStepModel) -> AutoTestStepModel:
+        """
+        解析报文来源步骤：引用公共接口步骤是壳（无自身报文），回落到被引用公共接口用例内的请求步骤。
+
+        :param services: CRUD聚合
+        :param step: 当前定位到的步骤
+        :return: 用于构建矩阵/报文原始值的步骤；非引用步骤原样返回，未找到内部请求步骤时兜底原步骤
+        """
+        if step.step_type != AutoTestStepType.QUOTE_PUBLIC_API:
+            return step
+        inner = await services.step_curd.model.filter(
+            case_id=step.quote_case_id or 0,
+            step_type__in=list(cls.REQUEST_STEP_TYPES),
+            state__not=1,
+        ).order_by("step_no").first()
+        return inner or step
 
     @staticmethod
     async def resolve_enabled_data_source(
@@ -716,7 +778,7 @@ class DataSourceService:
             case_id: int,
             step_code: Optional[str] = None,
     ) -> int:
-        """清空步骤上的数据源指针；step_code为空时清空该用例全部HTTP/TCP步骤。"""
+        """清空步骤上的数据源指针；step_code为空时清空该用例全部可挂数据源步骤(含引用公共接口)。"""
         step_vals: Dict[str, Any] = {
             "data_source_id": None,
             "data_source_name": None,
@@ -726,7 +788,7 @@ class DataSourceService:
         filters: Dict[str, Any] = {
             "case_id": case_id,
             "state": 0,
-            "step_type__in": list(cls.REQUEST_STEP_TYPES),
+            "step_type__in": list(cls.CLEAR_META_STEP_TYPES),
         }
         if cls._text(step_code):
             filters["step_code"] = cls._text(step_code)

@@ -28,8 +28,9 @@ from applications.autotest.services.autotest_runtime.protocol_tcp import (
     select_tcp_payload,
     parse_tcp_response,
     parse_tcp_timeouts,
+    resolve_tcp_frame_config,
     resolve_tcp_request_extract_sources,
-    tcp_body_source_for_assert
+    TCP_MAX_RESPONSE_BYTES,
 )
 from applications.autotest.services.autotest_runtime.datagram.datagram_diff import compare_messages
 from applications.autotest.services.autotest_runtime.builtin_variables import collect_builtin_step_variables
@@ -58,7 +59,7 @@ from applications.autotest.services.autotest_runtime.sandbox import (
 )
 from applications.autotest.services.autotest_tool_service import AutoTestToolService
 from applications.base.services.scaffold import unique_identify
-from common import AioTcpClient, TcpFrameMode
+from common import AioTcpClient
 from common.cache.redis_connection_pool import get_app_redis_pool, RedisConnPoolFromConfig
 from common.database.database_connection_pool import get_app_database_pool, DBConnPoolFromConfig
 from common.url_utils import build_absolute_http_url, is_absolute_http_url
@@ -199,6 +200,9 @@ class StepExecutionContext:
         self.executing_quote_case_id: Optional[int] = None
         # 引用链执行中容器步骤ID：被引用用例根步骤的parent_step_id为None，落明细时回落到此值归属引用容器
         self.executing_parent_step_id: Optional[int] = None
+        # 引用公共接口自身挂载的数据源快照：由引用执行器预载（宿主case_id+引用步骤step_code查表），供引用链内层HTTP/TCP步骤消费；引用公共脚本链中恒为None（屏蔽外层引用接口数据源）
+        self.quote_dataset_name: Optional[str] = None
+        self.quote_dataset_snapshot: Optional[Dict[str, Dict[str, Any]]] = None
         self._http_client = http_client
         self._exit_stack = AsyncExitStack()
         self.defined_variables: List[StepVariablesBase] = []
@@ -1417,6 +1421,9 @@ class BaseStepExecutor:
             loop_interval=self.step.loop_interval,
             loop_iterable=self.step.loop_iterable,
             loop_on_error=self.step.loop_on_error,
+            loop_index=self.step.loop_index,
+            loop_key=self.step.loop_key,
+            loop_value=self.step.loop_value,
             code=actual_request.get("request_code"),
             loop_conditions=self._snapshot_loop_conditions(actual_request),
             branch_items=self._snapshot_branch_items(actual_request),
@@ -1537,8 +1544,86 @@ class BaseStepExecutor:
 
 class LoopStepExecutor(BaseStepExecutor):
     """
-    循环结构执行器：根据loop_mode分派次数/列表/字典/条件循环，维护loop_index等会话变量并执行子步骤。
+    循环结构执行器：根据loop_mode分派次数/列表/字典/条件循环，维护循环索引等会话变量并执行子步骤。
+    循环变量名直接取步骤配置(loop_index/loop_key/loop_value)，页面输入框默认预填，合法性由schema入库前校验。
     """
+
+    # 条件循环最大循环时间上限(秒)
+    CONDITION_LOOP_MAX_TIMEOUT: int = 300
+
+    # 防死循环护栏：条件循环单层最大执行轮数
+    LOOP_GUARD_LIMIT: int = 100
+
+    async def _execute_loop_round(
+            self,
+            result: StepExecutionResult,
+            on_error: AutoTestLoopErrorStrategy,
+            loop_no: int,
+            loop_mode: str,
+            loop_message: str,
+            include_variables: List[StepVariablesBase],
+    ) -> bool:
+        """
+        执行单轮子步骤：标记本轮轮次、写入本轮循环变量、执行子步骤树并按错误策略处理失败。
+        四种循环模式的单轮行为完全一致，仅循环变量注入与日志文案不同，故收敛至此统一处理。
+
+        :param result: 用于挂载子步骤结果的StepExecutionResult
+        :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
+        :param loop_no: 当前轮次
+        :param loop_mode: 循环模式
+        :param loop_message: 日志文案
+        :param include_variables: 本轮写入会话变量的循环变量列表
+        :return: True=继续下一轮；False=按[中断循环]策略结束本层循环；STOP策略直接抛出终止整个用例
+        """
+        if self.step_code:
+            self.context.step_cycle_index[self.step_code] = loop_no
+
+        self.context.log(message=loop_message, step_code=self.step_code)
+        self.context.update_variables(include_variables, scope="session_variables")
+        for child in self.children:
+            child_code = child.step_code or (str(child.step_id) if child.step_id is not None else "")
+            if child_code:
+                self.context.step_cycle_index[child_code] = loop_no
+
+        try:
+            child_results = await self._execute_children()
+        except StepExecutionError:
+            if on_error == AutoTestLoopErrorStrategy.STOP:
+                raise
+            return on_error == AutoTestLoopErrorStrategy.CONTINUE
+        except Exception as e:
+            error_message = f"【循环结构】{loop_mode}, 第{loop_no}次执行失败, \n\t错误描述: {e}"
+            self.context.log(error_message, step_code=self.step_code)
+            result.success = False
+            if on_error == AutoTestLoopErrorStrategy.STOP:
+                raise StepExecutionError(error_message) from e
+            return on_error == AutoTestLoopErrorStrategy.CONTINUE
+
+        for child in child_results:
+            result.append_child(child)
+            if not child.success:
+                result.success = False
+                if on_error == AutoTestLoopErrorStrategy.STOP:
+                    raise StepExecutionError(
+                        f"【循环结构】{loop_mode}, "
+                        f"子步骤执行失败(错误处理策略: 停止整个用例执行)\n\t"
+                        f"错误描述: {child.error!r}"
+                    )
+                if on_error == AutoTestLoopErrorStrategy.BREAK:
+                    self.context.log(
+                        message=f"【循环结构】{loop_mode}, "
+                                f"子步骤执行失败(错误处理策略: 中断循环)\n\t"
+                                f"错误描述: {child.error!r}",
+                        step_code=self.step_code
+                    )
+                    return False
+                self.context.log(
+                    message=f"【循环结构】{loop_mode}, "
+                            f"子步骤执行失败(错误处理策略: 继续下一次循环)\n\t"
+                            f"错误描述: {child.error!r}",
+                    step_code=self.step_code
+                )
+        return True
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
@@ -1548,32 +1633,20 @@ class LoopStepExecutor(BaseStepExecutor):
         :return: None
         """
         try:
-            loop_mode_str = self.step.loop_mode
-            if not loop_mode_str:
-                raise StepExecutionError(
-                    "【循环结构】请明确指定循环模式类型: \n\t"
-                    "仅允许选择: 次数循环, 列表循环, 字典循环, 条件循环"
-                )
+            loop_mode: str = self.step.loop_mode
+            if not loop_mode:
+                raise StepExecutionError("【循环结构】请明确循环模式(仅允许选择: 次数循环, 列表循环, 字典循环, 条件循环)")
             try:
-                loop_mode = AutoTestLoopMode(loop_mode_str)
+                loop_mode = AutoTestLoopMode(loop_mode)
             except (ValueError, TypeError) as e:
-                raise StepExecutionError(
-                    f"【循环结构】循环模式{loop_mode_str}无效: \n\t"
-                    f"仅允许选择: 次数循环、列表循环、字典循环、条件循环"
-                ) from e
+                raise StepExecutionError(f"【循环结构】循环模式[{loop_mode}]无效(仅允许选择: 次数循环, 列表循环, 字典循环, 条件循环)") from e
             on_error_str = self.step.loop_on_error
             if not on_error_str:
-                raise StepExecutionError(
-                    "【循环结构】请明确指定错误处理策略: \n\t"
-                    "仅允许选择: 继续下一次循环, 中断循环, 停止整个用例执行"
-                )
+                raise StepExecutionError("【循环结构】请明确异常处理策略(仅允许选择: 继续下一次循环, 中断循环, 停止整个用例执行)")
             try:
                 on_error = AutoTestLoopErrorStrategy(on_error_str)
             except (ValueError, TypeError) as e:
-                raise StepExecutionError(
-                    f"【循环结构】错误处理策略{on_error_str}无效: \n\t"
-                    f"仅允许选择: 继续下一次循环、中断循环、停止整个用例执行"
-                ) from e
+                raise StepExecutionError(f"【循环结构】异常处理策略{on_error_str}无效(仅允许选择: 继续下一次循环, 中断循环, 停止整个用例执行)") from e
 
             if loop_mode == AutoTestLoopMode.COUNT:
                 await self._execute_count_loop(result, on_error)
@@ -1584,10 +1657,7 @@ class LoopStepExecutor(BaseStepExecutor):
             elif loop_mode == AutoTestLoopMode.CONDITION:
                 await self._execute_condition_loop(result, on_error)
             else:
-                raise StepExecutionError(
-                    f"【循环结构】循环模式[{loop_mode_str}]无效: \n\t"
-                    f"仅允许选择: 次数循环, 列表循环, 字典循环, 条件循环"
-                )
+                raise StepExecutionError(f"【循环结构】循环模式[{loop_mode}]无效(仅允许选择: 次数循环, 列表循环, 字典循环, 条件循环)")
         except StepExecutionError:
             raise
         except Exception as e:
@@ -1602,160 +1672,95 @@ class LoopStepExecutor(BaseStepExecutor):
 
         :return: 解析后的最大循环次数
         """
-        raw = self.step.loop_maximums
-        if raw is None or (isinstance(raw, str) and not str(raw).strip()):
-            raise StepExecutionError("【循环结构】次数循环模式不允许loop_maximums参数为空")
+        loop_maximums_raw: str = self.step.loop_maximums
+        if loop_maximums_raw is None or (isinstance(loop_maximums_raw, str) and not str(loop_maximums_raw).strip()):
+            raise StepExecutionError("【循环结构】次数循环: 参数[loop_maximums]不允许为空")
 
-        if isinstance(raw, bool):
-            raise StepExecutionError(
-                f"【循环结构】loop_maximums不允许为布尔值: \n\t原始值: {raw!r}"
-            )
+        if isinstance(loop_maximums_raw, bool):
+            raise StepExecutionError(f"【循环结构】次数循环模式: 参数[loop_maximums]不允许为布尔值")
 
-        if isinstance(raw, int):
-            resolved: Any = raw
+        if isinstance(loop_maximums_raw, int):
+            loop_maximums_resolved: int = loop_maximums_raw
         else:
-            text = str(raw).strip()
+            loop_maximums_raw = str(loop_maximums_raw).strip()
             try:
-                resolved = self.context.resolve_placeholders(variables=text, step_code=self.step_code)
+                loop_maximums_resolved: Any = self.context.resolve_placeholders(variables=loop_maximums_raw, step_code=self.step_code)
             except StepExecutionError:
                 raise
             except Exception as e:
-                raise StepExecutionError(
-                    f"【循环结构】loop_maximums占位符解析异常: \n\t"
-                    f"原始值: {raw!r}\n\t错误描述: {e}"
-                ) from e
+                raise StepExecutionError(f"【循环结构】次数循环模式: 参数[loop_maximums]占位符解析异常: {e}") from e
 
-            if isinstance(resolved, str) and resolved.startswith("${") and resolved.endswith("}"):
-                variable_name = resolved[2:-1]
+            if isinstance(loop_maximums_resolved, str) and loop_maximums_resolved.startswith("${") and loop_maximums_resolved.endswith("}"):
+                variable_name: str = loop_maximums_resolved[2:-1]
                 try:
-                    resolved = self.context.get_variable(variable_name)
+                    loop_maximums_resolved: Any = self.context.get_variable(variable_name)
                 except KeyError as e:
-                    raise StepExecutionError(
-                        f"【循环结构】loop_maximums引用的变量未定义: {variable_name}"
-                    ) from e
+                    raise StepExecutionError(f"【循环结构】次数循环模式: 参数[loop_maximums]占位符引用未定义, {e}") from e
 
         try:
-            if isinstance(resolved, bool):
-                raise ValueError(f"布尔值不能作为循环次数: {resolved!r}")
-            if isinstance(resolved, int):
-                loop_maximums = resolved
-            elif isinstance(resolved, float):
-                if not resolved.is_integer():
-                    raise ValueError(f"浮点数不是整数: {resolved!r}")
-                loop_maximums = int(resolved)
-            elif isinstance(resolved, str):
-                text = resolved.strip()
+            if isinstance(loop_maximums_resolved, bool):
+                raise ValueError(f"布尔值不被允许")
+            if isinstance(loop_maximums_resolved, int):
+                loop_maximums = loop_maximums_resolved
+            elif isinstance(loop_maximums_resolved, float):
+                if not loop_maximums_resolved.is_integer():
+                    raise ValueError(f"浮点数不被允许")
+                loop_maximums = int(loop_maximums_resolved)
+            elif isinstance(loop_maximums_resolved, str):
+                text = loop_maximums_resolved.strip()
                 if not re.fullmatch(r"[+-]?\d+", text):
-                    raise ValueError(f"字符串不是整数: {resolved!r}")
+                    raise ValueError(f"字符串不被允许")
                 loop_maximums = int(text)
             else:
-                raise ValueError(f"不支持的类型: {type(resolved).__name__}, 值: {resolved!r}")
+                raise ValueError(f"不支持的类型: {type(loop_maximums_resolved).__name__}, 值: {loop_maximums_resolved!r}")
         except ValueError as e:
             raise StepExecutionError(
-                f"【循环结构】loop_maximums解析后不是合法正整数: \n\t"
-                f"原始值: {raw!r}\n\t解析值: {resolved!r}\n\t错误描述: {e}"
+                f"【循环结构】次数循环: 参数[loop_maximums]占位符解析值不被允许\n\t"
+                f"原始值: {loop_maximums_raw!r}\n\t"
+                f"解析值: {loop_maximums_resolved!r}\n\t"
+                f"错误描述: {e}"
             ) from e
 
-        if loop_maximums < 1:
-            raise StepExecutionError(
-                f"【循环结构】loop_maximums必须为正整数(>=1): \n\t"
-                f"原始值: {raw!r}\n\t解析值: {loop_maximums}"
-            )
-        if loop_maximums > 100:
-            raise StepExecutionError(
-                f"【循环结构】loop_maximums超过最大限制100次: \n\t"
-                f"原始值: {raw!r}\n\t解析值: {loop_maximums}"
-            )
+        if loop_maximums < 1 or loop_maximums > 100:
+            raise StepExecutionError(f"【循环结构】次数循环: 参数[loop_maximums]必须为大于1且小于100的正整数")
         return loop_maximums
 
     async def _execute_count_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        次数循环模式，根据loop_maximums 执行固定次数循环，可选loop_interval间隔；超100次强制终止。
-        loop_maximums 支持字面量或变量占位符，执行前解析为整数。
+        次数循环模式：按loop_maximums（字面量或变量占位符，解析后强制1-100）执行固定次数，可选loop_interval间隔。
+        每轮写入循环索引变量并执行子步骤树，失败按错误策略处理。
 
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
         """
-        loop_maximums = self._resolve_loop_maximums()
+        loop_maximums: int = self._resolve_loop_maximums()
         result.request = {"loop_maximums": loop_maximums}
 
-        loop_interval = self.step.loop_interval
-        guard_limit = 100
+        loop_index: str = self.step.loop_index
+        loop_interval: float = self.step.loop_interval
 
-        self.context.log(
-            f"【循环结构】次数循环开始: 最大循环次数: {loop_maximums}"
-            f"（配置: {self.step.loop_maximums!r}）",
-            step_code=self.step_code,
-        )
-        for iteration in range(1, loop_maximums + 1):
-            if self.step_code:
-                self.context.step_cycle_index[self.step_code] = iteration
-            self.context.log(f"【循环结构】次数循环: 第{iteration}/{loop_maximums}次执行", step_code=self.step_code)
-            self.context.update_variables(
-                [StepVariablesBase(key="loop_index", value=iteration, desc="")],
-                scope="session_variables",
+        self.context.log(message=f"【循环结构】次数循环开始: 最大循环次数: {loop_maximums}", step_code=self.step_code)
+        for loop_no in range(1, loop_maximums + 1):
+            should_continue = await self._execute_loop_round(
+                result=result,
+                on_error=on_error,
+                loop_no=loop_no,
+                loop_mode="次数循环",
+                loop_message=f"【循环结构】次数循环, 第{loop_no}/{loop_maximums}次执行",
+                include_variables=[StepVariablesBase(key=loop_index, value=loop_no, desc="")],
             )
-            for child in self.children:
-                child_code = child.step_code
-                if child_code:
-                    self.context.step_cycle_index[child_code] = iteration
-            try:
-                child_results = await self._execute_children()
-                for child in child_results:
-                    result.append_child(child)
-                    if not child.success:
-                        result.success = False
-                        if on_error == AutoTestLoopErrorStrategy.STOP:
-                            raise StepExecutionError(
-                                f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行)\n\t"
-                                f"错误描述: {child.error!r}"
-                            )
-                        elif on_error == AutoTestLoopErrorStrategy.BREAK:
-                            self.context.log(
-                                f"【循环结构】子步骤执行失败(错误处理策略: 中断循环)\n\t"
-                                f"错误描述: {child.error!r}",
-                                step_code=self.step_code
-                            )
-                            return
-                        elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
-                            self.context.log(
-                                f"【循环结构】子步骤执行失败(错误处理策略: 继续下一次循环)\n\t"
-                                f"错误描述: {child.error!r}",
-                                step_code=self.step_code
-                            )
-                            pass
-            except StepExecutionError:
-                if on_error == AutoTestLoopErrorStrategy.STOP:
-                    raise
-                elif on_error == AutoTestLoopErrorStrategy.BREAK:
-                    return
-                elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
-                    pass
-            except Exception as e:
-                error_message = f"【循环结构】次数循环: 第{iteration}次执行失败, \n\t错误描述: {e}"
-                self.context.log(error_message, step_code=self.step_code)
-                result.success = False
-                if on_error == AutoTestLoopErrorStrategy.STOP:
-                    raise StepExecutionError(error_message) from e
-                elif on_error == AutoTestLoopErrorStrategy.BREAK:
-                    return
-
-            if iteration < loop_maximums and loop_interval and loop_interval > 0:
+            if not should_continue:
+                return
+            if loop_no < loop_maximums and loop_interval and loop_interval > 0:
                 await self.context.sleep(loop_interval)
 
-            if iteration > guard_limit:
-                raise StepExecutionError(
-                    f"【循环结构】循环次数超过最大限制{guard_limit}次: \n\t"
-                    f"已执行 {iteration} 次, 疑似无限循环, 为保护系统安全已自动终止循环"
-                )
-
-        self.context.log(f"【循环结构】次数循环结束: 共执行{loop_maximums}次", step_code=self.step_code)
+        self.context.log(message=f"【循环结构】次数循环结束: 共执行 {loop_maximums} 次", step_code=self.step_code)
 
     async def _execute_list_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        列表循环模式，对可迭代对象（变量或 JSON 数组）逐项执行子步骤。
-        会话变量固定为loop_index（从 1 起的序号）、loop_value（当前项）
+        列表循环模式：对可迭代对象（变量或 JSON 数组）逐项执行子步骤。
+        每轮写入循环索引变量（从 1 起的序号）与循环数据变量（当前项）并执行子步骤树。
 
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
@@ -1763,109 +1768,56 @@ class LoopStepExecutor(BaseStepExecutor):
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
-            raise StepExecutionError("【循环结构】列表循环模式下参数[loop_iterable]不允许为空")
+            raise StepExecutionError("【循环结构】列表循环, 参数[loop_iterable]不允许为空")
 
-        index_var_name = "loop_index"
-        value_var_name = "loop_value"
-        start_index = 1
-        loop_interval = self.step.loop_interval
-
+        loop_var_index: str = self.step.loop_index
+        loop_var_value: str = self.step.loop_value
+        loop_interval: float = self.step.loop_interval
         try:
             iterable_obj = self.parse_iterable_source(loop_iterable)
-            # 验证是否为可迭代对象（排除字符串和字节）
             if isinstance(iterable_obj, (str, bytes)) or not hasattr(iterable_obj, "__iter__"):
-                raise StepExecutionError(
-                    f"【循环结构】参数异常: \n\t"
-                    f"预期类型: List[...] | Tuple[...] 等可迭代对象\n\t"
-                    f"当前类型: {type(iterable_obj).__name__}"
-                )
+                raise StepExecutionError(f"【循环结构】列表循环: 参数[loop_iterable]值类型不被允许, 当前类型: {type(iterable_obj).__name__}")
+
             # 转换为列表以便索引
             iterable_list = list(iterable_obj)
             total_items = len(iterable_list)
             if total_items == 0:
-                self.context.log("【循环结构】列表循环: 可迭代对象为空, 跳过循环", step_code=self.step_code)
+                self.context.log(message="【循环结构】列表循环: 参数[loop_iterable]值为空, 跳过循环", step_code=self.step_code)
                 return
             self.context.log(
-                f"【循环结构】列表循环开始: \n\t"
-                f"迭代长度: {total_items}\n\t"
-                f"索引变量: {index_var_name}\n\t"
-                f"数据变量: {value_var_name}",
+                message=f"【循环结构】列表循环开始: \n\t"
+                        f"循环列表元素数: {total_items}\n\t"
+                        f"循环索引变量名: {loop_var_index}\n\t"
+                        f"循环数据变量名: {loop_var_value}",
                 step_code=self.step_code
             )
-            for idx, item in enumerate(iterable_list, start=start_index):
-                # 记录循环次数
-                if self.step_code:
-                    self.context.step_cycle_index[self.step_code] = idx
-                self.context.log(
-                    f"【循环结构】列表循环: \n\t"
-                    f"第{idx}/{total_items}次执行\n\t"
-                    f"数据: {item!r}",
-                    step_code=self.step_code
-                )
-                self.context.update_variables(
-                    [
-                        StepVariablesBase(key=index_var_name, value=idx, desc=""),
-                        StepVariablesBase(key=value_var_name, value=item, desc=""),
+            for idx, item in enumerate(iterable_list, start=1):
+                should_continue = await self._execute_loop_round(
+                    result=result,
+                    on_error=on_error,
+                    loop_no=idx,
+                    loop_message=f"【循环结构】列表循环: \n\t第{idx}/{total_items}次执行\n\t数据: {item!r}",
+                    loop_mode="列表循环",
+                    include_variables=[
+                        StepVariablesBase(key=loop_var_index, value=idx, desc=""),
+                        StepVariablesBase(key=loop_var_value, value=item, desc=""),
                     ],
-                    scope="session_variables",
                 )
-                # 为子步骤记录当前循环次数
-                for child in self.children:
-                    child_code = child.step_code
-                    if child_code:
-                        self.context.step_cycle_index[child_code] = idx
-                try:
-                    child_results = await self._execute_children()
-                    for child in child_results:
-                        result.append_child(child)
-                        if not child.success:
-                            result.success = False
-                            if on_error == AutoTestLoopErrorStrategy.STOP:
-                                raise StepExecutionError(
-                                    f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行)\n\t"
-                                    f"错误描述: {child.error!r}"
-                                )
-                            elif on_error == AutoTestLoopErrorStrategy.BREAK:
-                                self.context.log(
-                                    f"【循环结构】子步骤执行失败(错误处理策略: 中断循环)\n\t"
-                                    f"错误描述: {child.error!r}",
-                                    step_code=self.step_code
-                                )
-                                return
-                            elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
-                                self.context.log(
-                                    f"【循环结构】子步骤执行失败(错误处理策略: 继续下一次循环)\n\t"
-                                    f"错误描述: {child.error!r}",
-                                    step_code=self.step_code
-                                )
-                except StepExecutionError:
-                    if on_error == AutoTestLoopErrorStrategy.STOP:
-                        raise
-                    elif on_error == AutoTestLoopErrorStrategy.BREAK:
-                        return
-                except Exception as e:
-                    error_message = f"【循环结构】列表循环: \n\t第{idx}次执行失败: {e}"
-                    self.context.log(error_message, step_code=self.step_code)
-                    result.success = False
-                    if on_error == AutoTestLoopErrorStrategy.STOP:
-                        raise StepExecutionError(error_message) from e
-                    elif on_error == AutoTestLoopErrorStrategy.BREAK:
-                        return
-
+                if not should_continue:
+                    return
                 if idx < total_items and loop_interval and loop_interval > 0:
                     await self.context.sleep(loop_interval)
 
-            self.context.log(f"【循环结构】列表循环结束: 共执行{total_items}次", step_code=self.step_code)
-
+            self.context.log(message=f"【循环结构】列表循环结束: 共执行 {total_items} 次", step_code=self.step_code)
         except StepExecutionError:
             raise
         except Exception as e:
-            raise StepExecutionError(f"【循环结构】列表循环执行异常: {e}") from e
+            raise StepExecutionError(f"【循环结构】列表循环: {e}") from e
 
     async def _execute_dict_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        字典循环模式，对字典逐 (key, value) 执行子步骤。
-        会话变量固定为loop_index（从 1 起的序号）、loop_key、loop_value
+        字典循环模式：对字典逐 (key, value) 执行子步骤。
+        每轮写入循环索引变量（从 1 起的序号）、循环键名变量、循环数据变量并执行子步骤树。
 
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
@@ -1873,104 +1825,52 @@ class LoopStepExecutor(BaseStepExecutor):
         """
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
-            raise StepExecutionError("【循环结构】字典循环模式下参数[loop_iterable]不允许为空")
+            raise StepExecutionError("【循环结构】字典循环, 参数[loop_iterable]不允许为空")
 
-        index_var_name = "loop_index"
-        key_var_name = "loop_key"
-        value_var_name = "loop_value"
-        start_index = 1
-        loop_interval = self.step.loop_interval
+        loop_index: str = self.step.loop_index
+        loop_key: str = self.step.loop_key
+        loop_value: str = self.step.loop_value
+        loop_interval: float = self.step.loop_interval
 
         try:
             # 解析字典对象来源
             dict_obj = self.parse_iterable_source(loop_iterable)
             # 验证是否为字典
             if not isinstance(dict_obj, dict):
-                raise StepExecutionError(
-                    f"【循环结构】字典循环模式: \n\t"
-                    f"预期类型: Dict[str, Any]\n\t"
-                    f"实际类型: {type(dict_obj).__name__}"
-                )
+                raise StepExecutionError(f"【循环结构】字典循环: 参数[loop_iterable]值类型不被允许, 当前类型: {type(dict_obj).__name__}")
+
             total_items = len(dict_obj)
             if total_items == 0:
-                self.context.log("【循环结构】字典循环: 字典对象为空, 跳过循环", step_code=self.step_code)
+                self.context.log(message="【循环结构】字典循环: 字典对象为空, 跳过循环", step_code=self.step_code)
                 return
 
             self.context.log(
-                f"【循环结构】字典循环开始: \n\t"
-                f"字典键数量: {total_items}\n\t"
-                f"索引变量: {index_var_name}\n\t"
-                f"键变量: {key_var_name}\n\t"
-                f"值变量: {value_var_name}",
+                message=f"【循环结构】字典循环开始: \n\t"
+                        f"循环字典元素数: {total_items}\n\t"
+                        f"循环索引变量名: {loop_index}\n\t"
+                        f"循环键名变量名: {loop_key}\n\t"
+                        f"循环数据变量名: {loop_value}",
                 step_code=self.step_code
             )
-            for idx, (key, value) in enumerate(dict_obj.items(), start=start_index):
-                # 记录循环次数
-                if self.step_code:
-                    self.context.step_cycle_index[self.step_code] = idx
-                self.context.log(
-                    f"【循环结构】字典循环: \n\t"
-                    f"第{idx}/{total_items}次执行\n\t"
-                    f"键={key}\n\t"
-                    f"值={value}",
-                    step_code=self.step_code
-                )
-                self.context.update_variables(
-                    [
-                        StepVariablesBase(key=index_var_name, value=idx, desc=""),
-                        StepVariablesBase(key=key_var_name, value=key, desc=""),
-                        StepVariablesBase(key=value_var_name, value=value, desc=""),
+            for idx, (key, value) in enumerate(dict_obj.items(), start=1):
+                should_continue = await self._execute_loop_round(
+                    result=result,
+                    on_error=on_error,
+                    loop_no=idx,
+                    loop_message=f"【循环结构】字典循环: \n\t第{idx}/{total_items}次执行\n\t键={key}\n\t值={value}",
+                    loop_mode=f"字典循环",
+                    include_variables=[
+                        StepVariablesBase(key=loop_index, value=idx, desc=""),
+                        StepVariablesBase(key=loop_key, value=key, desc=""),
+                        StepVariablesBase(key=loop_value, value=value, desc=""),
                     ],
-                    scope="session_variables",
                 )
-                # 为子步骤记录当前循环次数
-                for child in self.children:
-                    child_code = child.step_code or (str(child.step_id) if child.step_id is not None else "")
-                    if child_code:
-                        self.context.step_cycle_index[child_code] = idx
-
-                try:
-                    child_results = await self._execute_children()
-                    for child in child_results:
-                        result.append_child(child)
-                        if not child.success:
-                            result.success = False
-                            if on_error == AutoTestLoopErrorStrategy.STOP:
-                                raise StepExecutionError(
-                                    f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行)\n\t"
-                                    f"错误描述: {child.error!r}"
-                                )
-                            elif on_error == AutoTestLoopErrorStrategy.BREAK:
-                                self.context.log(
-                                    f"【循环结构】子步骤执行失败(错误处理策略: 中断循环)\n\t"
-                                    f"错误描述: {child.error!r}",
-                                    step_code=self.step_code
-                                )
-                                return
-                            elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
-                                self.context.log(
-                                    f"【循环结构】子步骤执行失败(错误处理策略: 继续下一次循环)\n\t"
-                                    f"错误描述: {child.error!r}",
-                                    step_code=self.step_code
-                                )
-                except StepExecutionError:
-                    if on_error == AutoTestLoopErrorStrategy.STOP:
-                        raise
-                    elif on_error == AutoTestLoopErrorStrategy.BREAK:
-                        return
-                except Exception as e:
-                    error_message = f"【循环结构】字典循环: \n\t第{idx}次执行失败: {e}"
-                    self.context.log(error_message, step_code=self.step_code)
-                    result.success = False
-                    if on_error == AutoTestLoopErrorStrategy.STOP:
-                        raise StepExecutionError(error_message) from e
-                    elif on_error == AutoTestLoopErrorStrategy.BREAK:
-                        return
-
+                if not should_continue:
+                    return
                 if idx < total_items and loop_interval and loop_interval > 0:
                     await self.context.sleep(loop_interval)
 
-            self.context.log(f"【循环结构】字典循环结束: 共执行{total_items}次", step_code=self.step_code)
+            self.context.log(f"【循环结构】字典循环结束: 共执行 {total_items} 次", step_code=self.step_code)
 
         except StepExecutionError:
             raise
@@ -1979,12 +1879,12 @@ class LoopStepExecutor(BaseStepExecutor):
 
     async def _execute_condition_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        条件循环：while语义每轮先根据loop_conditions判断是否继续；仅当条件满足时才执行子步骤，
-        再进入间隔与下一轮判断。条件一开始就不满足时，子步骤一轮都不会执行。
-        超时、条件评估异常、或子步骤根据策略中断时退出；最多100轮（每轮一次子步骤树）防死循环。
+        条件循环模式：while语义每轮先根据loop_conditions判断是否继续，仅当条件满足时才执行子步骤。
+        条件一开始就不满足时子步骤一轮都不执行；超时（上限300秒，执行期兜底clamp存量超限数据）、
+        条件评估异常、或子步骤按错误策略中断时退出；最多100轮（每轮一次子步骤树）防死循环。
 
         约定：loop_conditions与ConditionsBase一致（condition_expr/condition_compare/condition_value），
-        经compare_assertion评估；返回True表示继续循环，返回 False 表示结束循环。
+        经evaluate_condition评估；返回True表示继续循环，返回False表示结束循环。
 
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
@@ -1992,131 +1892,79 @@ class LoopStepExecutor(BaseStepExecutor):
         """
         condition = self.step.loop_conditions
         if not condition:
-            raise StepExecutionError("【循环结构】条件循环模式下参数[loop_conditions]不允许为空")
+            raise StepExecutionError("【循环结构】条件循环, 参数[loop_conditions]不允许为空")
 
-        loop_timeout = self.step.loop_timeout
-        loop_interval = self.step.loop_interval
+        loop_timeout: float = self.step.loop_timeout
+        loop_interval: float = self.step.loop_interval
+        loop_index: str = self.step.loop_index
+        # 执行期上限兜底：拦截存量数据中超出300秒的配置，超限记日志并按上限执行
+        if loop_timeout and loop_timeout > self.CONDITION_LOOP_MAX_TIMEOUT:
+            self.context.log(
+                message=f"【循环结构】条件循环, 超时配置{loop_timeout}s超出上限{self.CONDITION_LOOP_MAX_TIMEOUT}s, 已按上限执行",
+                step_code=self.step_code,
+            )
+            loop_timeout = float(self.CONDITION_LOOP_MAX_TIMEOUT)
 
-        # iteration：实际执行子步骤树的轮数（与 loop_index、防死循环计数一致）
-        iteration = 0
-        guard_limit = 100
-        should_continue = True
-        start_time = time.time()
         if hasattr(condition, "model_dump"):
             result.request = {"loop_conditions": condition.model_dump()}
         elif isinstance(condition, dict):
             result.request = {"loop_conditions": condition}
         else:
             result.request = {"loop_conditions": None}
-        self.context.log(
-            f"【循环结构】条件循环开始: \n\t"
-            f"循环超时时间配置: {loop_timeout}s",
-            step_code=self.step_code
-        )
-        while should_continue:
+        self.context.log(message=f"【循环结构】条件循环开始: \n\t循环超时配置: {loop_timeout}s", step_code=self.step_code)
+
+        # loop_no：实际执行子步骤树的轮数（与循环索引变量、防死循环计数一致）
+        loop_no = 0
+        start_time = time.time()
+        while True:
             if loop_timeout and loop_timeout > 0:
                 elapsed = time.time() - start_time
                 if elapsed >= loop_timeout:
                     self.context.log(
-                        f"【循环结构】条件循环超时: \n\t"
-                        f"已累计执行子步骤: {iteration}轮\n\t"
-                        f"当前耗时: {elapsed:.2f}s\n\t"
-                        f"最大时间: {loop_timeout}s",
+                        message=f"【循环结构】条件循环, 执行超时: \n\t"
+                                f"累计执行: {loop_no}次\n\t"
+                                f"当前耗时: {elapsed:.2f}s\n\t"
+                                f"最大时间: {loop_timeout}s",
                         step_code=self.step_code
                     )
                     break
 
             # 先评估条件：不满足则不再执行本轮子步骤（while语义）
             try:
-                if not self.evaluate_condition(condition):
+                condition = self.evaluate_condition(condition)
+                if not condition:
                     self.context.log(
-                        f"【循环结构】条件不满足, 结束循环: \n\t"
-                        f"本轮不执行子步骤, 已累计执行子步骤: {iteration}轮",
+                        message=f"【循环结构】条件循环, 评估失败: \n\t本轮不执行子步骤, 已累计执行: {loop_no} 次",
                         step_code=self.step_code,
                     )
                     break
             except Exception as e:
                 result.success = False
-                error_message = f"【循环结构】条件评估失败: {e}"
-                result.error = error_message
-                self.context.log(error_message, step_code=self.step_code)
-                should_continue = False
+                result.error = f"【循环结构】条件循环, 评估异常: {e}"
+                self.context.log(result.error, step_code=self.step_code)
                 break
 
-            iteration += 1
-            if self.step_code:
-                self.context.step_cycle_index[self.step_code] = iteration
-            self.context.log(
-                f"【循环结构】条件循环: 第{iteration}轮(条件已满足, 开始执行子步骤)",
-                step_code=self.step_code,
+            loop_no += 1
+            should_continue = await self._execute_loop_round(
+                result=result,
+                on_error=on_error,
+                loop_no=loop_no,
+                loop_message=f"【循环结构】条件循环: 第 {loop_no} 轮(条件已满足, {condition!r})",
+                loop_mode=f"条件循环",
+                include_variables=[StepVariablesBase(key=loop_index, value=loop_no, desc="")],
             )
-            self.context.update_variables(
-                [StepVariablesBase(key="loop_index", value=iteration, desc="")],
-                scope="session_variables",
-            )
-            for child in self.children:
-                child_code = child.step_code or (str(child.step_id) if child.step_id is not None else "")
-                if child_code:
-                    self.context.step_cycle_index[child_code] = iteration
-            try:
-                child_results = await self._execute_children()
-                for child in child_results:
-                    result.append_child(child)
-                    if not child.success:
-                        result.success = False
-                        if on_error == AutoTestLoopErrorStrategy.STOP:
-                            raise StepExecutionError(
-                                f"【循环结构】子步骤执行失败(错误处理策略: 停止整个用例执行)\n\t"
-                                f"错误描述: {child.error!r}"
-                            )
-                        elif on_error == AutoTestLoopErrorStrategy.BREAK:
-                            self.context.log(
-                                f"【循环结构】子步骤执行失败(错误处理策略: 中断循环)\n\t"
-                                f"错误描述: {child.error!r}",
-                                step_code=self.step_code
-                            )
-                            return
-                        elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
-                            self.context.log(
-                                f"【循环结构】子步骤执行失败(错误处理策略: 继续下一次循环)\n\t"
-                                f"错误描述: {child.error!r}",
-                                step_code=self.step_code
-                            )
-                            pass
-            except StepExecutionError:
-                if on_error == AutoTestLoopErrorStrategy.STOP:
-                    raise
-                elif on_error == AutoTestLoopErrorStrategy.BREAK:
-                    should_continue = False
-                    break
-                elif on_error == AutoTestLoopErrorStrategy.CONTINUE:
-                    pass
-            except Exception as e:
-                error_message = f"【循环结构】条件循环: 第{iteration}轮执行子步骤失败: {e}"
-                self.context.log(error_message, step_code=self.step_code)
-                result.success = False
-                if on_error == AutoTestLoopErrorStrategy.STOP:
-                    raise StepExecutionError(error_message) from e
-                elif on_error == AutoTestLoopErrorStrategy.BREAK:
-                    should_continue = False
-                    break
-
             if not should_continue:
                 break
 
-            if iteration > guard_limit:
+            if loop_no > self.LOOP_GUARD_LIMIT:
                 raise StepExecutionError(
-                    f"【循环结构】循环次数超过最大限制{guard_limit}次: \n\t"
-                    f"已累计执行子步骤{iteration}轮, 疑似无限循环, 为保护系统安全已自动终止循环"
+                    f"【循环结构】条件循环, "
+                    f"循环次数超过最大限制{self.LOOP_GUARD_LIMIT}, 疑似无限循环, 为保护系统安全已自动终止循环"
                 )
-
             if loop_interval and loop_interval > 0:
                 await self.context.sleep(loop_interval)
 
-        self.context.log(
-            f"【循环结构】条件循环结束: 共执行子步骤 {iteration} 轮",
-            step_code=self.step_code,
-        )
+        self.context.log(message=f"【循环结构】条件循环结束: 共执行 {loop_no} 次", step_code=self.step_code)
 
     def evaluate_condition(self, condition: ConditionsBase) -> bool:
         """
@@ -2574,6 +2422,8 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
     resolve_own_defined_variables = False
     # 会话变量池半隔离：开启后引用域执行前以被引用用例聚合结果替换上下文变量池（独享、宿主池不可见），执行结束后整个引用池按key回灌宿主（引用覆盖宿主同名）
     use_isolated_session_pool: bool = False
+    # 引用步骤自身挂数据源：开启后执行内层步骤前按(宿主case_id, 引用步骤step_code)预载数据源快照注入context，供引用链内层HTTP/TCP步骤数据驱动（仅引用公共接口开启；引用公共脚本链中恒为None以屏蔽外层引用接口数据源）
+    allowed_own_dataset: bool = False
 
     def _merge_and_override_fields(self, quote_step: AutoTestStepTreeUpdateItem) -> AutoTestStepTreeUpdateItem:
         """
@@ -2645,6 +2495,10 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
         previous_parent_step_id: Optional[int] = getattr(self.context, "executing_parent_step_id", None)
         host_pool: List[StepVariablesBase] = []
         quote_pool: Optional[List[StepVariablesBase]] = None
+        previous_quote_dataset_name: Optional[str] = getattr(self.context, "quote_dataset_name", None)
+        previous_quote_dataset_snapshot: Optional[Dict[str, Dict[str, Any]]] = getattr(
+            self.context, "quote_dataset_snapshot", None
+        )
         try:
             quote_case_id = self.step.quote_case_id
             if not quote_case_id:
@@ -2699,6 +2553,31 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
                     step_code=self.step_code
                 )
 
+            if self.allowed_own_dataset and getattr(self.step, "data_source_id", None) and self.context.dataset_name:
+                # 引用步骤自身挂数据源：数据源行落在宿主用例(case_id+引用步骤step_code)，executing_quote_case_id传None绕过loader对引用链的短路
+                quote_snapshot: Optional[Dict[str, Dict[str, Any]]] = await AutoTestToolService.load_dataset_for_request_step(
+                    case_id=self.case_id,
+                    step_code=self.step_code,
+                    dataset_name=self.context.dataset_name,
+                    executing_quote_case_id=None,
+                )
+                self.context.quote_dataset_name = self.context.dataset_name
+                self.context.quote_dataset_snapshot = quote_snapshot
+                if quote_snapshot is not None:
+                    self.context.log(
+                        f"【{self.quote_step_label}】加载数据源场景({self.context.dataset_name})成功, 供内层请求步骤数据驱动",
+                        step_code=self.step_code
+                    )
+                else:
+                    self.context.log(
+                        f"【{self.quote_step_label}】数据源场景({self.context.dataset_name})在引用步骤数据源中未命中, 内层请求步骤不做数据驱动替换",
+                        step_code=self.step_code
+                    )
+            else:
+                # 开关关闭(引用公共脚本)、未挂数据源或本轮无数据场景：显式清空，屏蔽外层引用接口残留快照泄漏进本引用链
+                self.context.quote_dataset_name = None
+                self.context.quote_dataset_snapshot = None
+
             self.context.log(
                 f"【{self.quote_step_label}】执行用例(id={quote_case_id}, name={quote_case_name})开始",
                 step_code=self.step_code
@@ -2752,6 +2631,9 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
             self.context.log(result.error, step_code=self.step_code)
             raise StepExecutionError(result.error) from e
         finally:
+            # 恢复外层引用域数据源快照（嵌套引用时的正确回退）
+            self.context.quote_dataset_name = previous_quote_dataset_name
+            self.context.quote_dataset_snapshot = previous_quote_dataset_snapshot
             # 半隔离收口：整个执行后引用池按key回灌宿主（引用覆盖宿主同名），无论内层步骤成功或异常
             if quote_pool is not None:
                 merged_host_pool: List[StepVariablesBase] = self._merge_back_session_pool(
@@ -2774,11 +2656,13 @@ class QuotePublicApiStepExecutor(BaseQuoteCaseStepExecutor):
     """
     引用公共接口执行器：仅允许引用用例类型为公共接口的公共用例。
     引用步骤自身追加的局部变量/提取/断言合并进内层HTTP/TCP请求步骤执行（原数据在前、追加在后）。
+    开启引用步骤自身挂数据源：宿主侧挂载在引用步骤上的数据源快照注入引用链，供内层请求步骤数据驱动。
     """
 
     quote_step_label = "引用公共接口"
     allowed_quote_case_types = (AutoTestCaseType.PUBLIC_API,)
     allowed_merge_and_override_fields = True
+    allowed_own_dataset = True
 
 
 class QuotePublicScriptStepExecutor(BaseQuoteCaseStepExecutor):
@@ -2800,14 +2684,10 @@ class TcpStepExecutor(BaseStepExecutor):
         - request_url 为 TCP host（如 127.0.0.1 或域名）
         - request_port 为 TCP port（字符串或数字，范围 1~65535），二者均必填。
         - request_args_type 为 RAW 时发送 request_text（str/bytes），为 JSON 时发送 request_body（dict 或 JSON 字符串），其它或未配置时优先 request_text、否则 request_body。
-        - 额外可选字段（不在 schema 中也可透传到 step dict）：
-            - tcp_frame_mode 取 "length_prefix_json" 或 "raw"（对应 TcpFrameMode，默认 length_prefix_json）；
-            - tcp_length_field_size 为长度前缀宽度（默认 8）；
-            - tcp_encoding 为文本编码（默认 utf-8）；
-            - tcp_connect_timeout 为连接超时秒数（float）；
-            - tcp_read_timeout 为读写超时秒数（float）；
-            - tcp_max_response_bytes 为最大响应体限制（默认 10MB）；
-            - tcp_response_type 取 "json"、"xml"、"text" 或 "bytes"（默认 text，json/xml 失败会降级为 text）。
+        - TCP帧配置（tcp_radix/tcp_radix_length/tcp_datagram_length/tcp_request_end_symbol/tcp_response_end_symbol/
+          tcp_connect_type/tcp_encoding/tcp_hex_string/tcp_response_timeout 等）由 resolve_tcp_frame_config 统一推导，
+          帧字段相互独立不互斥，按优先级推导：进制数≠不使用 → 长度前缀；否则配置了结束符 → 结束符；均未配置 → RAW。
+        - 连接超时与最大读取字节数对齐JMeter不向用户暴露，由引擎按内部默认值兜底（TCP_MAX_RESPONSE_BYTES）。
     """
 
     def collect_builtin_variables(self) -> List[StepVariablesBase]:
@@ -2860,12 +2740,16 @@ class TcpStepExecutor(BaseStepExecutor):
             # 参数化驱动：与HTTP步骤一致（当存在 dataset_name 且不是引用公共脚本时）
             dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
             executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
-            step_struct = await AutoTestToolService.load_dataset_for_request_step(
-                case_id=self.case_id,
-                step_code=self.step_code,
-                dataset_name=dataset_name,
-                executing_quote_case_id=executing_quote_case_id,
-            )
+            if executing_quote_case_id:
+                # 引用链内层步骤：loader对引用链短路，数据驱动取引用公共接口自身挂载的数据源快照（引用公共脚本链中恒为None）
+                step_struct = getattr(self.context, "quote_dataset_snapshot", None)
+            else:
+                step_struct = await AutoTestToolService.load_dataset_for_request_step(
+                    case_id=self.case_id,
+                    step_code=self.step_code,
+                    dataset_name=dataset_name,
+                    executing_quote_case_id=executing_quote_case_id,
+                )
             result.dataset_snapshot = step_struct
             result.dataset_name = dataset_name
 
@@ -2945,53 +2829,65 @@ class TcpStepExecutor(BaseStepExecutor):
                 request_args_type_raw, request_text=request_text, request_body=request_body
             )
 
+            frame_config = resolve_tcp_frame_config(self.step)
+            max_response_bytes = TCP_MAX_RESPONSE_BYTES
+            connect_td, read_td = parse_tcp_timeouts(None, self.step.tcp_response_timeout)
+
             # 写入result.request，便于落库与排障
             result.request = {
                 "request_url": request_url,
                 "request_port": request_port,
                 "request_env_name": env_name,
                 "request_args_type": request_args_type_raw,
-                "tcp_frame_mode": self.step.tcp_frame_mode or "length_prefix_json",
-                "tcp_length_field_size": self.step.tcp_length_field_size or 8,
-                "tcp_encoding": self.step.tcp_encoding or "utf-8",
-                "tcp_connect_timeout": self.step.tcp_connect_timeout,
-                "tcp_read_timeout": self.step.tcp_read_timeout,
-                "tcp_response_type": self.step.tcp_response_type or "text",
+                "tcp_frame_mode": frame_config.frame_mode.value,
+                "tcp_radix": self.step.tcp_radix,
+                "tcp_radix_length": frame_config.radix_length,
+                "tcp_datagram_length": self.step.tcp_datagram_length,
+                "tcp_request_end_symbol": self.step.tcp_request_end_symbol,
+                "tcp_response_end_symbol": self.step.tcp_response_end_symbol,
+                "tcp_connect_type": self.step.tcp_connect_type,
+                "tcp_encoding": frame_config.encoding,
+                "tcp_hex_string": frame_config.hex_string,
+                "tcp_response_timeout": self.step.tcp_response_timeout,
                 "request_body": request_body,
                 "request_text": request_text,
                 "payload": payload,
             }
 
-            frame_mode_raw = (self.step.tcp_frame_mode or "length_prefix_json").strip().lower()
-            frame_mode = TcpFrameMode.RAW if frame_mode_raw == "raw" else TcpFrameMode.LENGTH_PREFIX_JSON
-
-            length_field_size = self.step.tcp_length_field_size or 8
-            encoding = self.step.tcp_encoding or "utf-8"
-            max_response_bytes = self.step.tcp_max_response_bytes or (10 * 1024 * 1024)
-            response_type = (self.step.tcp_response_type or "text").strip().lower()
-            connect_td, read_td = parse_tcp_timeouts(
-                self.step.tcp_connect_timeout, self.step.tcp_read_timeout
-            )
+            if frame_config.long_connection:
+                # 长连接暂未实现：按短连接降级执行，避免阻断步骤
+                self.context.log("【TCP请求】连接方式为长连接, 暂未实现, 已按短连接降级执行", step_code=self.step_code)
 
             start = time.perf_counter()
             async with AioTcpClient(
-                    timeout=read_td or timedelta(seconds=30),
+                    timeout=read_td or timedelta(seconds=10),
                     connect_timeout=connect_td,
-                    length_field_size=int(length_field_size),
-                    max_response_bytes=int(max_response_bytes),
+                    length_field_size=frame_config.radix_length,
+                    max_response_bytes=max_response_bytes,
             ) as client:
                 utils = await client.tcp(
                     request_url,
                     int(request_port),
                     payload,
-                    frame_mode=frame_mode,
-                    encoding=encoding,
+                    frame_mode=frame_config.frame_mode,
+                    length_field_size=frame_config.radix_length,
+                    radix=frame_config.radix,
+                    include_length_prefix=frame_config.include_length_prefix,
+                    request_end_symbol=frame_config.request_end_symbol,
+                    response_end_symbol=frame_config.response_end_symbol,
+                    hex_string=frame_config.hex_string,
+                    send_only=frame_config.send_only,
+                    encoding=frame_config.encoding,
                     connect_timeout=connect_td,
                     read_timeout=read_td,
                 )
                 # 只请求一次：获取原始字节后本地解析，避免解析失败时重发TCP请求
                 resp_bytes = await utils.bytes_resp()
-                parsed = parse_tcp_response(resp_bytes, encoding=encoding, response_type=response_type)
+                parsed = parse_tcp_response(
+                    resp_bytes,
+                    encoding=frame_config.encoding,
+                    hex_string=frame_config.hex_string,
+                )
                 resp_text = parsed.response_text
                 response_json = parsed.response_json
 
@@ -3013,7 +2909,7 @@ class TcpStepExecutor(BaseStepExecutor):
                 request_text=request_text_for_extract,
                 request_json=request_json_for_extract,
                 step_struct=step_struct,
-                body_source=tcp_body_source_for_assert(response_type),
+                body_source="response text",
             )
         except StepExecutionError:
             raise
@@ -3613,12 +3509,16 @@ class HttpStepExecutor(BaseStepExecutor):
             # 参数化驱动：根据 context.dataset_name + case_id/step_code 查 AutoTestDataSourceModel 取该步骤数据集
             dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
             executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
-            step_struct: Optional[Dict[str, Dict[str, Any]]] = await AutoTestToolService.load_dataset_for_request_step(
-                case_id=self.case_id,
-                step_code=self.step_code,
-                dataset_name=dataset_name,
-                executing_quote_case_id=executing_quote_case_id,
-            )
+            if executing_quote_case_id:
+                # 引用链内层步骤：loader对引用链短路，数据驱动取引用公共接口自身挂载的数据源快照（引用公共脚本链中恒为None）
+                step_struct: Optional[Dict[str, Dict[str, Any]]] = getattr(self.context, "quote_dataset_snapshot", None)
+            else:
+                step_struct = await AutoTestToolService.load_dataset_for_request_step(
+                    case_id=self.case_id,
+                    step_code=self.step_code,
+                    dataset_name=dataset_name,
+                    executing_quote_case_id=executing_quote_case_id,
+                )
             result.dataset_snapshot = step_struct
             result.dataset_name = dataset_name
             self.context.log(
@@ -4142,10 +4042,13 @@ class AutoTestStepExecutionEngine:
                     if root_step_code is not None:
                         self.aggregate_root_step_logs(context, result, root_step_code)
 
-            # 统计（根据 step_code 去重合并）
+            # 统计（根据 step_code 去重合并）；引用壳步骤执行的是被引用用例的内部步骤(children已逐项计数)，
             all_results: List[StepExecutionResult] = self.collect_all_results(results)
+            quote_shell_types: Tuple[AutoTestStepType, ...] = (AutoTestStepType.QUOTE_PUBLIC_SCRIPT, AutoTestStepType.QUOTE_PUBLIC_API)
             unique_states: Dict[str, bool] = {}
             for r in all_results:
+                if r.step_type in quote_shell_types and r.children:
+                    continue
                 key: str = r.step_code
                 if key not in unique_states:
                     unique_states[key] = True
