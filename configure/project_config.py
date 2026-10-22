@@ -38,7 +38,7 @@ class EnumAIModelConfig(BaseModel):
         if not self.api_key.get_secret_value().strip():
             raise ValueError(f"枚举抽取AI模型[{self.name}]的api_key不能为空")
         if not self.base_url.strip().lower().startswith("http"):
-            raise ValueError(f"枚举抽取AI模型[{self.name}]的base_url必须使用HTTPS")
+            raise ValueError(f"枚举抽取AI模型[{self.name}]的base_url必须使用HTTP")
         return self
 
 
