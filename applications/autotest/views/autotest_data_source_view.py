@@ -27,7 +27,7 @@ from applications.autotest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceUnbindCase,
     AutoTestDataSourceUpdateFields,
 )
-from applications.autotest.services.autotest_case_excel_service import style_data_source_sheet
+from applications.autotest.services.autotest_case_excel_service import CaseExcelService
 from applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
 from applications.autotest.services.autotest_data_source_service import DataSourceService
 from configure import LOGGER, PROJECT_CONFIG
@@ -375,6 +375,13 @@ async def save_or_update_data_source(
                     data_source_code=data_source_in.data_source_code,
                     on_error=True,
                 )
+                # 定位分支绕过创建准入：归属用例类型/步骤可挂载/入参归属一致须补校验
+                await DataSourceService.ensure_data_source_writable(
+                    services,
+                    instance=existing,
+                    case_id=data_source_in.case_id,
+                    case_code=data_source_in.case_code,
+                )
                 update_in = AutoTestDataSourceUpdate.model_validate({
                     **data_source_in.model_dump(),
                     "data_source_id": existing.id,
@@ -518,6 +525,13 @@ async def update_data_source_fields(
             return BadReqResponse(message="当前步骤无数据源, 无法完成更新字段")
         if not isinstance(instance.dataframe, list) or not instance.dataframe:
             return BadReqResponse(message="数据源矩阵为空, 无法完成更新字段")
+        # id定位可能命中他用例数据源：归属与用例类型准入须与入参定位比对
+        await DataSourceService.ensure_data_source_writable(
+            services,
+            instance=instance,
+            case_id=case.id,
+            case_code=case.case_code,
+        )
         datagram_step = await DataSourceService.resolve_datagram_source_step(services, step)
         updates = await DataSourceService.sync_data_source_fields(datagram_step, instance.dataframe, instance.axis)
         async with in_transaction():
@@ -1126,7 +1140,7 @@ async def single_step_dataset_download(
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
-            style_data_source_sheet(writer.sheets[safe_name])
+            CaseExcelService.style_data_source_sheet(writer.sheets[safe_name])
 
         file_name = f"数据源导出_{step_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         return _stream_xlsx_response(output, file_name)
@@ -1179,7 +1193,7 @@ async def single_step_template_download(
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
-            style_data_source_sheet(writer.sheets[safe_name])
+            CaseExcelService.style_data_source_sheet(writer.sheets[safe_name])
 
         file_name = f"数据源模板_{step_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         return _stream_xlsx_response(output, file_name)
@@ -1408,7 +1422,7 @@ async def batch_step_dataset_download(
                 df = pd.DataFrame(dataset_dataframe if dataset_dataframe else [[None]])
                 safe_name = _safe_sheet_name(step_name, used_names)
                 df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
-                style_data_source_sheet(writer.sheets[safe_name])
+                CaseExcelService.style_data_source_sheet(writer.sheets[safe_name])
 
         file_name = f"数据源汇总_{case_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         return _stream_xlsx_response(output, file_name)
@@ -1473,7 +1487,7 @@ async def batch_step_template_download(
                 safe_name = _safe_sheet_name(step.step_name, used_names)
                 df = pd.DataFrame(matrix)
                 df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
-                style_data_source_sheet(writer.sheets[safe_name])
+                CaseExcelService.style_data_source_sheet(writer.sheets[safe_name])
 
         file_name = f"数据源模板_{case_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         return _stream_xlsx_response(output, file_name)

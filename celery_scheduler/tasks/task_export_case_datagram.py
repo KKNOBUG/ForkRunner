@@ -5,11 +5,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from applications.autotest.dependencies import get_autotest_api_services
-from applications.autotest.services.autotest_case_excel_service import (
-    prepare_export_cases,
-    build_export_workbook,
-    build_export_file_name,
-)
+from applications.autotest.services.autotest_case_excel_service import CaseExcelService
 from celery_scheduler.celery_base import run_async
 from celery_scheduler.celery_worker import celery
 from configure import LOGGER, PROJECT_CONFIG
@@ -22,17 +18,18 @@ async def _export_testcases_impl(case_ids: List[int], created_user: Optional[str
     :param case_ids: 用例主键列表
     :param created_user: 提交用户账号(仅作元信息随结果落入执行记录)
     :return: 含file_name/file_path/case_count等的结果字典
+    :raises ValueError: 无合规用例可导出时
     """
     services = await get_autotest_api_services()
-    cases_data, invalid = await prepare_export_cases(case_ids=case_ids, services=services)
+    cases_data, invalid = await CaseExcelService.prepare_export_cases(case_ids=case_ids, services=services)
     # 视图层下发前已全量校验；此处防御任务排队期间用例被改类型/步骤
     if invalid:
         LOGGER.warning(f"【Celery-Worker】异步导出跳过不合规用例: {invalid}")
     if not cases_data:
         raise ValueError("无可导出的合规用例")
 
-    workbook = build_export_workbook(cases_data=cases_data)
-    file_name = build_export_file_name(created_user)
+    workbook = CaseExcelService.build_export_workbook(cases_data=cases_data)
+    file_name = CaseExcelService.build_export_file_name(created_user)
     download_dir = os.path.join(PROJECT_CONFIG.OUTPUT_DOWNLOAD_DIR, "autotest_export")
     os.makedirs(download_dir, exist_ok=True)
     file_path = os.path.join(download_dir, file_name)
