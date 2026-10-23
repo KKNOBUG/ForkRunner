@@ -359,8 +359,8 @@ class ProjectConfig(BaseSettings):
                 raise ValueError("ENUM_AI_MODELS中的name不允许重复")
 
         claude_base_url = self.CLAUDE_AGENT_BASE_URL.strip()
-        if claude_base_url and not claude_base_url.lower().startswith("https://"):
-            raise ValueError("CLAUDE_AGENT_BASE_URL必须使用HTTPS")
+        if claude_base_url and not claude_base_url.lower().startswith("https://","http://"):
+            raise ValueError("CLAUDE_AGENT_BASE_URL必须使用HTTPS或HTTP")
         if self.CLAUDE_AGENT_ENABLED:
             if not self.CLAUDE_AGENT_AUTH_TOKEN.get_secret_value().strip():
                 raise ValueError("未配置CLAUDE_AGENT_AUTH_TOKEN，无法启用智能生成")

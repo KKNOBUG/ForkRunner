@@ -365,8 +365,7 @@ class AutoTestClaudeAgentClient:
         :param model: 网关接受的模型名称；``None``表示读取项目配置。
         :param max_turns: 单次Agent运行允许的最大交互轮次；``None``表示读取
             项目配置。
-        :param max_budget_usd: 单次Agent运行的最大美元预算；``None``表示读取
-            项目配置。
+        :param max_budget_usd: 保留旧调用接口，当前不用于限制美元预算。
         :param timeout_seconds: Agent运行的超时秒数；``None``表示读取项目配置。
         :param cli_path: 可选的Claude CLI可执行文件路径；``None``表示读取
             项目配置。
@@ -555,12 +554,12 @@ class AutoTestClaudeAgentClient:
         构造受限的SDK运行选项，配置模型、环境、工具、Hook、沙箱和
         用于安全阶段日志的部分消息，并注入上海时区时间快照。
 
-        调用方可传入整个任务共用的时间和剩余预算；未传入时沿用单次调用配置。
+        调用方可传入整个任务共用的时间；预算参数仅保留旧调用接口。
 
         :param workspace: 已校验并装载Skill的任务工作区。
         :param policy: 与该工作区绑定的工具权限策略。
         :param baseline_time: 同一任务各批次共用的上海时区时间；省略时取当前时间。
-        :param max_budget_usd: 本批次可用的美元预算；省略时使用客户端默认值。
+        :param max_budget_usd: 保留旧调用接口，当前不用于限制美元预算。
         :return: 包含统一时间基准和部分消息开关、尚未发起请求的Agent运行选项。
         """
 
@@ -628,7 +627,6 @@ Unix 时间戳（秒）：{int(baseline_time.timestamp())}
             model=self.model,
             output_format={"type": "json_schema", "schema": _ANALYSIS_OUTPUT_SCHEMA},
             max_turns=self.max_turns,
-            max_budget_usd=max_budget_usd if max_budget_usd is not None else self.max_budget_usd,
             max_buffer_size=_MAX_SDK_MESSAGE_BYTES,
             include_partial_messages=True,
             env=environment,
@@ -820,7 +818,7 @@ Unix 时间戳（秒）：{int(baseline_time.timestamp())}
 
         :param work_directory: 包含当前批次场景JSON和HEAD/BODY快照的任务工作目录。
         :param baseline_time: 全任务共用的时间基准；省略时在调用前取时。
-        :param max_budget_usd: 本批次的剩余美元预算；省略时使用默认值。
+        :param max_budget_usd: 保留旧调用接口，当前不用于限制美元预算。
         :param timeout_seconds: 本批次的剩余超时秒数；省略时使用默认值。
         :param resume_session_id: 同一工作区上一次成功批次的会话标识；省略时
             创建新会话并装载Skill。

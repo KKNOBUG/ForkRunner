@@ -85,7 +85,7 @@ class IntelligentDataGenerateInputError(ValueError):
 class _BatchTracker:
     """集中追踪一次智能生成任务的批次执行状态。
 
-    把批次循环中需要跨迭代维护的预算、会话、统计、去重等状态从主编排函数
+    把批次循环中需要跨迭代维护的会话、统计、去重等状态从主编排函数
     中提取出来，避免单函数承载过多局部变量。
     """
 
@@ -93,8 +93,6 @@ class _BatchTracker:
     duration_ms: int = 0
     num_turns: int = 0
     total_cost_usd: float = 0.0
-    committed_budget_usd: float = 0.0
-    peak_batch_cost_usd: float = 0.0
     has_cost: bool = False
     seen_names: set[str] = field(default_factory=set)
     lane_sessions: list[Optional[str]] = field(default_factory=list)
@@ -319,7 +317,6 @@ class AutoTestIntelligentDataGenerateService:
             batch_sessions: list[tuple[Path, Optional[str]]],
             *,
             baseline_time: datetime,
-            batch_budget: float,
             remaining_time: float,
     ) -> list[ClaudeAgentRunResult]:
         """并行执行最多两个已准备批次，并在失败或超时时取消其他批次。
@@ -327,7 +324,6 @@ class AutoTestIntelligentDataGenerateService:
         :param batch_sessions: 按输入顺序排列的工作目录和各自待续接的
             会话标识，数量为一或二；同一目录不会在一波内重复出现。
         :param baseline_time: 全任务共用的上海时区时间基准。
-        :param batch_budget: 为每个批次预留的美元预算上限。
         :param remaining_time: 当前任务截止时间之前剩余的秒数。
         :return: 与输入顺序一致、含各自会话标识的Agent执行摘要。
         :raises ClaudeAgentExecutionError: 任务截止时间已到；批次自身的错误
@@ -340,7 +336,6 @@ class AutoTestIntelligentDataGenerateService:
             asyncio.create_task(self.agent_client.run(
                 batch_workspace,
                 baseline_time=baseline_time,
-                max_budget_usd=batch_budget,
                 timeout_seconds=remaining_time,
                 resume_session_id=session_id,
             ))
@@ -459,7 +454,7 @@ class AutoTestIntelligentDataGenerateService:
         :param csv_path: 中间CSV路径，由本函数逐批追加。
         :param tracker: 批次状态聚合器；本函数就地更新其字段。
         :raises IntelligentDataGenerateInputError: 分析结果不符合契约。
-        :raises ClaudeAgentExecutionError: 预算/时间耗尽、批次写入失败、
+        :raises ClaudeAgentExecutionError: 时间耗尽、批次写入失败、
             会话标识不一致。
         """
 
@@ -468,23 +463,15 @@ class AutoTestIntelligentDataGenerateService:
         next_start = 0
         while next_start < input_scenario_count:
             remaining_time = deadline - time.monotonic()
-            remaining_budget = (
-                self.agent_client.max_budget_usd - tracker.committed_budget_usd
-            )
-            if remaining_time <= 0 or remaining_budget <= 0:
+            if remaining_time <= 0:
                 raise ClaudeAgentExecutionError(
-                    "智能生成任务时间或预算已耗尽",
-                    public_message="智能生成任务时间或预算已耗尽",
+                    "智能生成任务时间已耗尽",
+                    public_message="智能生成任务时间已耗尽",
                 )
             remaining_batches = (
                 input_scenario_count - next_start + self.batch_size - 1
             ) // self.batch_size
             parallel_count = min(self.max_concurrent_batches, remaining_batches)
-            # 平分额度低于已见单批成本时回退串行，避免后续批次更易触及单批上限。
-            if (parallel_count > 1
-                    and remaining_budget / parallel_count < tracker.peak_batch_cost_usd):
-                parallel_count = 1
-            batch_budget = remaining_budget / parallel_count
 
             batch_inputs = await self._prepare_batch_inputs(
                 workspace, input_scenarios, next_start,
@@ -497,7 +484,6 @@ class AutoTestIntelligentDataGenerateService:
                     for _, _, batch_workspace, offset in batch_inputs
                 ],
                 baseline_time=baseline_time,
-                batch_budget=batch_budget,
                 remaining_time=remaining_time,
             )
 
@@ -507,7 +493,7 @@ class AutoTestIntelligentDataGenerateService:
                     batch_inputs, agent_results,
             ):
                 tracker.lane_sessions[offset] = agent_result.session_id
-                self._record_batch_cost(tracker, agent_result, batch_budget)
+                self._record_batch_cost(tracker, agent_result)
                 await self._persist_batch_analysis(
                     batch_workspace, batch_scenarios, start,
                     request_snapshot, csv_path, tracker,
@@ -596,31 +582,24 @@ class AutoTestIntelligentDataGenerateService:
     def _record_batch_cost(
             tracker: _BatchTracker,
             agent_result: ClaudeAgentRunResult,
-            batch_budget: float,
     ) -> None:
         """把一批 Agent 执行的耗时、轮次、成本累加到任务级追踪器。
 
         :param tracker: 批次状态聚合器；本函数就地更新。
         :param agent_result: 单批 Agent 执行结果。
-        :param batch_budget: 本批预留预算，用于校验实际成本上限及未报成本时的占位。
-        :raises ClaudeAgentExecutionError: 成本超出本批预算或不合法。
+        :raises ClaudeAgentExecutionError: SDK返回的成本值不合法。
         """
 
         tracker.duration_ms += agent_result.duration_ms
         tracker.num_turns += agent_result.num_turns
         cost = agent_result.total_cost_usd
         if cost is not None:
-            if (not math.isfinite(cost) or cost < 0
-                    or cost > batch_budget + 1e-6):
+            if not math.isfinite(cost) or cost < 0:
                 raise ClaudeAgentExecutionError(
-                    "Claude Agent批次成本超出预算",
-                    public_message="智能生成任务预算校验失败",
+                    "Claude Agent返回的成本数据不合法",
                 )
             tracker.has_cost = True
             tracker.total_cost_usd += cost
-            tracker.peak_batch_cost_usd = max(tracker.peak_batch_cost_usd, cost)
-        # 未返回成本时按整批预留额度记账，避免后续并发超出任务预算。
-        tracker.committed_budget_usd += cost if cost is not None else batch_budget
 
     async def _persist_batch_analysis(
             self,

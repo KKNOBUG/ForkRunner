@@ -21,7 +21,7 @@ celery-redbeat==2.4.1
 certifi==2025.4.26
 cffi==1.17.1
 charset-normalizer==3.4.1
-claude-agent-sdk==0.1.69
+claude-agent-sdk==0.2.96
 click==8.1.8
 click-didyoumean==0.3.1
 click-plugins==1.1.1.2
@@ -53,7 +53,7 @@ jsonschema-specifications==2025.9.1
 kombu==5.5.1
 loguru==0.7.3
 lxml==5.3.0
-mcp==1.12.4
+mcp==1.23.0
 multidict==6.1.0
 numpy==2.4.6
 openpyxl==3.1.5
@@ -68,10 +68,10 @@ portalocker==3.0.0
 prompt_toolkit==3.0.52
 propcache==0.2.0
 pycparser==2.22
-pydantic==2.10.6
+pydantic==2.11.0
 pydantic-settings==2.7.1
-pydantic_core==2.27.2
-PyJWT==2.9.0
+pydantic_core==2.33.0
+PyJWT==2.10.1
 PyMySQL==1.1.1
 pypika-tortoise==0.6.5
 python-dateutil==2.9.0.post0
@@ -91,6 +91,7 @@ starlette==0.40.0
 tenacity==9.1.4
 tortoise-orm==0.25.1
 typing_extensions==4.12.2
+typing-inspection==0.4.2
 tzdata==2025.1
 urllib3==2.2.3
 uvicorn==0.33.0
