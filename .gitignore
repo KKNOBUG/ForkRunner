@@ -17,3 +17,5 @@ output/logs/*.log
 output/logs/*.lock
 output/logs/*.zip
 migrations/models/*.py
+celery_deploy.sh
+fastapi_deploy.sh
