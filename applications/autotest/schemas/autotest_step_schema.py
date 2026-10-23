@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import re
 from typing import Optional, List, Dict, Any, Type
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
@@ -14,6 +15,10 @@ from enums import (
     AutoTestLoopErrorStrategy,
     AutoTestAssertionOperation,
     AutoTestConfigNodeType,
+    AutoTestTcpRadix,
+    AutoTestTcpDatagramLength,
+    AutoTestTcpConnectType,
+    AutoTestTcpEndSymbol,
 )
 from enums import HTTPMethod
 
@@ -175,13 +180,16 @@ class AutoTestStepReqBase(BaseModel):
     request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
     request_config_name: Optional[str] = Field(None, max_length=128, description="请求环境配置名称")
 
-    tcp_frame_mode: Optional[str] = Field(None, max_length=64, description="TCP帧模式(length_prefix_json|raw)")
-    tcp_length_field_size: Optional[int] = Field(None, ge=1, le=32, description="长度前缀字段宽度")
-    tcp_encoding: Optional[str] = Field(None, max_length=32, description="文本编码")
-    tcp_connect_timeout: Optional[float] = Field(None, ge=0, description="连接超时(单位: 秒)")
-    tcp_read_timeout: Optional[float] = Field(None, ge=0, description="读写超时(单位: 秒)")
-    tcp_max_response_bytes: Optional[int] = Field(None, ge=1, description="最大读取字节数")
-    tcp_response_type: Optional[str] = Field(None, max_length=16, description="响应解析(json|xml|text|bytes)")
+    # 进制数≠不使用 → 长度前缀（结束符字段保留但不参与成帧计算）；进制数=不使用且配置了结束符 → 结束符；均未配置 → RAW
+    tcp_radix: Optional[AutoTestTcpRadix] = Field(None, description="TCP报文头进制数")
+    tcp_radix_length: Optional[int] = Field(None, ge=2, le=10, description="TCP长度位宽度")
+    tcp_datagram_length: Optional[AutoTestTcpDatagramLength] = Field(None, description="TCP报文总长度")
+    tcp_request_end_symbol: Optional[AutoTestTcpEndSymbol] = Field(None, description="TCP请求报文结束符")
+    tcp_response_end_symbol: Optional[str] = Field(None, max_length=64, description="TCP响应报文结束符(自定义文本, 无或空=不使用)")
+    tcp_connect_type: Optional[AutoTestTcpConnectType] = Field(None, description="TCP连接方式")
+    tcp_encoding: Optional[str] = Field(None, max_length=32, description="TCP文本编码")
+    tcp_hex_string: Optional[bool] = Field(None, description="TCP HEX报文开关")
+    tcp_response_timeout: Optional[float] = Field(None, ge=0, description="TCP响应接收超时")
 
     @field_validator(
         "request_header",
@@ -303,8 +311,12 @@ class AutoTestStepBase(AutoTestStepReqBase, AutoTestStepDbBase, AutoTestStepRedi
     loop_interval: Optional[float] = Field(None, ge=0, le=60, description="每次循环间隔时间")
     loop_iterable: Optional[str] = Field(None, max_length=512, description="循环对象来源")
     loop_on_error: Optional[AutoTestLoopErrorStrategy] = Field(None, description="循环执行失败时的处理策略")
-    loop_timeout: Optional[float] = Field(None, ge=0, le=3000, description="条件循环超时时间")
+    loop_timeout: Optional[float] = Field(None, ge=0, le=300, description="条件循环超时时间")
     loop_conditions: Optional[ConditionsBase] = Field(None, description="条件循环判断条件")
+    # 循环变量名：允许用户自定义(嵌套循环时避免同名作用域冲突)
+    loop_index: Optional[str] = Field(None, max_length=64, description="循环索引变量名")
+    loop_key: Optional[str] = Field(None, max_length=64, description="循环键名变量名")
+    loop_value: Optional[str] = Field(None, max_length=64, description="循环数据变量名")
 
     branch_items: Optional[List[BranchItem]] = Field(None, description="条件分支列表")
     branch_index: Optional[int] = Field(None, ge=0, description="所属分支序号")
@@ -350,6 +362,29 @@ class AutoTestStepBase(AutoTestStepReqBase, AutoTestStepDbBase, AutoTestStepRedi
                 return text
             return text
         raise ValueError(f"参数[loop_maximums]必须为null、正整数或字符串，当前类型: {type(v).__name__}")
+
+    @field_validator("loop_index", "loop_key", "loop_value", mode="before")
+    @classmethod
+    def _normalize_loop_var_name(cls, v: Any) -> Any:
+        """
+        规范化循环变量名：strip后为空存None；
+        变量名需可安全用于${name}占位符，禁止包含空白符、'${'、'}'。
+
+        :param v: 原始值
+        :return: 规范化后的变量名或None
+        """
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            raise ValueError(f"参数[循环变量]必须为null或字符串，当前类型: {type(v).__name__}")
+        text = v.strip()
+        if not text:
+            return None
+        if len(text) > 64:
+            raise ValueError("参数[循环变量]长度不允许超过64字符")
+        if re.search(r"\s", text) or "${" in text or "}" in text:
+            raise ValueError(f"参数[循环变量]不允许包含空白符、'${{'、'}}': \n\t当前值: {text!r}")
+        return text
 
     @field_validator("loop_conditions", mode="before")
     @classmethod
@@ -453,7 +488,9 @@ class AutoTestStepTreeUpdateItem(AutoTestStepBase):
     @classmethod
     def _normalize_custom_var_first_quote(cls, v: Any) -> Any:
         """
-        ！！！前端中没有“用户变量”类型步骤, 而是自挂数据, 因此需要在请求前进行参数处理；！！！
+        *=======================================================================*
+        *===  前端中没有“用户变量”类型步骤，而是自挂数据，因此需要在请求前进行参数处理； ===*
+        *=======================================================================*
         特征规则：content、step_type、step_name字段值为"用户变量"且step_id为字符串，将其step_id/request_body归一为None。
         """
         if not isinstance(v, list) or not v:
@@ -591,7 +628,7 @@ def step_variables_list_from_storage(raw: Any) -> List[StepVariablesBase]:
 
 def step_tree_item_from_storage(data: Any) -> "AutoTestStepTreeUpdateItem":
     """
-    将仓储层to_dict得到的单步JSON转为AutoTestStepTreeUpdateItem。
+    将仓储层to_dict得到的单步JSON转为AutoTestStepTreeUpdateItem；
     已为目标模型时直接返回；递归处理children/quote_steps/branch_items。
     """
     if isinstance(data, AutoTestStepTreeUpdateItem):

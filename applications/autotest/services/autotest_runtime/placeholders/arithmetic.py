@@ -52,7 +52,10 @@ class PlaceholderArithmetic:
         :return: 是否应进入纯算术计算路径
         """
         if len(regularly_slots) == 1:
-            if re.search(r"[+\-*/]", content) is None:
+            match, value, failed_content = regularly_slots[0]
+            # 运算符只在占位符之外的骨架文本上判定, 变量名内的-/+等字符不属于算术
+            skeleton = (content[: match.start()] + content[match.end():]).strip()
+            if not skeleton or re.search(r"[+\-*/]", skeleton) is None:
                 return False
             match, value, failed_content = regularly_slots[0]
             if value is None:

@@ -6,6 +6,7 @@ from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
 from tortoise.expressions import Q
 
 from applications.autotest.models.autotest_case_model import AutoTestCaseModel
+from applications.autotest.models.autotest_data_source_model import AutoTestDataSourceModel
 from applications.autotest.models.autotest_step_model import AutoTestStepModel
 from applications.autotest.schemas.autotest_case_schema import AutoTestCaseCreate, AutoTestCaseUpdate
 from applications.autotest.services.autotest_tag_crud import AutoTestTagCrud
@@ -17,7 +18,13 @@ from core.exceptions import (
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from enums import AutoTestCaseType, AutoTestStepType, PUBLIC_CASE_TYPES, NO_TAG_CASE_TYPES, AutoTestReqArgsType
+from enums import (
+    AutoTestCaseType,
+    AutoTestStepType,
+    PUBLIC_CASE_TYPES,
+    NO_TAG_CASE_TYPES,
+    AutoTestReqArgsType
+)
 from services import get_current_username
 
 # 列表/对象型JSON字段：schema已将空数组归一为None；payload显式给出这些字段时，None代表显式清空，需回补以落库NULL
@@ -40,20 +47,6 @@ def _normalize_case_tags(case_type: Optional[AutoTestCaseType], case_tags: Optio
         LOGGER.error(error_message)
         raise ParameterException(message=error_message)
     return case_tags
-
-
-def _readd_explicit_null_fields(payload: Any, update_dict: Dict[str, Any], field_names: Tuple[str, ...]) -> None:
-    """
-    回补显式置空字段到更新载荷，避免exclude_none丢弃None导致旧值残留。
-
-    :param payload: 更新入参schema实例
-    :param update_dict: model_dump产出的更新字典(就地修改)
-    :param field_names: 需要回补语义的字段名集合
-    :return: None
-    """
-    for field_name in field_names:
-        if field_name in payload.model_fields_set and getattr(payload, field_name, None) is None:
-            update_dict[field_name] = None
 
 
 class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoTestCaseUpdate]):
@@ -171,6 +164,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             error_message: str = "按业务唯一键查找用例失败, 所属人员不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
+
         query = self.model.filter(
             case_project=case_project,
             case_name=case_name,
@@ -184,11 +178,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             query = query.exclude(id=exclude_id)
         return await query.order_by("state", "-updated_time").first()
 
-    async def _restore_and_overwrite_case(
-            self,
-            existing: AutoTestCaseModel,
-            overwrite: Dict[str, Any],
-    ) -> AutoTestCaseModel:
+    async def _restore_and_overwrite_case(self, existing: AutoTestCaseModel, overwrite: Dict[str, Any]) -> AutoTestCaseModel:
         """
         唤醒软删用例并按本次创建数据覆盖表头，不改created_user、owner_user、case_code。
 
@@ -232,12 +222,13 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             owner_user=owner_user,
         )
         if existing_case and existing_case.state != 1:
-            message_error: str = "相同应用及所属人时, 用例名称不允许重复"
+            message_error: str = "相同应用下, 用例名称不允许重复"
             LOGGER.error(
                 f"{message_error}, "
                 f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}, owner_user={owner_user}]"
             )
             raise DataAlreadyExistsException(message=message_error)
+
         # 分组命中的可能是异类型软删记录(如新建公共脚本却命中软删的用户脚本)：复活须落到同精确类型的软删行，
         # 否则会撞DB唯一键(case_project+case_name+case_type+owner_user)或产生两条启用态同名脚本
         if existing_case and existing_case.case_type != case_type:
@@ -248,6 +239,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 owner_user=owner_user,
                 state=1,
             ).first()
+
         try:
             case_dict = case_in.model_dump(exclude_none=True, exclude_unset=True)
             case_dict.pop("created_user", None)
@@ -279,13 +271,13 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             return
         updated_count: int = await AutoTestStepModel.filter(
             case_id=case_instance.id, state__not=1
-        ).exclude(request_project_id=case_instance.case_project).update(
+        ).exclude(
+            request_project_id=case_instance.case_project
+        ).update(
             request_project_id=case_instance.case_project
         )
         if updated_count:
-            LOGGER.info(
-                f"公共接口用例[id={case_instance.id}]级联对齐请求步骤所属应用为[{case_instance.case_project}]记录, 更新{updated_count}条"
-            )
+            LOGGER.info(f"公共接口[id={case_instance.id}]级联对齐请求步骤所属应用[{case_instance.case_project}]")
 
     async def update_case(self, case_in: AutoTestCaseUpdate) -> AutoTestCaseModel:
         """
@@ -307,14 +299,18 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         else:
             instance = await self.get_by_code(case_code=case_code, on_error=True, state__not=1)
             case_id = instance.id
+
         original_case_type: Optional[AutoTestCaseType] = instance.case_type
         update_dict = case_in.model_dump(
             exclude_none=True,
             exclude_unset=True,
             exclude={"case_id", "case_code"}
         )
-        _readd_explicit_null_fields(case_in, update_dict, CASE_CLEARABLE_JSON_FIELDS)
-
+        self.explicit_restored_null_fields(
+            payload=case_in,
+            update_dict=update_dict,
+            field_names=("case_tags", "session_variables")
+        )
         effective_type = update_dict.get("case_type", instance.case_type)
         if effective_type in NO_TAG_CASE_TYPES:
             if update_dict.get("case_tags"):
@@ -342,15 +338,19 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 exclude_id=case_id,
             )
             if existing_case:
-                message_error: str = "相同应用及所属人时, 用例名称不允许重复"
+                message_error: str = "相同应用下, 用例名称不允许重复"
                 LOGGER.error(
                     f"{message_error}, "
-                    f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={unique_case_type}, owner_user={instance.owner_user}]"
+                    f"查询条件: [case_project={case_project}, case_name={case_name}, "
+                    f"case_type={unique_case_type}, owner_user={instance.owner_user}]"
                 )
                 raise DataAlreadyExistsException(message=message_error)
 
         if case_type == AutoTestCaseType.PUBLIC_API and original_case_type != AutoTestCaseType.PUBLIC_API:
             await self._validate_switch_to_public_api(instance)
+            await self._ensure_no_mounted_data_source(instance, AutoTestCaseType.PUBLIC_API)
+        elif case_type == AutoTestCaseType.PUBLIC_SCRIPT and original_case_type != AutoTestCaseType.PUBLIC_SCRIPT:
+            await self._ensure_no_mounted_data_source(instance, AutoTestCaseType.PUBLIC_SCRIPT)
 
         try:
             update_dict["case_version"] = instance.case_version + 1
@@ -368,6 +368,24 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             error_message: str = f"更新用例信息异常, 违反约束规则: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
+
+    @staticmethod
+    async def _ensure_no_mounted_data_source(case_instance: AutoTestCaseModel, target_type: AutoTestCaseType) -> None:
+        """
+        校验切换为公共类型前用例下不存在已挂载的数据源，公共接口/公共脚本不允许挂数据源。
+
+        :param case_instance: 待切换的用例实例
+        :param target_type: 切换目标用例类型(用于提示语)
+        :raises ParameterException: 用例下存在启用中的数据源
+        """
+        mounted = await AutoTestDataSourceModel.filter(case_id=case_instance.id, state__not=1).exists()
+        if mounted:
+            error_message: str = (
+                f"用例({case_instance.case_name})不允许切换为[{target_type}], "
+                f"请先解绑步骤已挂载的数据源"
+            )
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
 
     async def delete_case(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestCaseModel:
         """
@@ -508,10 +526,11 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 )
                 create_case_dict["case_tags"] = case_tags
                 if existing_case_instance and existing_case_instance.state != 1:
-                    message_error: str = "相同应用及所属人时, 用例名称不允许重复"
+                    message_error: str = "相同应用下, 用例名称不允许重复"
                     LOGGER.error(
                         f"第{cid}条用例新增失败, {message_error}, "
-                        f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}, owner_user={owner_user}]"
+                        f"查询条件: [case_project={case_project}, case_name={case_name}, "
+                        f"case_type={case_type}, owner_user={owner_user}]"
                     )
                     raise DataAlreadyExistsException(message=message_error)
                 # 分组命中的异类型软删记录不可直接复活：改落到同精确类型的软删行，避免撞DB唯一键或产生两条启用态同名脚本
@@ -528,9 +547,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                         new_case_instance = await self._restore_and_overwrite_case(
                             existing_case_instance, create_case_dict
                         )
-                        LOGGER.info(
-                            f"第{cid}条用例新增命中软删记录, 已恢复覆盖: id={new_case_instance.id}"
-                        )
+                        LOGGER.info(f"第{cid}条用例新增命中软删记录, 已恢复覆盖: id={new_case_instance.id}")
                     else:
                         create_case_dict["owner_user"] = owner_user
                         new_case_instance: AutoTestCaseModel = await self.create(obj_in=create_case_dict)
@@ -555,13 +572,19 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             else:
                 if case_type == AutoTestCaseType.PUBLIC_API and case_instance.case_type != AutoTestCaseType.PUBLIC_API:
                     await self._validate_switch_to_public_api(case_instance)
-
+                    await self._ensure_no_mounted_data_source(case_instance, AutoTestCaseType.PUBLIC_API)
+                elif case_type == AutoTestCaseType.PUBLIC_SCRIPT and case_instance.case_type != AutoTestCaseType.PUBLIC_SCRIPT:
+                    await self._ensure_no_mounted_data_source(case_instance, AutoTestCaseType.PUBLIC_SCRIPT)
                 update_case_dict: Dict[str, Any] = case_data.model_dump(
                     exclude_none=True,
                     exclude_unset=True,
                     exclude={"case_id", "case_code"}
                 )
-                _readd_explicit_null_fields(case_data, update_case_dict, CASE_CLEARABLE_JSON_FIELDS)
+                self.explicit_restored_null_fields(
+                    payload=case_data,
+                    update_dict=update_case_dict,
+                    field_names=("case_tags", "session_variables")
+                )
                 if not update_case_dict:
                     processed_case.add((case_id, case_code))
                     case_dict: Dict[str, Any] = await case_instance.to_dict(
@@ -601,10 +624,11 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                         exclude_id=case_id,
                     )
                     if existing_case_instance:
-                        message_error: str = "相同应用及所属人时, 用例名称不允许重复"
+                        message_error: str = "相同应用下, 用例名称不允许重复"
                         LOGGER.error(
                             f"第{cid}条用例新增失败, {message_error}, "
-                            f"查询条件: [case_project={unique_project}, case_name={unique_case_name}, case_type={unique_case_type}, owner_user={case_instance.owner_user}]"
+                            f"查询条件: [case_project={unique_project}, case_name={unique_case_name}, "
+                            f"case_type={unique_case_type}, owner_user={case_instance.owner_user}]"
                         )
                         raise DataAlreadyExistsException(message=message_error)
 

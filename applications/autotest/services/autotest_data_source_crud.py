@@ -175,7 +175,8 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         if data_dict.get("dataset_names") is None:
             data_dict["dataset_names"] = []
 
-        existing = await self.model.filter(case_id=case_id, step_code=step_code).first()
+        # 启用优先：启用+软删并存时定位到启用记录执行拒绝/更新判定，避免误选软删记录二次恢复
+        existing = await self.model.filter(case_id=case_id, step_code=step_code).order_by("state").first()
 
         if not existing:
             try:
@@ -333,7 +334,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        from backend.applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
+        from applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
 
         # 每个场景强制补齐 head/body/assert_head/assert_body 四键
         normalized_dataset = {

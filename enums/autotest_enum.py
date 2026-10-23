@@ -48,9 +48,9 @@ class AutoTestStepType(StringEnum):
 class AutoTestLoopMode(StringEnum):
     # 循环模式：次数循环(loop_mode + loop_maximums + loop_interval；loop_maximums支持正整数或变量占位符)
     COUNT = "次数循环"
-    # 循环模式：列表循环(loop_mode + loop_iterable + loop_interval；会话变量固定loop_index/loop_value)
+    # 循环模式：列表循环(loop_mode + loop_iterable + loop_interval；会话变量loop_index/loop_value可自定义)
     LIST = "列表循环"
-    # 循环模式：字典循环(loop_mode + loop_iterable + loop_interval；会话变量固定loop_index/loop_key/loop_value)
+    # 循环模式：字典循环(loop_mode + loop_iterable + loop_interval；会话变量loop_index/loop_key/loop_value可自定义)
     DICT = "字典循环"
     # 循环模式：条件循环(loop_mode + loop_conditions + loop_interval + loop_timeout)
     CONDITION = "条件循环"
@@ -202,3 +202,32 @@ class AutoTestConfigNodeType(StringEnum):
     DB = "DB"
     REDIS = "REDIS"
     FILE = "FILE"
+
+
+# ==================== TCP 请求步骤 ====================
+class AutoTestTcpRadix(StringEnum):
+    """TCP报文头(长度位)进制数；不使用表示不追加长度前缀。"""
+    NONE = "不使用"
+    DECIMAL = "十进制"
+    HEX = "十六进制"
+
+
+class AutoTestTcpDatagramLength(StringEnum):
+    """TCP报文总长度口径；包含长度位时长度值需加上长度位自身宽度。"""
+    INCLUDE = "包含长度位"
+    EXCLUDE = "不包含长度位"
+
+
+class AutoTestTcpConnectType(StringEnum):
+    """TCP连接方式；长连接暂未实现，执行与调试时按短连接降级。"""
+    LONG = "长连接"
+    SHORT = "短连接"
+    SEND_ONLY = "只发不收(长连接)"
+
+
+class AutoTestTcpEndSymbol(StringEnum):
+    """TCP收发结束符；值为转义展示文本，发送/匹配时映射为真实字节序列。"""
+    NONE = "无"
+    CRLF = "\\r\\n"
+    CR = "\\r"
+    LF = "\\n"

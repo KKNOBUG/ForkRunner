@@ -37,7 +37,7 @@ class EnumAIModelConfig(BaseModel):
     def validate_model_endpoint(self) -> Self:
         if not self.api_key.get_secret_value().strip():
             raise ValueError(f"枚举抽取AI模型[{self.name}]的api_key不能为空")
-        if not self.base_url.strip().lower().startswith("https://"):
+        if not self.base_url.strip().lower().startswith("http"):
             raise ValueError(f"枚举抽取AI模型[{self.name}]的base_url必须使用HTTPS")
         return self
 
@@ -109,7 +109,7 @@ class ProjectConfig(BaseSettings):
     # 调试配置
     SERVER_APP: str = "backend_main:app"
     # SERVER_HOST: str = ShellUtils.acquire_localhost()
-    SERVER_HOST: str = "192.168.155.76"
+    SERVER_HOST: str = "192.168.136.76"
     # SERVER_HOST: str = "192.168.43.7"
     SERVER_SYSTEM: str = platform.system()
     SERVER_PORT: int = 8520
@@ -256,7 +256,7 @@ class ProjectConfig(BaseSettings):
     ]
 
     # 数据库配置
-    DATABASE_AUTO_MIGRATION: bool = False
+    DATABASE_AUTO_MIGRATION: bool = True
     DATABASE_CONNECTIONS: Dict[str, Any] = {}
     DATABASE_URL: str = Field("", description="数据库地址")
     DATABASE_HOST: str = Field(..., description="数据库主机")

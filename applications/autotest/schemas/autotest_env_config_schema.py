@@ -7,7 +7,7 @@ from applications.base.services.scaffold import UpperStr
 from enums import AutoTestDataBaseType, AutoTestConfigNodeType
 
 
-def _validate_db_required_fields(database_name: Any, database_type: Any, config_username: Any, config_password: Any) -> None:
+def _validate_database_required_fields(database_name: Any, database_type: Any, config_username: Any, config_password: Any) -> None:
     """校验DB类型必填字段。"""
     missing = [
         name for name, val in (
@@ -60,7 +60,7 @@ class AutoTestEnvConfigCreate(AutoTestEnvConfigBase):
     def _validate_by_env_type(self):
         """按节点类型校验必填字段。"""
         if self.env_type == AutoTestConfigNodeType.DB:
-            _validate_db_required_fields(
+            _validate_database_required_fields(
                 database_name=self.database_name,
                 database_type=self.database_type,
                 config_username=self.config_username,
@@ -82,7 +82,7 @@ class AutoTestEnvConfigUpdate(AutoTestEnvConfigBase):
         if self.env_type is None:
             return self
         if self.env_type == AutoTestConfigNodeType.DB:
-            _validate_db_required_fields(
+            _validate_database_required_fields(
                 database_name=self.database_name,
                 database_type=self.database_type,
                 config_username=self.config_username,
