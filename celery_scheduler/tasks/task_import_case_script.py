@@ -1,17 +1,10 @@
 # -*- coding: utf-8 -*-
-"""
-@Author  : yangkai
-@Email   : 807440781@qq.com
-@Project : Krun
-@Module  : task_import_case_script.py
-@DateTime: 2026/9/16
-"""
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
 from applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
-from applications.autotest.services.autotest_case_excel_service import import_script_rows
+from applications.autotest.services.autotest_case_excel_service import CaseExcelService
 from celery_scheduler.celery_base import run_async
 from celery_scheduler.celery_worker import celery
 from configure import LOGGER
@@ -35,7 +28,7 @@ async def _import_case_scripts_impl(rows: List[Dict[str, Any]], file_name: Optio
         CTX_USERNAME.set(str(created_user).strip())
     services: AutoTestServices = await get_autotest_api_services()
 
-    result, invalid = await import_script_rows(rows=rows, services=services)
+    result, invalid = await CaseExcelService.import_script_rows(rows=rows, services=services)
     if invalid:
         return {
             "total_cases": len(rows),

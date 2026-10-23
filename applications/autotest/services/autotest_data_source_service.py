@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from xml.etree import ElementTree
 
 import orjson
@@ -12,6 +12,7 @@ from applications.autotest.models.autotest_step_model import AutoTestStepModel
 from applications.autotest.schemas.autotest_data_source_schema import AutoTestDataSourceCreate
 from applications.autotest.services.autotest_data_source_crud import make_cache_key
 from applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
+from applications.autotest.services.autotest_tool_service import AutoTestToolService
 from core.exceptions import NotFoundException, ParameterException
 from enums import AutoTestReqArgsType, AutoTestStepType, PUBLIC_CASE_TYPES
 from services import get_current_username
@@ -153,14 +154,50 @@ class DataSourceService:
         :param step: 当前定位到的步骤
         :return: 用于构建矩阵/报文原始值的步骤；非引用步骤原样返回，未找到内部请求步骤时兜底原步骤
         """
-        if step.step_type != AutoTestStepType.QUOTE_PUBLIC_API:
-            return step
-        inner = await services.step_curd.model.filter(
-            case_id=step.quote_case_id or 0,
-            step_type__in=list(cls.REQUEST_STEP_TYPES),
-            state__not=1,
-        ).order_by("step_no").first()
-        return inner or step
+        resolved_map = await cls.resolve_datagram_source_steps(services, [step])
+        return resolved_map.get(step.id, step)
+
+    @classmethod
+    async def resolve_datagram_source_steps(
+            cls,
+            services: AutoTestServices,
+            steps: Sequence[AutoTestStepModel],
+    ) -> Dict[int, AutoTestStepModel]:
+        """
+        批量解析报文来源步骤：引用公共接口壳统一回落到被引用用例内的请求步骤。
+
+        单步与批量共用同一解析口径；批量按quote_case_id一次性预载内部请求步骤，避免下载多sheet时逐步骤查库。
+
+        :param services: CRUD聚合
+        :param steps: 当前步骤集合
+        :return: 原步骤id→报文来源步骤；非引用步骤映射自身，未找到内部请求步骤时兜底壳步骤
+        """
+        step_list: List[AutoTestStepModel] = list(steps or [])
+        if not step_list:
+            return {}
+
+        shell_case_ids = {
+            int(step.quote_case_id)
+            for step in step_list
+            if step.step_type == AutoTestStepType.QUOTE_PUBLIC_API and step.quote_case_id
+        }
+        inner_step_map: Dict[int, AutoTestStepModel] = {}
+        if shell_case_ids:
+            inner_steps = await services.step_curd.model.filter(
+                case_id__in=list(shell_case_ids),
+                step_type__in=list(cls.REQUEST_STEP_TYPES),
+                state__not=1,
+            ).order_by("case_id", "step_no")
+            for inner_step in inner_steps:
+                inner_step_map.setdefault(inner_step.case_id, inner_step)
+
+        resolved_map: Dict[int, AutoTestStepModel] = {}
+        for step in step_list:
+            if step.step_type == AutoTestStepType.QUOTE_PUBLIC_API and step.quote_case_id:
+                resolved_map[step.id] = inner_step_map.get(int(step.quote_case_id), step)
+            else:
+                resolved_map[step.id] = step
+        return resolved_map
 
     @staticmethod
     async def resolve_enabled_data_source(
@@ -392,14 +429,28 @@ class DataSourceService:
                 return loaded
         return None
 
+    @staticmethod
+    def _xml_payload_text(step: AutoTestStepModel) -> str:
+        """
+        提取步骤的XML报文本：复用AutoTestToolService的统一判定，兼容request_body字符串。
+
+        :param step: 步骤实例
+        :return: XML文本；非XML或为空时返回空串
+        """
+        return AutoTestToolService.extract_xml_payload_text(
+            getattr(step, "request_text", None),
+            getattr(step, "request_body", None),
+        )
+
     @classmethod
     def _collect_step_partition(cls, step: AutoTestStepModel) -> Dict[str, Dict[str, Any]]:
         """
         统一采集步骤报文的HEAD与BODY分区路径及原始值。
 
         HEAD取自请求头键值对；BODY按request_args_type分支采集：
-        JSON展平叶子、XML展平XPath、PARAMS/FORM_DATA/X_WWW_FORM_URLENCODED取键值，
-        RAW/NONE/其他返回空BODY。
+        JSON展平叶子、XML展平XPath、PARAMS/FORM_DATA/X_WWW_FORM_URLENCODED取键值；
+        RAW/NONE/未指定类型默认无结构化字段，但正文为XML时同样按XPath展平
+        （TCP/HTTP的RAW报文常直接存放XML，若只认xml类型会导致数据源矩阵与data_original为空）。
 
         :param step: 步骤实例(取request_args_type与报文)
         :return: 分区名→{路径→原始值}映射，如{"HEAD": {"$.Token": "x"}, "BODY": {"$.id": 1}}
@@ -408,13 +459,22 @@ class DataSourceService:
             "HEAD": dict(cls._kv_originals(getattr(step, "request_header", None))),
             "BODY": {},
         }
-        args = cls._enum_value(getattr(step, "request_args_type", None))
+        args = cls._enum_value(getattr(step, "request_args_type", None)).lower()
         if args == AutoTestReqArgsType.JSON.value:
             payload = cls._parse_json_body(getattr(step, "request_body", None))
             if payload is not None:
                 result["BODY"] = cls._flatten_json_leaf_values(payload)
         elif args == AutoTestReqArgsType.XML.value:
-            result["BODY"] = cls._flatten_xml_xpath_values(getattr(step, "request_text", None) or "")
+            result["BODY"] = cls._flatten_xml_xpath_values(cls._xml_payload_text(step))
+        elif args in (AutoTestReqArgsType.RAW.value, AutoTestReqArgsType.NONE.value, ""):
+            # RAW/NONE 不是“无报文”，只是未声明结构；正文是XML时按XML采集字段，
+            # 否则保持空BODY（纯文本/十六进制报文无法生成字段路径）。
+            if AutoTestToolService.resolve_datagram_is_xml(
+                    getattr(step, "request_args_type", None),
+                    getattr(step, "request_text", None),
+                    getattr(step, "request_body", None),
+            ):
+                result["BODY"] = cls._flatten_xml_xpath_values(cls._xml_payload_text(step))
         elif args == AutoTestReqArgsType.PARAMS.value:
             result["BODY"] = cls._kv_originals(getattr(step, "request_params", None))
         elif args == AutoTestReqArgsType.FORM_DATA.value:
@@ -433,7 +493,7 @@ class DataSourceService:
         """
         按请求参数类型收集BODY分区路径。
 
-        raw/none/文件型form-data不进入BODY。
+        raw/none 正文为XML时进入BODY；纯文本/十六进制及文件型form-data不进入。
         """
         return list(cls._collect_step_partition(step).get("BODY", {}))
 
