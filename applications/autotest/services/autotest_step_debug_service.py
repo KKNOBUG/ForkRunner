@@ -35,9 +35,9 @@ from applications.autotest.services.autotest_runtime.protocol_tcp import (
     build_tcp_debug_request_info_body,
     parse_tcp_response,
     parse_tcp_timeouts,
-    resolve_tcp_debug_request_extract_sources,
+    resolve_tcp_request_extract_sources,
     resolve_tcp_frame_config,
-    select_tcp_debug_payload,
+    select_tcp_payload,
     TCP_MAX_RESPONSE_BYTES,
 )
 from applications.autotest.services.autotest_tool_service import AutoTestToolService
@@ -713,8 +713,8 @@ class StepDebugService:
                 )
         log("【参数替换】结束")
 
-        payload = select_tcp_debug_payload(
-            request_args_type, request_text=request_text, request_body=request_body
+        payload = select_tcp_payload(
+            request_args_type, request_text=request_text, request_body=request_body, serialize_json=True
         )
         frame_config = resolve_tcp_frame_config(debug_in)
         connect_td, read_td = parse_tcp_timeouts(None, debug_in.tcp_response_timeout)
@@ -772,7 +772,7 @@ class StepDebugService:
             encoding=frame_config.encoding,
             hex_string=frame_config.hex_string,
         )
-        request_json_for_extract, request_text_for_extract = resolve_tcp_debug_request_extract_sources(
+        request_json_for_extract, request_text_for_extract = resolve_tcp_request_extract_sources(
             request_body=request_body, request_text=request_text
         )
 

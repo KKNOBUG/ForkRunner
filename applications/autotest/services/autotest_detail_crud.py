@@ -22,6 +22,7 @@ from core.exceptions import (
 
 
 class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate, AutoTestDetailUpdate]):
+    # 明细轻量列清单：分页查询与树模式全量查询共用，保证两模式返回字段结构一致
     DETAIL_LIGHT_COLUMNS: Tuple[str, ...] = (
         "id", "case_id", "parent_step_id",
         "step_id", "step_no", "step_name", "step_type", "step_state", "step_elapsed", "step_exec_except",
@@ -246,10 +247,11 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         """
         try:
             query = self.model.filter(search)
+            total = await query.count()
             page_offset = (page - 1) * page_size
             order_fields = self.normalize_order_fields(order)
             dataset = await query.offset(page_offset).limit(page_size).order_by(*order_fields).values(*self.DETAIL_LIGHT_COLUMNS)
-            return len(dataset), dataset
+            return total, dataset
         except FieldError as e:
             error_message: str = f"查询明细信息失败, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
