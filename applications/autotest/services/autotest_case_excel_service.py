@@ -90,8 +90,8 @@ class CaseExcelService:
         HTTP_PROTOCOL: (HTTP_SHEET_NAME, HTTP_SHEET_COLUMNS),
     }
     SCRIPT_EXPORT_SHEET_NAMES: Dict[str, str] = {
-        TCP_PROTOCOL: "TCP接口数据",
-        HTTP_PROTOCOL: "HTTP接口数据",
+        TCP_PROTOCOL: "TCP数据",
+        HTTP_PROTOCOL: "HTTP数据",
     }
     SCRIPT_DATA_START_ROW: int = 3
     TCP_FRAME_CONFIG_COLUMNS: Tuple[Tuple[str, str], ...] = (
@@ -104,10 +104,6 @@ class CaseExcelService:
 
     # ==================== 常量：TCP 帧配置校验 ====================
     TCP_RADIX_VALUES = frozenset(e.value for e in AutoTestTcpRadix)
-    TCP_RADIX_ALIASES: Dict[str, str] = {
-        "10进制": AutoTestTcpRadix.DECIMAL.value,
-        "16进制": AutoTestTcpRadix.HEX.value,
-    }
     TCP_DATAGRAM_LENGTH_VALUES = frozenset(e.value for e in AutoTestTcpDatagramLength)
     TCP_REQUEST_END_SYMBOL_VALUES = frozenset(e.value for e in AutoTestTcpEndSymbol)
     TCP_RADIX_LENGTH_MIN, TCP_RADIX_LENGTH_MAX = 2, 10
@@ -612,7 +608,7 @@ class CaseExcelService:
         """
         按导出用例的协议组合选择模板：全HTTP用HTTP模板、全TCP用TCP模板、混合用HTTP&TCP模板；
         模板内HTTP行写入[HTTP模板]sheet、TCP行写入[TCP模板]sheet；填充完成后将用户可见页签
-        重命名为[HTTP接口数据]/[TCP接口数据]，[帮助]sheet不做任何修改。
+        重命名为[HTTP数据]/[TCP数据]，[帮助]sheet不做任何修改。
 
         :param rows: 行字典列表（键为列名，TCP行额外携带帧配置列）
         :return: 填充完成的工作簿
@@ -698,14 +694,14 @@ class CaseExcelService:
         解析并校验TCP帧配置五列（报文进制/长度位/报文总长度/请求结束符/响应结束符）。
 
         校验口径与执行引擎 resolve_tcp_frame_config 对齐：报文进制≠不使用时长度位与报文总长度必填；
-        进制填写指引的"10进制/16进制"别名归一为枚举规范值。
+        报文进制取值与 AutoTestTcpRadix 枚举一致（不使用/10进制/16进制），不再做别名映射。
 
         :param cells: 行单元格字典（键为列名）
         :return: (可落库的TCP帧字段字典, 错误列表)
         """
         errors: List[str] = []
         radix_raw = cells["报文进制"]
-        radix = cls.TCP_RADIX_ALIASES.get(radix_raw, radix_raw) or None
+        radix = radix_raw or None
         if not radix:
             errors.append("TCP协议[报文进制]不允许为空")
         elif radix not in cls.TCP_RADIX_VALUES:
