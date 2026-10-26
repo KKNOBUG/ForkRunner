@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import threading
+from contextlib import suppress
 from contextvars import ContextVar
-from typing import Any, Awaitable, Coroutine, Dict, Union
+from typing import Any, Dict
 
 from tortoise import Tortoise, connections
 from tortoise.exceptions import DBConnectionError
@@ -23,17 +24,6 @@ def reset_tortoise_orm_state() -> None:
     """
     global _tortoise_orm_initialized
     _tortoise_orm_initialized = False
-
-
-def run_async(func: Union[Coroutine, Awaitable]) -> Any:
-    """
-    在Celery任务同步上下文中执行异步协程，统一投递到池的event loop。
-
-    :param func: 待执行的协程对象
-    :return: 协程执行结果
-    """
-    from common import AsyncEventLoopContextIOPool
-    return AsyncEventLoopContextIOPool.run_in_pool(func)
 
 
 async def init_tortoise_orm() -> None:
@@ -56,10 +46,8 @@ async def init_tortoise_orm() -> None:
                     except Exception:
                         LOGGER.warning("【Celery-Worker】数据库连接已断开，将重新初始化")
                         _tortoise_orm_initialized = False
-                        try:
+                        with suppress(Exception):
                             await Tortoise.close_connections()
-                        except Exception:
-                            pass
                 else:
                     _tortoise_orm_initialized = False
             except Exception as e:
@@ -67,10 +55,8 @@ async def init_tortoise_orm() -> None:
                     f"【Celery-Worker】【span_id={get_span_id_for_log()}】数据库连接检查失败，将重新初始化: {str(e)}"
                 )
                 _tortoise_orm_initialized = False
-                try:
+                with suppress(Exception):
                     await Tortoise.close_connections()
-                except Exception:
-                    pass
 
         config: Dict[str, Any] = {
             "connections": PROJECT_CONFIG.DATABASE_CONNECTIONS,
@@ -116,7 +102,7 @@ def get_span_id_for_log() -> str:
 
     :return: span_id字符串；不可用时返回空串
     """
-    from common.request_context import get_span_id
+    from backend.common.request_context import get_span_id
 
     sid = get_span_id()
     if sid and sid != "-":

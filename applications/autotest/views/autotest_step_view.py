@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import json
 import traceback
 import uuid
 from datetime import datetime
@@ -805,7 +804,7 @@ async def execute_step_tree(
                         total=1,
                     )
 
-                # 参数化驱动：下发Celery，由Worker池通过run_async执行协程
+                # 参数化驱动：下发Celery，由Worker事件循环池执行协程
                 from celery_scheduler.tasks.task_execute_assign_case import execute_step_tree_task
                 from services import get_current_username
 

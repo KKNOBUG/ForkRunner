@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Optional
 
 from applications.autotest.dependencies import get_autotest_api_services
 from applications.autotest.services.autotest_case_excel_service import CaseExcelService
-from celery_scheduler.celery_base import run_async
 from celery_scheduler.celery_worker import celery
+from common import AsyncEventLoopContextIOPool
 from configure import LOGGER, PROJECT_CONFIG
 
 
@@ -52,13 +52,19 @@ def export_case_scripts_task(case_ids: List[int], created_user: Optional[str] = 
     :param created_user: 提交用户账号
     :param report_type: 报告类型快照(供Worker写执行记录；任务体本身不消费)
     :return: 导出结果字典(落入task_summary)
+    :raises Exception: 导出失败时向上抛出，供Celery on_failure处理
     """
     try:
         LOGGER.info(
             f"【Celery-Worker】开始导出公共接口脚本任务: 数量={len(case_ids or [])}, "
             f"created_user={created_user}, report_type={report_type}"
         )
-        result = run_async(_export_case_scripts_impl(case_ids=case_ids or [], created_user=created_user))
+        result = AsyncEventLoopContextIOPool.run_in_pool(
+            _export_case_scripts_impl(
+                case_ids=case_ids or [],
+                created_user=created_user
+            )
+        )
         LOGGER.info(
             f"【Celery-Worker】导出公共接口脚本任务完成: file_name={result.get('file_name')}, "
             f"case_count={result.get('case_count')}, skipped_invalid_count={result.get('skipped_invalid_count')}"

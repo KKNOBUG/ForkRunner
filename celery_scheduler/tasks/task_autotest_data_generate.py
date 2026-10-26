@@ -6,6 +6,13 @@ from typing import Any, Dict
 
 from billiard.exceptions import SoftTimeLimitExceeded
 
+from applications.data_generation.services.autotest_ai_enum_extraction_client import (
+    AIEnumExtractionError,
+)
+from applications.data_generation.services.autotest_claude_agent_client import (
+    ClaudeAgentConfigurationError,
+    ClaudeAgentExecutionError,
+)
 from applications.data_generation.services.autotest_data_generate_service import TestDataGenerationError
 from applications.data_generation.services.autotest_data_generate_task_crud import (
     AutoTestDataGenerateTaskCrud,
@@ -16,24 +23,17 @@ from applications.data_generation.services.autotest_data_generate_task_service i
     AutoTestDataGenerateTaskService,
     DataGenerateTaskInputError,
 )
-from applications.data_generation.services.autotest_ai_enum_extraction_client import (
-    AIEnumExtractionError,
-)
-from applications.data_generation.services.autotest_claude_agent_client import (
-    ClaudeAgentConfigurationError,
-    ClaudeAgentExecutionError,
-)
 from applications.data_generation.services.autotest_intelligent_data_generate_service import (
     IntelligentDataGenerateInputError,
-)
-from applications.data_generation.services.autotest_project_enum_extraction_service import (
-    ProjectEnumExtractionInputError,
 )
 from applications.data_generation.services.autotest_interface_workbook_service import (
     InterfaceWorkbookError,
 )
-from celery_scheduler.celery_base import run_async
+from applications.data_generation.services.autotest_project_enum_extraction_service import (
+    ProjectEnumExtractionInputError,
+)
 from celery_scheduler.celery_worker import celery
+from common import AsyncEventLoopContextIOPool
 from configure import LOGGER
 from core.exceptions import NotFoundException, ParameterException
 
@@ -161,7 +161,7 @@ def generate_test_data_task(self, task_id: int) -> Dict[str, Any]:
     celery_id = str(self.request.id or "").strip()
     attempt = int(self.request.retries or 0) + 1
     try:
-        result = run_async(
+        result = AsyncEventLoopContextIOPool.run_in_pool(
             AutoTestDataGenerateTaskService().execute(
                 task_id,
                 celery_id,
@@ -181,13 +181,13 @@ def generate_test_data_task(self, task_id: int) -> Dict[str, Any]:
         return {"success": True, "ignored": True, "task_id": task_id}
     except Exception as exc:
         can_retry = (
-            not is_permanent_generation_error(exc)
-            and int(self.request.retries or 0) < DATA_GENERATE_MAX_RETRIES
+                not is_permanent_generation_error(exc)
+                and int(self.request.retries or 0) < DATA_GENERATE_MAX_RETRIES
         )
         if can_retry:
             countdown = retry_countdown(int(self.request.retries or 0))
             try:
-                run_async(
+                AsyncEventLoopContextIOPool.run_in_pool(
                     AutoTestDataGenerateTaskCrud().record_retry(
                         task_id,
                         celery_id,
@@ -204,7 +204,7 @@ def generate_test_data_task(self, task_id: int) -> Dict[str, Any]:
             )
             raise self.retry(exc=exc, countdown=countdown, max_retries=DATA_GENERATE_MAX_RETRIES)
 
-        run_async(_mark_failure_safely(task_id, celery_id, exc, attempt=attempt))
+        AsyncEventLoopContextIOPool.run_in_pool(_mark_failure_safely(task_id, celery_id, exc, attempt=attempt))
         LOGGER.error(
             f"【数据生成任务】执行失败: task_id={task_id}, celery_id={celery_id}, "
             f"attempt={attempt}, error_type={type(exc).__name__}"
@@ -226,4 +226,4 @@ async def _recover_timed_out_tasks_impl() -> Dict[str, Any]:
 @celery.task(name=DATA_GENERATE_RECOVERY_TASK_NAME)
 def recover_timed_out_data_generate_tasks() -> Dict[str, Any]:
     """Beat入口，恢复硬超时或Worker丢失后遗留的进行中任务。"""
-    return run_async(_recover_timed_out_tasks_impl())
+    return AsyncEventLoopContextIOPool.run_in_pool(_recover_timed_out_tasks_impl())

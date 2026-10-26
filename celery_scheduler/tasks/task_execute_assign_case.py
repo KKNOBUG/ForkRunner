@@ -7,8 +7,8 @@ from typing import Any, Dict, List, Optional
 
 from applications.autotest.schemas.autotest_step_schema import StepVariablesBase, step_variables_list_from_storage
 from applications.autotest.services.autotest_step_crud import AutoTestStepCrud
-from celery_scheduler.celery_base import run_async
 from celery_scheduler.celery_worker import celery
+from common import AsyncEventLoopContextIOPool
 from configure import LOGGER
 from enums import AutoTestReportType
 from services.ctx import CTX_USERNAME
@@ -171,7 +171,7 @@ def execute_step_tree_task(
             f"batch_code={batch_code}, dataset_count={len(selected_dataset_names or [])}, "
             f"has_steps_execute_config={bool(steps_execute_config)}, created_user={created_user}"
         )
-        result = run_async(
+        result = AsyncEventLoopContextIOPool.run_in_pool(
             _execute_step_tree_impl(
                 case_id=case_id,
                 initial_variables=initial_variables,

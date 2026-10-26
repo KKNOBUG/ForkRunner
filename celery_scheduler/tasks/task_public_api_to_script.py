@@ -8,10 +8,13 @@ from tortoise.transactions import in_transaction
 
 from applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from applications.autotest.schemas.autotest_case_schema import AutoTestCaseUpdate
-from applications.autotest.schemas.autotest_step_schema import AutoTestStepTreeUpdateItem, AutoTestStepTreeUpdateList
+from applications.autotest.schemas.autotest_step_schema import (
+    AutoTestStepTreeUpdateItem,
+    AutoTestStepTreeUpdateList,
+)
 from applications.autotest.services.autotest_tool_service import AutoTestToolService
-from celery_scheduler.celery_base import run_async
 from celery_scheduler.celery_worker import celery
+from common import AsyncEventLoopContextIOPool
 from configure import LOGGER
 from enums import AutoTestCaseType, AutoTestStepType
 from services.ctx import CTX_USERNAME
@@ -284,14 +287,16 @@ def generate_case_scripts_task(
             f"case_project={case_project}, case_type={case_type}, case_attr={case_attr}, "
             f"created_user={created_user}, report_type={report_type}"
         )
-        result = run_async(_generate_case_scripts_impl(
-            case_ids=case_ids or [],
-            case_project=case_project,
-            case_type=case_type,
-            case_attr=case_attr,
-            case_tags=case_tags,
-            created_user=created_user,
-        ))
+        result = AsyncEventLoopContextIOPool.run_in_pool(
+            _generate_case_scripts_impl(
+                case_ids=case_ids or [],
+                case_project=case_project,
+                case_type=case_type,
+                case_attr=case_attr,
+                case_tags=case_tags,
+                created_user=created_user,
+            )
+        )
         LOGGER.info(
             f"【Celery-Worker】公共接口转脚本任务完成: total_cases={result.get('total_cases')}, "
             f"success_cases={result.get('success_cases')}, failed_cases={result.get('failed_cases')}"

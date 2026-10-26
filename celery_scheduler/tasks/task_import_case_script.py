@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Optional
 
 from applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from applications.autotest.services.autotest_case_excel_service import CaseExcelService
-from celery_scheduler.celery_base import run_async
 from celery_scheduler.celery_worker import celery
+from common import AsyncEventLoopContextIOPool
 from configure import LOGGER
 from services.ctx import CTX_USERNAME
 
@@ -71,7 +71,7 @@ def import_case_scripts_task(
             f"【Celery-Worker】开始导入公共接口脚本任务: 行数={len(rows or [])}, "
             f"file_name={file_name}, created_user={created_user}, report_type={report_type}"
         )
-        result = run_async(_import_case_scripts_impl(
+        result = AsyncEventLoopContextIOPool.run_in_pool(_import_case_scripts_impl(
             rows=rows or [],
             file_name=file_name,
             created_user=created_user,
