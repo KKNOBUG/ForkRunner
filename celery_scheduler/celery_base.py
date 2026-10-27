@@ -102,7 +102,7 @@ def get_span_id_for_log() -> str:
 
     :return: span_id字符串；不可用时返回空串
     """
-    from backend.common.request_context import get_span_id
+    from common.request_context import get_span_id
 
     sid = get_span_id()
     if sid and sid != "-":
