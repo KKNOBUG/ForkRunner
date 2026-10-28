@@ -78,6 +78,7 @@ _INTERFACE_TEMPLATE_FILES = {
     AutoTestInterfaceStyle.PROJECT: "项目接口文档模板.xlsx",
     AutoTestInterfaceStyle.INTEGRATION: "整合接口文档模板.xlsx",
 }
+_PLATFORM_LOAN_TEMPLATE_FILE = "平台贷模版.xlsx"
 
 _GENERATION_MODE_NAMES = {
     AutoTestDataGenerateMode.NORMAL.value: "常规",
@@ -135,18 +136,14 @@ def _download_response(file_path: str, file_name: str) -> StreamingResponse:
     )
 
 
-def _resolve_interface_template(interface_style: str) -> tuple[str, str]:
-    """
-        根据接口样式找到对应的excel模版文件，并返回文件路径和文件名
-    """
-    try:
-        style = AutoTestInterfaceStyle.normalize(interface_style)
-    except ValueError as exc:
-        raise ParameterException(
-            message="接口样式仅支持esb、project或integration"
-        ) from exc
-    file_name = _INTERFACE_TEMPLATE_FILES[style]
+def _resolve_template_file(file_name: str) -> tuple[str, str]:
+    """在模板目录内定位固定文件名对应的工作簿。
 
+    :param file_name: 服务端预设的模板文件名，不接受请求参数作为文件名。
+    :return: 模板的规范化路径及用于下载响应的原始文件名。
+    :raises ParameterException: 文件路径解析后超出模板目录。
+    :raises NotFoundException: 模板文件尚未放入模板目录。
+    """
     template_root = os.path.realpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template"))
     file_path = os.path.realpath(os.path.join(template_root, file_name))
     if os.path.commonpath((template_root, file_path)) != template_root:
@@ -156,6 +153,23 @@ def _resolve_interface_template(interface_style: str) -> tuple[str, str]:
             message=f"{file_name}不存在，请将模板上传至output/template目录"
         )
     return file_path, file_name
+
+
+def _resolve_interface_template(interface_style: str) -> tuple[str, str]:
+    """按接口样式定位常规生成的文档模板。
+
+    :param interface_style: ESB、项目或整合接口的样式标识。
+    :return: 对应模板的规范化路径及下载文件名。
+    :raises ParameterException: 接口样式不受支持或模板路径不合法。
+    :raises NotFoundException: 对应模板文件尚未放入模板目录。
+    """
+    try:
+        style = AutoTestInterfaceStyle.normalize(interface_style)
+    except ValueError as exc:
+        raise ParameterException(
+            message="接口样式仅支持esb、project或integration"
+        ) from exc
+    return _resolve_template_file(_INTERFACE_TEMPLATE_FILES[style])
 
 
 @autotest_data_generate.post("/tasks", summary="创建测试数据生成任务")
@@ -381,6 +395,24 @@ async def download_interface_template(interface_style: str):
     except Exception as exc:
         LOGGER.error(f"下载接口文档模板失败, 错误类型={type(exc).__name__}\n{traceback.format_exc()}")
         return FailureResponse(message="下载接口文档模板失败")
+
+
+@autotest_data_generate.get("/templates/intelligent/platform-loan", summary="下载平台贷场景文档模板")
+async def download_platform_loan_template():
+    """从模板目录下载平台贷场景文档模板，缺失时返回统一错误响应。
+
+    :return: 模板文件流；文件不存在或读取失败时返回对应的错误响应。
+    """
+    try:
+        file_path, file_name = _resolve_template_file(_PLATFORM_LOAN_TEMPLATE_FILE)
+        return _download_response(file_path, file_name)
+    except ParameterException as exc:
+        return ParameterResponse(message=str(exc.message))
+    except NotFoundException as exc:
+        return NotFoundResponse(message=str(exc.message))
+    except Exception as exc:
+        LOGGER.error(f"下载平台贷场景文档模板失败, 错误类型={type(exc).__name__}\n{traceback.format_exc()}")
+        return FailureResponse(message="下载平台贷场景文档模板失败")
 
 
 @autotest_data_generate.get("/{task_id}/detail", summary="查询数据生成任务详情")
