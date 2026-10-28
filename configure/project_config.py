@@ -109,7 +109,7 @@ class ProjectConfig(BaseSettings):
     # 调试配置
     SERVER_APP: str = "backend_main:app"
     # SERVER_HOST: str = ShellUtils.acquire_localhost()
-    SERVER_HOST: str = "192.168.136.76"
+    SERVER_HOST: str = "192.168.213.76"
     # SERVER_HOST: str = "192.168.43.7"
     SERVER_SYSTEM: str = platform.system()
     SERVER_PORT: int = 8520
