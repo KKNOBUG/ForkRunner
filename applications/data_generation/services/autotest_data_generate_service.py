@@ -189,26 +189,35 @@ def _request_path_segments(path: str) -> Tuple[str, ...]:
     return (text,)
 
 
-def _interface_array_path(interface_field: ParsedInterfaceField) -> Tuple[str, ...]:
-    """
-        从接口文档字段中读取并校验array_path，然后标准化为字符串元组
+def _interface_container_path(interface_field: ParsedInterfaceField) -> Tuple[str, ...]:
+    """读取字段的完整父级路径，并兼容已有任务快照的 array_path 键。
+
+    :param interface_field: 文档解析后的叶子字段定义。
+    :return: 从外到内的数组及结构体名称元组；顶层字段返回空元组。
+    :raises TestDataGenerationError: 路径不是名称列表或含有空名称。
     """
     raw_path = interface_field.get("array_path")
     if not isinstance(raw_path, (list, tuple)):
-        raise TestDataGenerationError("接口文档字段缺少合法的数组路径")
+        raise TestDataGenerationError("接口文档字段缺少合法的父级路径")
 
-    array_path = tuple(str(name or "").strip() for name in raw_path)
-    if any(not name for name in array_path):
-        raise TestDataGenerationError("接口文档字段数组路径中存在空节点")
-    return array_path
+    container_path = tuple(str(name or "").strip() for name in raw_path)
+    if any(not name for name in container_path):
+        raise TestDataGenerationError("接口文档字段父级路径中存在空节点")
+    return container_path
 
 
 def match_interface_fields(
         interface_fields: Sequence[ParsedInterfaceField],
         request_fields: Mapping[str, Any],
 ) -> List[MatchedInterfaceField]:
-    """
-        按BODY顺序匹配；完整路径严格识别，允许大小写不敏感的最外层Body作为可选报文包装节点。
+    """按完整容器路径匹配文档字段与 JSONPath 或 XML 路径。
+
+    :param interface_fields: 文档中带数组、结构体父级路径的叶子字段。
+    :param request_fields: 请求体字段路径到原始值的映射，保留报文顺序。
+    :return: 按请求体顺序排列的匹配结果；同一文档字段只匹配一次。
+    :raises TestDataGenerationError: 请求字段超限或文档父级路径无效。
+
+    最外层 Body 可作为不区分大小写的可选报文包装节点。
     """
     if len(request_fields) > MAX_REQUEST_FIELDS:
         raise TestDataGenerationError(f"请求报文字段数量不能超过{MAX_REQUEST_FIELDS}")
@@ -222,8 +231,8 @@ def match_interface_fields(
         field_name = str(interface_field.get("field_name") or "").strip()
         if not field_name:
             continue
-        array_path = _interface_array_path(interface_field)
-        identity = (array_path, field_name)
+        container_path = _interface_container_path(interface_field)
+        identity = (container_path, field_name)
         if identity in interface_by_identity:
             duplicate_identities.add(identity)
             continue
