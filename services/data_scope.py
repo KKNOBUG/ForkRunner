@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import Depends, Request
 from tortoise.expressions import Q
 
-from applications.base.models.role_tag_model import RoleTag
+from applications.base.models.role_tag_model import RoleTags
 from applications.department.models.dept_model import DeptStruct
 from applications.user.models.user_model import User
 from enums import BuiltinRoleCode, DataScopeEnum
@@ -121,7 +121,7 @@ class DataScope:
         if tag and tag != LEGACY_TAG:
             overrides = {
                 row.role_id: row
-                for row in await RoleTag.filter(role_id__in=[role.id for role in roles], tag=tag)
+                for row in await RoleTags.filter(role_id__in=[role.id for role in roles], tag=tag)
             }
 
         read_scopes, write_scopes, delete_scopes = [], [], []

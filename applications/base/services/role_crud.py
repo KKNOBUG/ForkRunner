@@ -6,7 +6,7 @@ from tortoise.transactions import in_transaction
 
 from applications.base.models.menu_model import Menu
 from applications.base.models.role_model import Role
-from applications.base.models.role_tag_model import RoleTag
+from applications.base.models.role_tag_model import RoleTags
 from applications.base.models.router_model import Router
 from applications.base.schemas.role_schema import RoleCreate, RoleUpdate, RoleTagScopeItem
 from applications.base.services.scaffold import ScaffoldCrud
@@ -229,8 +229,8 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
         :return: 每项含 tag、显式覆盖值、角色默认值
         """
         role = await self.get_by_id(role_id=role_id, on_error=True)
-        overrides: Dict[str, RoleTag] = {
-            row.tag: row for row in await RoleTag.filter(role_id=role_id)
+        overrides: Dict[str, RoleTags] = {
+            row.tag: row for row in await RoleTags.filter(role_id=role_id)
         }
         defaults = self._default_scopes(role)
         result: List[Dict] = []
@@ -284,9 +284,9 @@ class RoleCrud(ScaffoldCrud[Role, RoleCreate, RoleUpdate]):
             })
 
         async with in_transaction() as conn:
-            await RoleTag.filter(role_id=role_id).using_db(conn).delete()
+            await RoleTags.filter(role_id=role_id).using_db(conn).delete()
             for row in rows:
-                await RoleTag(**row).save(using_db=conn)
+                await RoleTags(**row).save(using_db=conn)
 
     @staticmethod
     def _default_scopes(role: Role) -> Dict[str, DataScopeEnum]:

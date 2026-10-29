@@ -5,7 +5,7 @@ from applications.base.services.scaffold import ScaffoldModel, MaintainMixin, Ti
 from enums import DataScopeEnum
 
 
-class RoleTag(ScaffoldModel, MaintainMixin, TimestampMixin):
+class RoleTags(ScaffoldModel, MaintainMixin, TimestampMixin):
     """角色按资源族标签覆盖的数据范围。"""
 
     role = fields.ForeignKeyField(model_name="models.Role", related_name="tag_scopes", on_delete=fields.CASCADE, description="角色")
@@ -15,7 +15,7 @@ class RoleTag(ScaffoldModel, MaintainMixin, TimestampMixin):
     delete_scope = fields.CharEnumField(DataScopeEnum, null=True, default=None, max_length=16, description="数据可删范围(空表示按角色默认)")
 
     class Meta:
-        table = "tbx_role_tag"
+        table = "tbx_role_tags"
         unique_together = (
             ("role", "tag"),
         )
