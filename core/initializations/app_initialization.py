@@ -20,17 +20,19 @@ from tortoise.contrib.fastapi import register_tortoise
 from tortoise.exceptions import DoesNotExist
 
 from configure import PROJECT_CONFIG, LOGGER
+from core.exceptions import NoPermissionException
 from core.exceptions.http_exceptions import (
     request_validation_exception_handler,
     response_validation_exception_handler,
     http_exception_handler,
+    no_permission_exception_handler,
     null_point_exception_handler,
     app_exception_handler,
 )
 from core.middlewares.app_middleware import logging_middleware
 from core.middlewares.auth_middleware import auth_middleware
 from core.middlewares.request_context_middleware import request_context_middleware
-from services import DependPermission, DependOptionalAuth
+from services import DependPermission
 
 
 def _migration_app_dir() -> str:
@@ -156,6 +158,11 @@ def register_exceptions(app: FastAPI) -> None:
         exc_class_or_status_code=HTTPException,
         handler=http_exception_handler
     )
+    # 业务层数据越权(如删除他人数据)统一映射为403，须先于通用Exception兜底注册
+    app.add_exception_handler(
+        exc_class_or_status_code=NoPermissionException,
+        handler=no_permission_exception_handler
+    )
     # 当使用 Tortoise ORM 进行数据库查询时，如果查询结果为空，会触发 DoesNotExist 异常
     app.add_exception_handler(
         exc_class_or_status_code=DoesNotExist,
@@ -236,7 +243,7 @@ def register_routers(app: FastAPI) -> None:
     # 导入路由蓝图
     from applications.base.views import base_public, base_secure, router_secure, menu_secure, role_secure, audit_secure, file_secure
     from applications.department.views.department_view import dept
-    from applications.user.views.user_view import user_public, user_secure
+    from applications.user.views.user_view import user_secure
     from applications.toolbox.views import toolbox
     from applications.autotest.views import autotest, autotest_data_create
     from applications.data_generation.views import data_generation
@@ -250,7 +257,6 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(router=role_secure, prefix="/yk/base", tags=["系统管理:角色"], dependencies=[DependPermission])
     app.include_router(router=audit_secure, prefix="/yk/base", tags=["系统管理:审计"], dependencies=[DependPermission])
     app.include_router(router=file_secure, prefix="/yk/base", tags=["系统管理:文件"], dependencies=[DependPermission])
-    app.include_router(router=user_public, prefix="/yk/user", tags=["系统管理:用户"], dependencies=[DependOptionalAuth])
     app.include_router(router=user_secure, prefix="/yk/user", tags=["系统管理:用户"], dependencies=[DependPermission])
     app.include_router(router=dept, prefix="/yk/dept", tags=["系统管理:部门"], dependencies=[DependPermission])
     app.include_router(router=toolbox, prefix="/yk/toolbox", tags=["便捷工具:工具箱"], dependencies=[DependPermission])
