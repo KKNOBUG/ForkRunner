@@ -12,10 +12,14 @@ from applications.autotest.models.autotest_step_model import AutoTestStepModel
 from applications.autotest.schemas.autotest_data_source_schema import AutoTestDataSourceCreate
 from applications.autotest.services.autotest_data_source_crud import make_cache_key
 from applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
+from applications.autotest.services.autotest_scope_guard import (
+    CASE_TAG,
+    assert_parent_readable,
+)
 from applications.autotest.services.autotest_tool_service import AutoTestToolService
-from core.exceptions import NotFoundException, ParameterException
+from core.exceptions import NotFoundException, ParameterException, NoPermissionException
 from enums import AutoTestReqArgsType, AutoTestStepType, PUBLIC_CASE_TYPES
-from services import get_current_username
+from services import DataScope, get_current_username
 
 __all__ = ["DataSourceService"]
 
@@ -116,22 +120,31 @@ class DataSourceService:
             cls,
             services: AutoTestServices,
             instance: AutoTestDataSourceModel,
+            scope: DataScope,
             case_id: Optional[int] = None,
             case_code: Optional[str] = None,
     ) -> None:
         """
-        数据源写操作准入：归属用例不允许公共类型、归属步骤须可挂载；入参携带用例定位时须与归属一致。
+        数据源写操作准入：归属用例须允许当前用户写入、不允许公共类型、归属步骤须可挂载；入参携带用例定位时须与归属一致。
 
-        按id/code定位的更新路径绕过了创建时的准入校验，更新/字段同步前必须调用。
+        按id/code定位的更新路径绕过了创建时的准入校验，更新/删除/字段同步前必须调用。
 
         :param services: CRUD聚合
         :param instance: 已定位的启用中数据源
+        :param scope: 数据权限上下文，数据源归属跟随用例所属人
         :param case_id: 入参用例ID(可选)
         :param case_code: 入参用例标识(可选)
+        :raises NoPermissionException: 归属用例所属人非当前用户
         :raises ParameterException: 归属用例为公共类型、入参定位与归属不一致、归属步骤不可挂载
         :raises NotFoundException: 归属用例不存在
         """
         owner_case = await services.case_curd.get_by_id(case_id=instance.case_id, on_error=True, state__not=1)
+        # 数据源权限跟随归属用例（父资源族），父用例可见是写入准入前提
+        await assert_parent_readable(scope, CASE_TAG, owner_case, "用例")
+        if not scope.can_write(owner_case.owner_user):
+            raise NoPermissionException(
+                message=f"数据源操作失败, 用例[{owner_case.case_name}]所属人[{owner_case.owner_user}]非当前用户, 无权操作"
+            )
         cls.ensure_case_allows_data_source(owner_case)
         input_case_id = case_id if case_id else None
         input_case_code = str(case_code).strip() if case_code else ""
