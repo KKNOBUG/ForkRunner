@@ -5,8 +5,8 @@ from .autotest_enum import (
     AutoTestCaseType,
     PUBLIC_CASE_TYPES,
     NO_TAG_CASE_TYPES,
-    AutoTestStepType,
     AutoTestLoopMode,
+    AutoTestStepType,
     AutoTestReportType,
     AutoTestBranchType,
     AutoTestLoopErrorStrategy,
@@ -19,12 +19,9 @@ from .autotest_enum import (
     AutoTestSessionTransfer,
     AutoTestEnvMode,
     AutoTestTaskStatus,
-    AutoTestDataGenerateStatus,
-    AutoTestDataGenerateMode,
     AutoTestReqArgsType,
     AutoTestDataBaseType,
     AutoTestConfigNodeType,
-    AutoTestInterfaceStyle,
     AutoTestTcpRadix,
     AutoTestTcpDatagramLength,
     AutoTestTcpConnectType,
@@ -34,7 +31,9 @@ from .base_error_enum import BaseErrorEnum
 from .file_size_enum import FileSizeEum
 from .http_enum import HTTPMethod
 from .menu_enum import MenuType
+from .permission_enum import DataScopeEnum
 from .program_env_enum import TestCasePriorityEnum
+from .role_enum import BuiltinRoleCode
 from .testcase_priority_enum import TestCasePriorityEnum
 
 __all__ = (
@@ -59,16 +58,15 @@ __all__ = (
     AutoTestSessionTransfer,
     AutoTestEnvMode,
     AutoTestTaskStatus,
-    AutoTestDataGenerateStatus,
-    AutoTestDataGenerateMode,
     AutoTestReqArgsType,
     BaseErrorEnum,
+    BuiltinRoleCode,
+    DataScopeEnum,
     FileSizeEum,
     HTTPMethod,
     TestCasePriorityEnum,
     AutoTestDataBaseType,
     AutoTestConfigNodeType,
-    AutoTestInterfaceStyle,
     AutoTestTcpRadix,
     AutoTestTcpDatagramLength,
     AutoTestTcpConnectType,
