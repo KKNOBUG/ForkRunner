@@ -35,7 +35,7 @@ auth_public = APIRouter()
 auth_secure = APIRouter()
 
 
-@auth_public.post("/access_token", summary="生成访问令牌", description="验证用户密码和状态并生成令牌")
+@auth_public.post("/access_token", summary="更新访问令牌", description="验证用户密码和状态并更新访问令牌")
 async def get_login_access_token(
         credentials: CredentialsSchema = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
