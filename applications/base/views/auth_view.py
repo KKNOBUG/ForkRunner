@@ -3,15 +3,23 @@ import traceback
 from datetime import timedelta, datetime, timezone
 from typing import List
 
+from fastapi import APIRouter, Depends, Body
+
 from applications.base.models.menu_model import Menu
 from applications.base.models.role_model import Role
 from applications.base.models.router_model import Router
 from applications.base.schemas.token_schema import CredentialsSchema, JWTOut, JWTPayload
 from applications.user.dependencies import get_user_crud
 from applications.user.models.user_model import User
+from applications.user.schemas.user_schema import UserCreate
 from applications.user.services.user_crud import UserCrud
 from configure import LOGGER, PROJECT_CONFIG
-from core.exceptions import NotFoundException, NoPermissionException, ParameterException
+from core.exceptions import (
+    NotFoundException,
+    NoPermissionException,
+    ParameterException,
+    NoAuthenticateException
+)
 from core.responses import (
     SuccessResponse,
     NotFoundResponse,
@@ -22,7 +30,6 @@ from core.responses import (
 from enums import BuiltinRoleCode
 from services import CTX_USER_ID, DataScope
 from services import create_access_token
-from fastapi import APIRouter, Depends, Body
 
 auth_public = APIRouter()
 auth_secure = APIRouter()
@@ -44,7 +51,12 @@ async def get_login_access_token(
         try:
             user: User = await user_crud.authenticate(credentials)
         except NotFoundException as e:
-            return NotFoundResponse(message=str(e.message), data=credentials.model_dump())
+            valid, third_user = await user_crud.confirm_user_authenticate(username=credentials.username)
+            if not valid:
+                return NotFoundResponse(message=str(e.message), data=credentials.model_dump())
+            user = await user_crud.create_user(user_in=UserCreate(password=credentials.password, **third_user))
+        except NoAuthenticateException as e:
+            return ForbiddenResponse(message=str(e.message), data=credentials.model_dump())
         except NoPermissionException as e:
             return ForbiddenResponse(message=str(e.message), data=credentials.model_dump())
         try:
@@ -56,7 +68,6 @@ async def get_login_access_token(
 
         access_token_expires = timedelta(minutes=PROJECT_CONFIG.AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
         expire = datetime.now(timezone.utc) + access_token_expires
-
         data = JWTOut(
             access_token=create_access_token(
                 data=JWTPayload(
