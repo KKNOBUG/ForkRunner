@@ -1,17 +1,12 @@
 # -*- coding: utf-8 -*-
-import asyncio
 import traceback
-from asyncio import Task
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List
 
-import httpx
 from fastapi import APIRouter, Body, Query, Depends
-from httpx import Response
 from tortoise import connections
 from tortoise.expressions import Q
 
 from applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
-from applications.autotest.models.autotest_project_model import AutoTestProjectModel
 from applications.autotest.schemas.autotest_project_schema import (
     AutoTestProjectCreate,
     AutoTestProjectUpdate,
@@ -35,7 +30,6 @@ from core.responses import (
     DataAlreadyExistsResponse
 )
 from services import DataScope, DependTagScope
-from services.semaphores import AdaptiveSemaphore
 
 autotest_project = APIRouter()
 
@@ -117,7 +111,7 @@ async def delete_project(
     :param project_id: 应用主键ID
     :param project_code: 应用业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的应用
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的应用
     :return: 统一HTTP响应
     """
     try:
@@ -156,7 +150,7 @@ async def batch_delete_projects(
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的应用
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的应用
     :return: 统一HTTP响应
     """
     try:
@@ -186,7 +180,7 @@ async def update_project(
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改创建人为自己的应用
+    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的应用
     :return: 统一HTTP响应
     """
     try:
@@ -237,6 +231,7 @@ async def get_project(
             instance = await services.project_curd.get_by_id(project_id=project_id, on_error=True, state__not=1)
         else:
             instance = await services.project_curd.get_by_code(project_code=project_code, on_error=True, state__not=1)
+        await scope.load_owners([instance.created_user])
         if not scope.can_read(instance.created_user):  # 详情需收口到可见范围
             raise NoPermissionException(
                 message=f"查询应用失败, 应用[{instance.project_code}]创建人[{instance.created_user}]不在当前用户可见范围"
@@ -354,6 +349,7 @@ async def search_projects(
         ]
         # 行级可删标记由后端按当前资源族的删除范围判定：部门范围无法在前端复算，
         # 且响应已排除 created_user，前端不能再按归属人自行比对
+        await scope.load_owners([obj.created_user for obj in instances])
         for item, obj in zip(data, instances):
             item["can_delete"] = scope.can_delete(obj.created_user)
         return SuccessResponse(message="查询成功", data=data, total=total)
@@ -362,78 +358,3 @@ async def search_projects(
     except Exception as e:
         LOGGER.error(f"根据条件分页查询应用列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
-
-
-@autotest_project.post("/sync", summary="API自动化测试-同步ATPM应用信息")
-async def sync_project_info(services: AutoTestServices = Depends(get_autotest_api_services)):
-    semaphore = AdaptiveSemaphore(max_concurrent=5)
-    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
-        try:
-            app_response: Response = await client.request(
-                method="POST",
-                url="http://10.208.24.14:8001/api/Ai/queryApplicaiton",
-            )
-            response_details: Dict[str, Any] = app_response.json()
-            app_details: List[Dict[str, Any]] = response_details.get("data")
-            if not app_details:
-                return FailureResponse(message=f"同步应用失败, 获取应用明细信息为空", data=response_details)
-        except Exception as e:
-            error_message: str = (
-                f"【同步ATPM应用信息】请求服务器发生未知错误, "
-                f"错误类型: {type(e).__name__}, "
-                f"错误描述: {e}"
-            )
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            return FailureResponse(message=f"HTTP请求调试异常", data=error_message)
-
-    async def protected_update_or_create(app_info):
-        async with semaphore.semaphore:
-            return await services.project_curd.model.update_or_create(
-                defaults={
-                    "project_name": app_info["subApplicationName"],
-                    "project_mark": app_info["subApplicationIdentify"]
-                },
-                project_name=app_info["subApplicationName"],
-                project_mark=app_info["subApplicationIdentify"],
-                state=0
-            )
-
-    try:
-        sync_tasks: List[Task] = []
-        for app_info in app_details:
-            sync_tasks.append(asyncio.create_task(protected_update_or_create(app_info)))
-    except KeyError as e:
-        return FailureResponse(message=f"同步应用失败, 获取应用名称或标识发生空指针: {e}")
-
-    sync_result: List[Tuple[AutoTestProjectModel, bool]] = await asyncio.gather(*sync_tasks, return_exceptions=True)
-    failure_details: List = []
-    created_numbers: set = set()
-    updated_numbers: set = set()
-    affected_detail: List[Dict[str, Any]] = []
-    for result in sync_result:
-        if not isinstance(result, tuple) or not isinstance(result[0], AutoTestProjectModel):
-            failure_details.append(result)
-        else:
-            obj, created = result
-            if created:
-                created_numbers.add(obj.id)
-            else:
-                updated_numbers.add(obj.id)
-            affected_detail.append({
-                "project_id": obj.id,
-                "project_name": obj.project_name,
-                "project_mark": obj.project_mark,
-                "created": created
-            })
-
-    created_num: int = len(created_numbers)
-    updated_num: int = len(updated_numbers)
-    return SuccessResponse(
-        message=f"同步应用存在{len(failure_details)}条失败, 错误描述: {failure_details[0]}" if failure_details else "同步应用全部成功",
-        data={
-            "created_numbers": created_num,
-            "updated_numbers": updated_num,
-            "affected_detail": affected_detail,
-        },
-        total=created_num + updated_num
-    )

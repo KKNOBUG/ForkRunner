@@ -32,7 +32,7 @@ from core.exceptions.http_exceptions import (
 from core.middlewares.app_middleware import logging_middleware
 from core.middlewares.auth_middleware import auth_middleware
 from core.middlewares.request_context_middleware import request_context_middleware
-from services import DependPermission
+from services import DependAuth, DependPermission
 
 
 def _migration_app_dir() -> str:
@@ -241,22 +241,22 @@ def register_routers(app: FastAPI) -> None:
     app.add_route(PROJECT_CONFIG.APP_DOCS_URL, enhancer_swagger_docs_html, name="swagger_docs_html")
 
     # 导入路由蓝图
-    from applications.base.views import base_public, base_secure, router_secure, menu_secure, role_secure, audit_secure, file_secure
+    from applications.base.views import router_secure, menu_secure, role_secure, audit_secure, file_secure
     from applications.department.views.department_view import dept
-    from applications.user.views.user_view import user_secure
+    from applications.user.views.user_view import user_public, user_self, user_secure
     from applications.toolbox.views import toolbox
     from applications.autotest.views import autotest, autotest_data_create
     from applications.data_generation.views import data_generation
 
     # 挂在路由蓝图
     # tags 采用「一级目录:二级模块」，与侧边栏菜单对齐，便于角色权限按模块制定规则
-    app.include_router(router=base_public, prefix="/yk/base", tags=["系统管理:认证"])
-    app.include_router(router=base_secure, prefix="/yk/base", tags=["系统管理:认证"], dependencies=[DependPermission])
     app.include_router(router=router_secure, prefix="/yk/base", tags=["系统管理:路由"], dependencies=[DependPermission])
     app.include_router(router=menu_secure, prefix="/yk/base", tags=["系统管理:菜单"], dependencies=[DependPermission])
     app.include_router(router=role_secure, prefix="/yk/base", tags=["系统管理:角色"], dependencies=[DependPermission])
     app.include_router(router=audit_secure, prefix="/yk/base", tags=["系统管理:审计"], dependencies=[DependPermission])
     app.include_router(router=file_secure, prefix="/yk/base", tags=["系统管理:文件"], dependencies=[DependPermission])
+    app.include_router(router=user_public, prefix="yk/user", tags=["系统管理:用户"])
+    app.include_router(router=user_self, prefix="yk/user", tags=["系统管理:用户"], dependencies=[DependAuth])
     app.include_router(router=user_secure, prefix="/yk/user", tags=["系统管理:用户"], dependencies=[DependPermission])
     app.include_router(router=dept, prefix="/yk/dept", tags=["系统管理:部门"], dependencies=[DependPermission])
     app.include_router(router=toolbox, prefix="/yk/toolbox", tags=["便捷工具:工具箱"], dependencies=[DependPermission])

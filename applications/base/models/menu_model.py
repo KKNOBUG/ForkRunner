@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from tortoise import fields
 
-from enums import MenuType
 from applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
+from enums import MenuType
 
 
 class Menu(ScaffoldModel, MaintainMixin, TimestampMixin):
@@ -22,3 +22,4 @@ class Menu(ScaffoldModel, MaintainMixin, TimestampMixin):
 
     class Meta:
         table = "tbx_menu"
+        unique_together = (("name", "path"), ("parent_id", "path"))

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import traceback
 
-from fastapi import APIRouter, Query, Depends, Body
+from fastapi import APIRouter, Body, Query, Depends
 
 from applications.base.dependencies import get_menu_crud
 from applications.base.schemas.menu_schema import MenuCreate, MenuUpdate
@@ -10,14 +10,16 @@ from configure import LOGGER
 from core.exceptions import (
     ParameterException,
     NotFoundException,
-    DataAlreadyExistsException
+    DataAlreadyExistsException,
+    DataBaseStorageException,
 )
 from core.responses import (
     NotFoundResponse,
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
-    DataAlreadyExistsResponse
+    DataAlreadyExistsResponse,
+    DataBaseStorageResponse,
 )
 
 menu = APIRouter()
@@ -133,6 +135,10 @@ async def update_menu(
         instance = await menu_crud.update_menu(menu_in=menu_in)
         data = await instance.to_dict(replace_fields={"id": "menu_id"})
         return SuccessResponse(message="更新成功", data=data, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except Exception as e:

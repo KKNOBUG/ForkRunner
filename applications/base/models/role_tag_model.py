@@ -9,7 +9,7 @@ class RoleTags(ScaffoldModel, MaintainMixin, TimestampMixin):
     """角色按资源族标签覆盖的数据范围。"""
 
     role = fields.ForeignKeyField(model_name="models.Role", related_name="tag_scopes", on_delete=fields.CASCADE, description="角色")
-    tag = fields.CharField(max_length=64, index=True, description="资源族标签(一级目录:二级模块)")
+    tag = fields.CharField(max_length=64, index=True, description="资源族编码(如autotest.case)")
     select_scope = fields.CharEnumField(DataScopeEnum, null=True, default=None, max_length=16, description="数据可见范围(空表示按角色默认)")
     update_scope = fields.CharEnumField(DataScopeEnum, null=True, default=None, max_length=16, description="数据可写范围(空表示按角色默认)")
     delete_scope = fields.CharEnumField(DataScopeEnum, null=True, default=None, max_length=16, description="数据可删范围(空表示按角色默认)")

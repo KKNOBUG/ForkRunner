@@ -35,6 +35,7 @@ from .file_size_enum import FileSizeEum
 from .http_enum import HTTPMethod
 from .menu_enum import MenuType
 from .permission_enum import DataScopeEnum
+from .resource_enum import ResourceDomain, ResourceTag
 from .program_env_enum import TestCasePriorityEnum
 from .role_enum import BuiltinRoleCode
 from .testcase_priority_enum import TestCasePriorityEnum

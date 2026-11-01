@@ -5,13 +5,19 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+from tortoise.timezone import now as tz_now
+
 from applications.autotest.models.autotest_task_model import AutoTestTaskModel
 from applications.autotest.services.autotest_step_crud import AutoTestStepCrud
-from applications.autotest.services.autotest_task_schedule import fetch_schedulable_tasks, is_task_due
+from applications.autotest.services.autotest_task_crud import AutoTestTaskCrud
+from applications.autotest.services.autotest_task_schedule import (
+    fetch_schedulable_tasks,
+    is_task_due,
+)
 from celery_scheduler.celery_base import get_span_id_for_log
 from celery_scheduler.celery_worker import celery
 from common import AsyncEventLoopContextIOPool
-from configure import LOGGER
+from configure import AUTOTEST_TASK_SOFT_TIME_LIMIT, AUTOTEST_TASK_TIME_LIMIT, LOGGER
 from enums import (
     AutoTestReportType,
     AutoTestTaskStatus,
@@ -75,21 +81,34 @@ async def _run_autotest_task_impl(
     if last_execute_user:
         CTX_USERNAME.set(str(last_execute_user).strip())
     case_ids = getattr(task, "task_case_ids", None) or []
+
+    # 原子抢占执行权：多端点击/Beat 重投时只有一条消息能把状态落到 RUNNING，其余直接忽略，避免重叠执行
+    run_started_at = tz_now()
+    claimed: bool = await AutoTestTaskCrud().claim_execution(
+        task_id=task_id,
+        execute_user=last_execute_user,
+        started_at=run_started_at,
+    )
+    if not claimed:
+        LOGGER.warning(
+            f"{_LOG_PREFIX}【span_id={span_id}】任务正在执行中, 本次重复触发已忽略: "
+            f"task_id={task_id}, task_code={task_code}, task_name={task_name}"
+        )
+        return {"success": False, "error": "任务正在执行中, 本次重复触发已忽略", "task_id": task_id}
+    # 与库内状态保持一致：_should_close_schedule 以本次启动时刻判定触发点是否已全部消费
+    task.last_execute_time = run_started_at
+    task.last_execute_state = AutoTestTaskStatus.RUNNING
+    task.last_execute_user = last_execute_user
+
+    # 空任务同样先经过执行权仲裁，抢到执行权的消息再写唯一失败终态
     if not case_ids:
-        task.last_execute_time = datetime.now()
         task.last_execute_state = AutoTestTaskStatus.FAILURE
-        task.last_execute_user = last_execute_user
-        await task.save(update_fields=["last_execute_time", "last_execute_state", "last_execute_user"])
+        await task.save(update_fields=["last_execute_state"])
         LOGGER.warning(
             f"{_LOG_PREFIX}【span_id={span_id}】关联用例列表为空: "
             f"task_id={task_id}, task_code={task_code}, task_name={task_name}"
         )
         return {"success": False, "error": "关联用例列表为空", "task_id": task_id}
-
-    task.last_execute_time = datetime.now()
-    task.last_execute_state = AutoTestTaskStatus.RUNNING
-    task.last_execute_user = last_execute_user
-    await task.save(update_fields=["last_execute_time", "last_execute_state", "last_execute_user"])
 
     exec_report_type = AutoTestReportType.SCHEDULE_EXEC
     if report_type == AutoTestReportType.ASYNC_EXEC or (
@@ -229,8 +248,8 @@ def scan_and_dispatch_autotest_tasks():
     acks_on_failure_or_timeout=True,
     # 任务级时限覆盖全局(3300/3600)：整批任务绑定多脚本串行数小时为正常场景；软时限向任务抛出
     # SoftTimeLimitExceeded后会被单用例兜底捕获(信号仅发一次)，整批的强制停止依赖硬时限兜底
-    soft_time_limit=25200,
-    time_limit=28800,
+    soft_time_limit=AUTOTEST_TASK_SOFT_TIME_LIMIT,
+    time_limit=AUTOTEST_TASK_TIME_LIMIT,
 )
 def run_autotest_task(
         task_id: int,
