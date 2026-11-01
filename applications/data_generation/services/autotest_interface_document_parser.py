@@ -41,6 +41,8 @@ _REQUIRED_TRUE_VALUES = {"1", "true", "m", "y", "yes", "是", "必填", "必输"
 _REQUIRED_FALSE_VALUES = {"0", "false", "o", "n", "no", "否", "非必填", "非必输"}
 #数组类型
 _ARRAY_TYPE_VALUES = {"array", "list"}
+_STRUCT_TYPE_VALUE = "struct"
+_FIELD_NAME_PATTERN = re.compile(r"[A-Za-z0-9]+")
 
 
 class InterfaceDocumentParseError(ValueError):
@@ -48,9 +50,10 @@ class InterfaceDocumentParseError(ValueError):
 
 
 class ParsedInterfaceField(TypedDict):
-    """
-        单个字段输出结构
-        TypedDict：用于描述字典应该有哪些键
+    """保存接口文档中的叶子字段及其规则和父级容器路径。
+
+    解析器生成该结构，字段匹配与场景生成读取它；array_path 保留旧快照键名，
+    现在按顺序包含数组与结构体节点。
     """
     field_name: str
     field_chinese_name: Optional[str]
@@ -64,7 +67,7 @@ class ParsedInterfaceField(TypedDict):
     length_error: Optional[str]
     enum_values: Optional[str]          #枚举文本：esb直接读取，其他文档由AI抽取
     remark: Optional[str]               #AI枚举抽取使用的原始字段文本
-    array_path: List[str]               #字段所属数组路径，按从外到内的顺序保存
+    array_path: List[str]               #兼容旧快照：数组与结构体的完整父级路径
     duplicate_in_context: bool          #字段是否在同一个上下文中重复
     source_row: int                     #字段在原excel中的行号
 
@@ -79,8 +82,11 @@ class ParsedInterfaceDocument(TypedDict):
     fields: List[ParsedInterfaceField]
 
 
-class _ArrayContext(TypedDict):
+class _ContainerContext(TypedDict):
+    """记录当前未配对的数组或结构体标记，供标准文档按嵌套顺序配对。"""
+
     name: str
+    kind: str
     start_row: int
 
 
@@ -254,7 +260,15 @@ def _iter_field_rows(
         field_name_header: str,
         chinese_name_header: str,
 ) -> Iterator[Tuple[int, Dict[str, Optional[str]]]]:
-    """从首个有效英文字段开始读取，开始后遇到非纯英文字段名即停止。"""
+    """从首个有效字段开始读取，遇到空行或非英数字字段名时停止。
+
+    :param sheet: 待扫描的接口文档工作表。
+    :param header_row: 字段表头所在的行号。
+    :param positions: 表头名称到工作表列索引的映射。
+    :param field_name_header: 英文字段名对应的表头名称。
+    :param chinese_name_header: 中文字段名对应的表头名称，用于确认扫描起点。
+    :return: 按工作表顺序生成字段行号及其各列文本值。
+    """
     data_started = False
     for row_no, row, is_empty in _iter_limited_rows(
             sheet,
@@ -267,37 +281,57 @@ def _iter_field_rows(
 
         values = _row_values(row, positions)
         field_name = values[field_name_header]
-        is_english_field_name = re.fullmatch(r"[A-Za-z]+", field_name or "") is not None
+        is_alphanumeric_field_name = _FIELD_NAME_PATTERN.fullmatch(field_name or "") is not None
         if data_started:
-            if not is_english_field_name:
+            if not is_alphanumeric_field_name:
                 break
         else:
             chinese_name = values[chinese_name_header]
-            if not (is_english_field_name and chinese_name):
+            if not (is_alphanumeric_field_name and chinese_name):
                 continue
             data_started = True
 
         yield row_no, values
 
 
-def _update_array_contexts(
-        active_arrays: List[_ArrayContext],
+def _update_container_contexts(
+        active_containers: List[_ContainerContext],
         *,
-        array_name: Optional[str],
+        container_name: Optional[str],
+        container_kind: str,
         row_no: int,
         name_label: str,
 ) -> None:
-    if not array_name:
-        raise InterfaceDocumentParseError(f"第{row_no}行数组标记缺少{name_label}")
-    if active_arrays and array_name == active_arrays[-1]["name"]:
-        active_arrays.pop()
+    """按名称和类型切换容器标记，并检查嵌套顺序。
+
+    :param active_containers: 当前从外到内尚未配对的容器栈，执行后原地更新。
+    :param container_name: 标记行中的英文名称，不能为空。
+    :param container_kind: 规范化后的容器类型，取 array 或 struct。
+    :param row_no: 标记行在工作表中的行号，用于定位错误。
+    :param name_label: 文档中英文字段名称列的表头，用于缺失提示。
+    :raises InterfaceDocumentParseError: 标记缺少名称、类型冲突或关闭顺序错误。
+    """
+    kind_label = "数组" if container_kind == "array" else "结构体"
+    if not container_name:
+        raise InterfaceDocumentParseError(f"第{row_no}行{kind_label}标记缺少{name_label}")
+    if active_containers and container_name == active_containers[-1]["name"]:
+        if container_kind != active_containers[-1]["kind"]:
+            raise InterfaceDocumentParseError(
+                f"第{row_no}行容器标记「{container_name}」类型与"
+                f"第{active_containers[-1]['start_row']}行不一致"
+            )
+        active_containers.pop()
         return
-    if any(context["name"] == array_name for context in active_arrays):
+    if any(context["name"] == container_name for context in active_containers):
         raise InterfaceDocumentParseError(
-            f"第{row_no}行数组结束标记「{array_name}」顺序不正确，"
-            f"请先结束内层数组「{active_arrays[-1]['name']}」"
+            f"第{row_no}行容器标记「{container_name}」顺序不正确，"
+            f"请先结束内层容器「{active_containers[-1]['name']}」"
         )
-    active_arrays.append({"name": array_name, "start_row": row_no})
+    active_containers.append({
+        "name": container_name,
+        "kind": container_kind,
+        "start_row": row_no,
+    })
 
 
 def _build_field(
@@ -311,10 +345,22 @@ def _build_field(
         array_path: Tuple[str, ...],
         source_row: int,
 ) -> ParsedInterfaceField:
+    """将文档中的字段行转换为生成规则使用的字段定义。
+
+    :param field_name: 字段英文名，允许英文字母和数字。
+    :param field_chinese_name: 字段中文说明，可为空。
+    :param required_text: 文档中的必输标记原文。
+    :param length_text: 文档中的字段长度原文。
+    :param enum_values: 文档中的枚举值文本，可为空。
+    :param remark: 字段备注，可为空。
+    :param array_path: 从外到内的所属数组与结构体名称，沿用旧快照键名。
+    :param source_row: 字段在原工作表中的行号。
+    :return: 含规范化规则、原文及校验错误的字段定义；非法字段名记录错误而不抛异常。
+    """
     field_name_error = None
-    if not re.fullmatch(r"[A-Za-z]+", field_name):
+    if not _FIELD_NAME_PATTERN.fullmatch(field_name):
         field_name_error = (
-            f"字段名「{field_name}」格式不合法，仅支持纯英文字母"
+            f"字段名「{field_name}」格式不合法，仅支持英文字母和数字"
         )
     length, total_length, integer_length, decimal_length = _normalize_length(length_text)
     length_error = None
@@ -445,7 +491,12 @@ def _append_or_mark_duplicate_field(
         field_indexes: Dict[_FieldIdentity, int],
         field: ParsedInterfaceField,
 ) -> None:
-    """按完整数组路径和字段名去重，保留首条并标记其存在重复。"""
+    """按完整父级路径与字段名识别同一上下文中的重复字段。
+
+    :param fields: 已解析的字段列表；首次出现的字段保留在其中。
+    :param field_indexes: 字段路径到 fields 索引的映射，执行后原地更新。
+    :param field: 当前待加入的字段；重复时只标记已有字段。
+    """
     identity = (tuple(field["array_path"]), field["field_name"])
     existing_index = field_indexes.get(identity)
     if existing_index is not None:
@@ -459,6 +510,13 @@ def _parse_standard_sheet(
         sheet: Worksheet,
         config: _StandardSheetConfig,
 ) -> ParsedInterfaceDocument:
+    """按标准接口文档配置解析字段和成对的数组、结构体标记。
+
+    :param sheet: 待读取的工作表，仅解析其中首个匹配的字段表头区域。
+    :param config: 当前接口样式的表头及字段列配置。
+    :return: 包含接口样式、工作表信息及字段定义的解析结果。
+    :raises InterfaceDocumentParseError: 表头无效或容器标记未配对、类型冲突、顺序错误。
+    """
     header_row, _, positions = _find_ordered_header_group(
         sheet,
         config.headers,
@@ -466,7 +524,7 @@ def _parse_standard_sheet(
     )
     fields: List[ParsedInterfaceField] = []
     field_indexes: Dict[_FieldIdentity, int] = {}
-    active_arrays: List[_ArrayContext] = []
+    active_containers: List[_ContainerContext] = []
 
     for row_no, values in _iter_field_rows(
             sheet,
@@ -475,11 +533,12 @@ def _parse_standard_sheet(
             field_name_header=config.field_name_header,
             chinese_name_header=config.chinese_name_header,
     ):
-        array_type = values[config.array_type_header]
-        if (array_type or "").casefold() in _ARRAY_TYPE_VALUES:
-            _update_array_contexts(
-                active_arrays,
-                array_name=values[config.field_name_header],
+        field_type = (values[config.array_type_header] or "").casefold()
+        if field_type in _ARRAY_TYPE_VALUES or field_type == _STRUCT_TYPE_VALUE:
+            _update_container_contexts(
+                active_containers,
+                container_name=values[config.field_name_header],
+                container_kind="array" if field_type in _ARRAY_TYPE_VALUES else "struct",
                 row_no=row_no,
                 name_label=config.field_name_header,
             )
@@ -488,7 +547,7 @@ def _parse_standard_sheet(
         field_name = values[config.field_name_header]
         if not field_name:
             continue
-        array_path = tuple(context["name"] for context in active_arrays)
+        array_path = tuple(context["name"] for context in active_containers)
         field = _build_field(
             field_name=field_name,
             field_chinese_name=values[config.chinese_name_header],
@@ -509,9 +568,12 @@ def _parse_standard_sheet(
         )
         _append_or_mark_duplicate_field(fields, field_indexes, field)
 
-    if active_arrays:
-        active_array = active_arrays[-1]
-        raise InterfaceDocumentParseError(f"第{active_array['start_row']}行数组标记缺少结束行")
+    if active_containers:
+        active_container = active_containers[-1]
+        kind_label = "数组" if active_container["kind"] == "array" else "结构体"
+        raise InterfaceDocumentParseError(
+            f"第{active_container['start_row']}行{kind_label}标记缺少开始或结束行"
+        )
     return {
         "interface_style": config.interface_style.value,
         "sheet_name": sheet.title,
