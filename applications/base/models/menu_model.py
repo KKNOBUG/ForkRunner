@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 from tortoise import fields
 
-from applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
+from applications.base.services.scaffold import (
+    MaintainMixin,
+    ScaffoldModel,
+    TimestampMixin,
+)
 from enums import MenuType
 
 
@@ -23,3 +27,6 @@ class Menu(ScaffoldModel, MaintainMixin, TimestampMixin):
     class Meta:
         table = "tbx_menu"
         unique_together = (("name", "path"), ("parent_id", "path"))
+
+    def __str__(self):
+        return f"Menu(name={self.name}, menu_type={self.menu_type}, path={self.path})"

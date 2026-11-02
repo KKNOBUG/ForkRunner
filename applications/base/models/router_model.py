@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 from tortoise import fields
 
-from applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
+from applications.base.services.scaffold import (
+    MaintainMixin,
+    ScaffoldModel,
+    TimestampMixin,
+)
 from enums import HTTPMethod
 
 
@@ -20,3 +24,6 @@ class Router(ScaffoldModel, MaintainMixin, TimestampMixin):
         unique_together = (
             ("method", "path"),
         )
+
+    def __str__(self):
+        return f"Router(path={self.path}, method={self.method})"

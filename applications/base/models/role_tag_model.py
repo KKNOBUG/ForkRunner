@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 from tortoise import fields
 
-from applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
+from applications.base.services.scaffold import (
+    MaintainMixin,
+    ScaffoldModel,
+    TimestampMixin,
+)
 from enums import DataScopeEnum
 
 
@@ -19,3 +23,6 @@ class RoleTags(ScaffoldModel, MaintainMixin, TimestampMixin):
         unique_together = (
             ("role", "tag"),
         )
+
+    def __str__(self):
+        return f"RoleTags(role={self.role}, tag={self.tag})"
