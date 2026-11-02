@@ -479,69 +479,13 @@ async def logout(
 
 
 # ==================== 公开端点：登录 ====================
-@user_public.post("/login", summary="用户登录", description="验证用户密码和状态并签发访问令牌")
-async def login(
-        credentials: CredentialsSchema = Body(..., description="用户信息"),
-        user_crud: UserCrud = Depends(get_user_crud),
-):
-    """
-    验证用户密码和状态并生成令牌。
-
-    :param credentials: 登录凭证入参
-    :param user_crud: 用户CRUD服务
-    :return: 统一HTTP响应
-    """
-    try:
-        try:
-            user: User = await user_crud.authenticate(credentials)
-        except (NotFoundException, NoAuthenticateException):
-            # 账号不存在与密码错误统一返回401，避免账号枚举；失败响应不回显密码
-            return UnauthorizedResponse(message="用户名或密码错误")
-        except NoPermissionException as e:
-            return ForbiddenResponse(message=str(e.message))
-        try:
-            await user_crud.update_last_login(user_id=user.id)
-        except (ParameterException, NotFoundException):
-            return FailureResponse(message="登录失败，请稍后重试")
-
-        access_token_expires = timedelta(minutes=PROJECT_CONFIG.AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-        expire = datetime.now(timezone.utc) + access_token_expires
-        data = JWTOut(
-            access_token=create_access_token(
-                data=JWTPayload(
-                    user_id=user.id,
-                    username=user.username,
-                    state=user.state,
-                    is_superuser=user.is_superuser,
-                    token_version=user.token_version,
-                    exp=expire,
-                ),
-            ),
-            username=user.username,
-            alias=user.alias,
-            email=user.email,
-            phone=user.phone,
-            avatar=user.avatar,
-            state=user.state,
-            is_superuser=user.is_superuser,
-            last_login=user.last_login
-        )
-        return SuccessResponse(message="登录成功", data=data.model_dump())
-    except Exception as e:
-        LOGGER.error(f"登录失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message="登录失败，请稍后重试")
-
-
-@user_public.post("/transfer_login", summary="第三方迁移登录", description="账号不存在时按第三方平台校验并接纳为新用户后生成令牌")
+@user_public.post("/login", summary="用户登录", description="验证用户密码和状态并签发访问令牌, 账号不存在时按第三方平台校验并接纳为新用户后生成令牌")
 async def transfer_login(
         credentials: CredentialsSchema = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
-    第三方平台用户迁移登录：本地账号不存在时按第三方平台校验并接纳为新用户后生成令牌。
-
-    与 /user/login 的差异仅在于账号不存在分支：校验第三方账号真实性并自动注册，
-    其余口令/状态校验与令牌签发逻辑与原接口一致。
+    验证用户密码和状态并生成令牌; 本地账号不存在时按第三方平台校验并接纳为新用户后生成令牌。
 
     :param credentials: 登录凭证入参
     :param user_crud: 用户CRUD服务

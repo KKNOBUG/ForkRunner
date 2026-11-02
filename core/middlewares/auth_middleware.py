@@ -12,8 +12,7 @@ from services import AuthControl
 
 # 公开入口白名单：登录、根路径、文档与静态资源；与路由契约 public 模式保持同源语义
 PUBLIC_WHITELIST: tuple[str, ...] = (
-    "POST /user/login",
-    "POST /user/transfer_login",
+    "POST /yk/user/login",
     "GET /",
     f"GET {PROJECT_CONFIG.APP_DOCS_URL}",
     f"GET {PROJECT_CONFIG.APP_REDOC_URL}",
