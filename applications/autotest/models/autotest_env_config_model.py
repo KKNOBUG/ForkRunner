@@ -41,8 +41,7 @@ class AutoTestEnvBindModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMo
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回绑定标识代码。"""
-        return self.env_code
+        return f"AutoTestDetailModel(env_enum={self.env_enum}, env_type={self.env_type}, env_code={self.env_code}, project_id={self.project_id})"
 
 
 class AutoTestEnvConfigModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
@@ -83,4 +82,4 @@ class AutoTestEnvConfigModel(ScaffoldModel, MaintainMixin, TimestampMixin, State
         ordering = ["-updated_time"]
 
     def __str__(self):
-        return self.config_name
+        return f"AutoTestDetailModel(env_bind={self.env_bind}, config_name={self.config_name}, config_code={self.config_code})"
