@@ -56,7 +56,7 @@ class ResourceTag(StringEnum):
     DETAIL = ("autotest.detail", "自动化测试:明细", ResourceDomain.AUTOTEST, True)
     TOOL = ("autotest.tool", "自动化测试:工具", ResourceDomain.AUTOTEST)
     # 数据源无独立归属，范围跟随所属用例，不单独配置
-    DATASET_GENERATE = ("autotest.dataset_generate", "自动化测试:数据源生成", ResourceDomain.AUTOTEST)
+    DATA_GENERATION = ("autotest.data_generation", "自动化测试:数据源生成", ResourceDomain.AUTOTEST)
     DATASET = ("autotest.dataset", "自动化测试:数据源", ResourceDomain.AUTOTEST)
     DEBUG = ("autotest.debug", "自动化测试:调试", ResourceDomain.AUTOTEST)
 

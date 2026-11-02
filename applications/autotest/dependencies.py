@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 from applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 from applications.autotest.services.autotest_case_transfer_crud import AutoTestCaseTransferCrud
-from applications.autotest.services.autotest_data_create_crud import AutoTestDataCreateCrud
 from applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
 from applications.autotest.services.autotest_detail_crud import AutoTestDetailCrud
 from applications.autotest.services.autotest_env_config_crud import AutoTestEnvConfigCrud
@@ -21,7 +20,6 @@ class AutoTestServices:
     """自动化测试相关CRUD服务聚合，供视图层依赖注入。"""
     case_curd: AutoTestCaseCrud
     case_transfer_curd: AutoTestCaseTransferCrud
-    data_create_curd: AutoTestDataCreateCrud
     data_source_curd: AutoTestDataSourceCrud
     detail_curd: AutoTestDetailCrud
     env_config_curd: AutoTestEnvConfigCrud
@@ -43,7 +41,6 @@ async def get_autotest_api_services() -> AutoTestServices:
     return AutoTestServices(
         case_curd=AutoTestCaseCrud(),
         case_transfer_curd=AutoTestCaseTransferCrud(),
-        data_create_curd=AutoTestDataCreateCrud(),
         data_source_curd=AutoTestDataSourceCrud(),
         detail_curd=AutoTestDetailCrud(),
         env_config_curd=AutoTestEnvConfigCrud(),
