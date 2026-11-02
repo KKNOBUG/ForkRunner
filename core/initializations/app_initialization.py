@@ -245,7 +245,7 @@ def register_routers(app: FastAPI) -> None:
     from applications.department.views.department_view import dept
     from applications.user.views.user_view import user_public, user_self, user_secure
     from applications.toolbox.views import toolbox
-    from applications.autotest.views import autotest, autotest_data_create
+    from applications.autotest.views import autotest
     from applications.data_generation.views import data_generation
 
     # 挂在路由蓝图
@@ -261,5 +261,4 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(router=dept, prefix="/yk/dept", tags=["系统管理:部门"], dependencies=[DependPermission])
     app.include_router(router=toolbox, prefix="/yk/toolbox", tags=["便捷工具:工具箱"], dependencies=[DependPermission])
     app.include_router(router=autotest, prefix="/yk/autotest", dependencies=[DependPermission])
-    app.include_router(router=autotest_data_create, prefix="/lb/autotest", dependencies=[DependPermission])
     app.include_router(router=data_generation, prefix="/yk/autotest", dependencies=[DependPermission])

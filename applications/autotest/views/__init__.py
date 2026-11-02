@@ -4,7 +4,6 @@ from fastapi import APIRouter
 from enums import ResourceTag
 from .autotest_case_transfer_view import autotest_case_transfer
 from .autotest_case_view import autotest_case
-from .autotest_data_create_view import autotest_data_create
 from .autotest_data_source_view import autotest_data_source
 from .autotest_datagram_diff_view import datagram_diff_router
 from .autotest_detail_view import autotest_detail
@@ -33,7 +32,6 @@ autotest.include_router(autotest_env_config, prefix="/config", tags=[ResourceTag
 autotest.include_router(autotest_tag, prefix="/tag", tags=[ResourceTag.TAG.desc])
 autotest.include_router(autotest_task, prefix="/task", tags=[ResourceTag.TASK.desc])
 autotest.include_router(autotest_tool, prefix="/tool", tags=[ResourceTag.TOOL.desc])
-autotest.include_router(autotest_data_create, prefix="/data_create", tags=[ResourceTag.DATASET_GENERATE.desc])
 autotest.include_router(autotest_data_source, prefix="/data_source", tags=[ResourceTag.DATASET.desc])
 autotest.include_router(autotest_tcp_test, prefix="/tcp_test", tags=[ResourceTag.DEBUG.desc])
 autotest.include_router(autotest_http_xml_test, prefix="/http_xml_test", tags=[ResourceTag.DEBUG.desc])
