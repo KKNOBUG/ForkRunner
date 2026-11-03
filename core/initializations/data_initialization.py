@@ -890,7 +890,7 @@ async def init_database_env_config():
                 config_name="ToolBox工具箱-APP配置1",
                 env_name=env_name,
                 config_host="192.168.1.27",
-                config_port="8518",
+                config_port="8520",
                 config_desc=f"ToolBox工具箱, 后端服务器{env_name}环境APP配置1",
                 created_user=TESTER,
             )
@@ -900,8 +900,8 @@ async def init_database_env_config():
                 project_id=project_id,
                 config_name="ToolBox工具箱-APP配置2",
                 env_name=env_name,
-                config_host="192.168.1.27",
-                config_port="8519",
+                config_host="192.168.1.28",
+                config_port="8520",
                 config_desc=f"ToolBox工具箱, 后端服务器{env_name}环境APP配置2",
                 created_user=TESTER,
             )
@@ -912,7 +912,7 @@ async def init_database_env_config():
                 config_name="ToolBox工具箱-TCP&JSON报文",
                 env_name=env_name,
                 config_host="192.168.1.27",
-                config_port="9091",
+                config_port="9991",
                 config_desc=f"JSON请求(银行账户交易查询→XML响应)",
                 created_user=TESTER,
             )
@@ -923,7 +923,7 @@ async def init_database_env_config():
                 config_name="ToolBox工具箱-TCP&XML报文",
                 env_name=env_name,
                 config_host="192.168.1.27",
-                config_port="9092",
+                config_port="9992",
                 config_desc=f"XML请求(贷款申请→XML响应)",
                 created_user=TESTER,
             )
@@ -934,7 +934,7 @@ async def init_database_env_config():
                 config_name="ToolBox工具箱-10进制8位不包含",
                 env_name=env_name,
                 config_host="192.168.1.27",
-                config_port="9093",
+                config_port="9993",
                 config_desc=f"TCP协议：10进制/8位长度位/不包含长度位",
                 created_user=TESTER,
             )
@@ -945,7 +945,7 @@ async def init_database_env_config():
                 config_name="ToolBox工具箱-16进制4位包含",
                 env_name=env_name,
                 config_host="192.168.1.27",
-                config_port="9094",
+                config_port="9994",
                 config_desc=f"TCP协议：16进制/4位长度位/包含长度位",
                 created_user=TESTER,
             )
@@ -956,7 +956,7 @@ async def init_database_env_config():
                 config_name="ToolBox工具箱-不使用进制数",
                 env_name=env_name,
                 config_host="192.168.1.27",
-                config_port="9095",
+                config_port="9995",
                 config_desc=f"TCP协议：进制数不使用，请求/响应结束符\r\n",
                 created_user=TESTER,
             )
@@ -967,7 +967,7 @@ async def init_database_env_config():
                 config_name="ToolBox工具箱-10进制8位不包含&开启HEX",
                 env_name=env_name,
                 config_host="192.168.1.27",
-                config_port="9096",
+                config_port="9996",
                 config_desc=f"TCP协议：10进制/8位/不包含长度位/HEX开启",
                 created_user=TESTER,
             )
@@ -978,7 +978,7 @@ async def init_database_env_config():
                 config_name="ToolBox工具箱-10进制8位不包含&GBK编码",
                 env_name=env_name,
                 config_host="192.168.1.27",
-                config_port="9097",
+                config_port="9997",
                 config_desc=f"TCP协议：10进制/8位/不包含长度位/GBK编码",
                 created_user=TESTER,
             )
@@ -989,7 +989,7 @@ async def init_database_env_config():
                 config_name="ToolBox工具箱-不使用进制数且无结束符",
                 env_name=env_name,
                 config_host="192.168.1.27",
-                config_port="9098",
+                config_port="9998",
                 config_desc=f"TCP协议：进制数不使用且无结束符，报文原样收发",
                 created_user=TESTER,
             )
@@ -1000,7 +1000,7 @@ async def init_database_env_config():
                 config_name="ToolBox工具箱-帧字段共存组合",
                 env_name=env_name,
                 config_host="192.168.1.27",
-                config_port="9099",
+                config_port="9999",
                 config_desc=f"TCP协议：帧字段共存组合（进制数与结束符不互斥）：推导按优先级取长度前缀，结束符保留不参与成帧",
                 created_user=TESTER,
             )
