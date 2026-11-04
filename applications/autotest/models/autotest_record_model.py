@@ -2,11 +2,11 @@
 from tortoise import fields
 
 from applications.base.services.scaffold import (
-    ScaffoldModel,
     MaintainMixin,
-    TimestampMixin,
-    StateModel,
     ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
 )
 from enums import (
     AutoTestReportType,
@@ -49,5 +49,4 @@ class AutoTestRecordModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         ordering = ["-celery_start_time", "-id"]
 
     def __str__(self):
-        """返回 celery_id 与 task_name 的组合字符串。"""
-        return f"{self.celery_id or ''}-{self.task_name or ''}"
+        return f"AutoTestRecordModel(task_id={self.task_id}, task_name={self.task_name}, task_type={self.task_type}, celery_id={self.celery_id})"

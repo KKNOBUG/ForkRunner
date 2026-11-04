@@ -1,21 +1,22 @@
 # -*- coding: utf-8 -*-
+from tortoise import fields
+
 from applications.base.services.scaffold import (
-    ScaffoldModel,
     MaintainMixin,
-    TimestampMixin,
-    StateModel,
     ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     UpperCharField,
     unique_identify,
 )
 from enums import AutoTestCaseType, AutoTestCaseAttr, AutoTestSessionTransfer
-from tortoise import fields
 
 
 class AutoTestCaseModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     case_name = fields.CharField(max_length=255, index=True, description="用例名称")
     case_desc = fields.CharField(max_length=2048, null=True, description="用例描述")
-    # case_tags 存储为List[int]格式, 每个元素都是Tag记录的主键
+    # case_tags 存储为List[int]格式, 每个元素都是AutoTestTagModel表记录的主键
     case_tags = fields.JSONField(default=None, null=True, description="用例所属标签")
     case_type = fields.CharEnumField(AutoTestCaseType, default=None, null=True, description="用例所属类型")
     case_attr = fields.CharEnumField(AutoTestCaseAttr, default=None, null=True, description="用例所属属性")
@@ -48,5 +49,4 @@ class AutoTestCaseModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回用例名称。"""
-        return self.case_name
+        return f"AutoTestCaseModel(case_name={self.case_name}, case_type={self.case_type}, case_code={self.case_code})"

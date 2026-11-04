@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from applications.autotest.models.autotest_tag_model import AutoTestTagModel
 from applications.autotest.schemas.autotest_env_config_schema import (
     APPEnvConfigCreate,
+    AutoTestEnvConfigCreate,
     DBEnvConfigCreate,
     FILEEnvConfigCreate,
 )
@@ -30,9 +31,11 @@ from applications.user.schemas.user_schema import UserCreate
 from applications.user.services.user_crud import UserCrud
 from configure import LOGGER
 from enums import DataScopeEnum, MenuType
+from services import DataScope
 
 # 初始化种子数据的创建人
-INIT_CREATED_USER = "ADMIN"
+ADMIN = "ADMIN"
+TESTER = "TESTER"
 
 
 async def init_database_role():
@@ -56,7 +59,7 @@ async def init_database_role():
             select_scope=DataScopeEnum.ALL,
             update_scope=DataScopeEnum.ALL,
             delete_scope=DataScopeEnum.ALL,
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
     )
     user_role = await role_crud.create_role(
@@ -67,7 +70,7 @@ async def init_database_role():
             select_scope=DataScopeEnum.DEPT_AND_CHILD,
             update_scope=DataScopeEnum.SELF,
             delete_scope=DataScopeEnum.SELF,
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
     )
     guest_role = await role_crud.create_role(
@@ -78,7 +81,7 @@ async def init_database_role():
             select_scope=DataScopeEnum.DEPT_AND_CHILD,
             update_scope=DataScopeEnum.SELF,
             delete_scope=DataScopeEnum.SELF,
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
     )
     LOGGER.info(f"创建角色成功: {admin_role.name} (id: {admin_role.id}, code: {admin_role.code})")
@@ -117,19 +120,19 @@ async def init_database_dept():
     dept_data: List[DepartmentCreate] = [
         DepartmentCreate(
             code="SYSTEM_DEPT",
-            name="系统默认部门",
-            description="系统默认配置，无具体业务归属，仅作初始部门使用",
+            name="ToolBox工具箱",
+            description="无具体业务归属，仅作初始部门使用",
             order=0,
             parent_id=0,
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
         DepartmentCreate(
             code="AUTOTEST_DEPT",
-            name="技术测试团队",
-            description="技术测试与冒烟验证相关人员所属部门",
+            name="ToolBox工具箱开发&测试部门",
+            description="ToolBox工具箱开发与测试相关人员所属部门",
             order=1,
             parent_id=0,
-            created_user=INIT_CREATED_USER,
+            created_user=TESTER,
         ),
     ]
 
@@ -168,7 +171,7 @@ async def init_database_user():
             dept_id=default_dept.id,
             is_superuser=True,
             role_ids=[admin_role.id],
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
         UserCreate(
             username="tester",
@@ -180,7 +183,7 @@ async def init_database_user():
             dept_id=test_dept.id,
             is_superuser=False,
             role_ids=[user_role.id],
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
         UserCreate(
             username="guest",
@@ -192,7 +195,7 @@ async def init_database_user():
             dept_id=test_dept.id,
             is_superuser=False,
             role_ids=[guest_role.id],
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
     ]
     for user_in in user_data:
@@ -203,36 +206,10 @@ async def init_database_user():
             LOGGER.error(f"创建用户失败: {user_in.alias}, username: {user_in.username}: {e}")
 
 
-async def ensure_autotest_detail_menu(menu_crud: MenuCrud) -> None:
-    """存量环境幂等补建[执行明细]菜单：菜单初始化表非空即跳过，新增页面需单独补齐。"""
-    parent_menu = await menu_crud.model.filter(path="/autotest", parent_id=0).first()
-    if not parent_menu:
-        LOGGER.warning("[菜单]补建[执行明细]跳过，未找到[自动化测试]父级目录")
-        return
-    if await menu_crud.model.filter(parent_id=parent_menu.id, name="执行明细").exists():
-        return
-    await menu_crud.create_menu(
-        MenuCreate(
-            menu_type=MenuType.MENU,
-            name="执行明细",
-            path="detail",
-            order=6,
-            parent_id=parent_menu.id,
-            icon="mdi:format-list-group",
-            is_hidden=False,
-            component="/autotest/detail",
-            keepalive=True,
-            created_user=INIT_CREATED_USER,
-        )
-    )
-    LOGGER.info("创建[执行明细]菜单成功")
-
-
 async def init_database_menu():
     menu_crud = MenuCrud()
     if await menu_crud.model.exists():
         LOGGER.info("[菜单]已有数据，跳过初始化")
-        await ensure_autotest_detail_menu(menu_crud)
         return
     # 系统设置菜单配置
     system_parent_menu = await menu_crud.create_menu(
@@ -247,7 +224,7 @@ async def init_database_menu():
             component="Layout",
             keepalive=False,
             redirect="/system/user",
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
     )
     system_children_menu = [
@@ -261,7 +238,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/system/user",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -273,7 +250,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/system/role",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -285,7 +262,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/system/menu",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -297,7 +274,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/system/router",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -309,7 +286,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/system/dept",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -321,7 +298,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/system/redis",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -333,7 +310,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/system/database",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -345,7 +322,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/system/auditlog",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
     ]
     await Menu.bulk_create(system_children_menu)
@@ -364,7 +341,7 @@ async def init_database_menu():
             component="Layout",
             keepalive=False,
             redirect="/program/project",
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
     )
     program_children_menu = [
@@ -378,7 +355,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/program/project",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -390,7 +367,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/program/environment",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -402,7 +379,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/program/tags",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
     ]
     await Menu.bulk_create(program_children_menu)
@@ -421,7 +398,7 @@ async def init_database_menu():
             component="Layout",
             keepalive=False,
             redirect="/interface/swagger",
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
     )
     interface_children_menu = [
@@ -435,7 +412,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/interface/swagger",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -447,7 +424,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/interface/redoc",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
     ]
     await Menu.bulk_create(interface_children_menu)
@@ -466,7 +443,7 @@ async def init_database_menu():
             component="Layout",
             keepalive=False,
             redirect="/autotest/testcase",
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
     )
     autotest_children_menu = [
@@ -481,12 +458,12 @@ async def init_database_menu():
             component="/autotest/ui",
             keepalive=True
             ,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
             name="App 测试",
-            path="ui",
+            path="app",
             order=2,
             parent_id=autotest_parent_menu.id,
             icon="gravity-ui:smartphone",
@@ -494,7 +471,7 @@ async def init_database_menu():
             component="/autotest/ui",
             keepalive=True
             ,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -507,7 +484,7 @@ async def init_database_menu():
             component="/autotest/steps",
             keepalive=True
             ,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -520,7 +497,7 @@ async def init_database_menu():
             component="/autotest/testcase",
             keepalive=True
             ,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -533,20 +510,7 @@ async def init_database_menu():
             component="/autotest/report",
             keepalive=True
             ,
-            created_user=INIT_CREATED_USER
-        ),
-        Menu(
-            menu_type=MenuType.MENU,
-            name="执行明细",
-            path="detail",
-            order=6,
-            parent_id=autotest_parent_menu.id,
-            icon="mdi:format-list-group",
-            is_hidden=False,
-            component="/autotest/detail",
-            keepalive=True
-            ,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
     ]
     await Menu.bulk_create(autotest_children_menu)
@@ -565,7 +529,7 @@ async def init_database_menu():
             component="Layout",
             keepalive=False,
             redirect="/performance/scene",
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
     )
     perf_children_menu = [
@@ -579,7 +543,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/performance/api",
             keepalive=True,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -591,7 +555,7 @@ async def init_database_menu():
             is_hidden=True,
             component="/performance/api/edit",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -603,7 +567,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/performance/scene",
             keepalive=True,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -615,7 +579,7 @@ async def init_database_menu():
             is_hidden=True,
             component="/performance/scene/edit",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -627,7 +591,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/performance/machine",
             keepalive=True,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -639,7 +603,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/performance/schedule",
             keepalive=True,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -651,7 +615,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/performance/report",
             keepalive=True,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -663,7 +627,7 @@ async def init_database_menu():
             is_hidden=True,
             component="/performance/report/detail",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
     ]
     await Menu.bulk_create(perf_children_menu)
@@ -682,7 +646,7 @@ async def init_database_menu():
             component="Layout",
             keepalive=False,
             redirect="/task/async_center",
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
     )
     task_children_menu = [
@@ -697,7 +661,7 @@ async def init_database_menu():
             component="/task/list",
             keepalive=True
             ,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -710,7 +674,7 @@ async def init_database_menu():
             component="/task/record",
             keepalive=True
             ,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -723,7 +687,7 @@ async def init_database_menu():
             component="/task/async_center",
             keepalive=True
             ,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
     ]
     await Menu.bulk_create(task_children_menu)
@@ -742,7 +706,7 @@ async def init_database_menu():
             component="Layout",
             keepalive=False,
             redirect="/toolbox/pythonHelpDoc",
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
     )
     toolbox_children_menu = [
@@ -756,7 +720,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/toolbox/pythonHelpDoc",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -768,7 +732,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/toolbox/generate",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -780,7 +744,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/toolbox/textAnalysis",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
         Menu(
             menu_type=MenuType.MENU,
@@ -792,7 +756,7 @@ async def init_database_menu():
             is_hidden=False,
             component="/toolbox/databaseSearch",
             keepalive=False,
-            created_user=INIT_CREATED_USER
+            created_user=ADMIN
         ),
     ]
     await Menu.bulk_create(toolbox_children_menu)
@@ -811,7 +775,7 @@ async def init_database_menu():
             component="/top-menu",
             keepalive=False,
             redirect="",
-            created_user=INIT_CREATED_USER,
+            created_user=ADMIN,
         ),
     )
 
@@ -822,11 +786,15 @@ async def init_database_router(app: FastAPI):
         LOGGER.info("[路由]已有数据，跳过初始化")
         return
 
-    # 初始化无 HTTP 登录上下文：临时写入 CTX，供 refresh_router 取当前用户
+    # 初始化无 HTTP 登录上下文：仅在路由刷新期间写入 CTX，退出时恢复进入前的身份
     from services.ctx import CTX_USERNAME
-    CTX_USERNAME.set(INIT_CREATED_USER)
-    # 首次灌路由时角色可能尚未创建，关闭自动补绑；角色初始化阶段再完整绑定
-    await router_crud.refresh_router(app, sync_role_bindings=False)
+    username_token = CTX_USERNAME.set(ADMIN)
+    try:
+        # 首次灌路由时角色可能尚未创建，关闭自动补绑；角色初始化阶段再完整绑定
+        await router_crud.refresh_router(app, sync_role_bindings=False)
+    finally:
+        # 同一初始化任务还会继续创建其他数据，临时身份不能泄漏到后续链路
+        CTX_USERNAME.reset(username_token)
 
 
 async def init_database_project():
@@ -844,10 +812,11 @@ async def init_database_project():
             project_developers=["admin"],
             project_test_owners=["tester"],
             project_testers=["tester", "guest"],
-            created_user=INIT_CREATED_USER,
+            created_user=TESTER,
             project_phase=None,
             project_current_month_env=None,
-        )
+        ),
+        scope=DataScope.system(),
     )
     LOGGER.info("创建[应用]成功: ToolBox工具箱")
 
@@ -870,14 +839,21 @@ async def init_database_tag():
             tag_mode="技术测试团队",
             tag_name="测试工程师",
             tag_desc=None,
-            created_user=INIT_CREATED_USER,
+            created_user=TESTER,
         ),
         AutoTestTagCreate(
             tag_project=project.id,
             tag_mode="技术测试团队",
             tag_name="开发工程师",
             tag_desc=None,
-            created_user=INIT_CREATED_USER,
+            created_user=TESTER,
+        ),
+        AutoTestTagCreate(
+            tag_project=project.id,
+            tag_mode="技术测试团队",
+            tag_name="运维工程师",
+            tag_desc=None,
+            created_user=TESTER,
         ),
     ]
     await tag_crud.model.bulk_create(
@@ -893,7 +869,7 @@ async def init_database_env_config():
     project_crud = AutoTestProjectCrud()
     project = await project_crud.model.filter(project_name="ToolBox工具箱", state__not=1).first()
     if not project:
-        LOGGER.error("[环境配置]初始化失败: 未找到应用 ToolBox工具箱")
+        LOGGER.error("[环境配置]初始化失败: 未找到[ToolBox工具箱]应用")
         return
 
     env_crud = AutoTestEnvCrud()
@@ -902,97 +878,206 @@ async def init_database_env_config():
         return
 
     config_crud = AutoTestEnvConfigCrud()
-    env_name = "SIT1"
     project_id = int(project.id)
+    scope = DataScope.system()
 
-    seed_configs = [
-        # 主表1：APP(api)
-        APPEnvConfigCreate(
-            project_id=project_id,
-            config_name="ToolBox工具箱后端1",
-            env_name=env_name,
-            config_host="192.168.245.76",
-            config_port="8518",
-            config_desc="服务器1",
-            created_user=INIT_CREATED_USER,
-        ),
-        APPEnvConfigCreate(
-            project_id=project_id,
-            config_name="ToolBox工具箱后端2",
-            env_name=env_name,
-            config_host="192.168.245.77",
-            config_port="8518",
-            config_desc="服务器2",
-            created_user=INIT_CREATED_USER,
-        ),
-        # 主表2：DB(database)
-        DBEnvConfigCreate(
-            project_id=project_id,
-            config_name="ToolBox工具箱后端1",
-            env_name=env_name,
-            config_host="10.211.55.3",
-            config_port="3306",
-            database_name="tbx_runner",
-            database_type="mysql",
-            config_username="root",
-            config_password="root",
-            config_desc="服务器1",
-            created_user=INIT_CREATED_USER,
-        ),
-        DBEnvConfigCreate(
-            project_id=project_id,
-            config_name="ToolBox工具箱后端2",
-            env_name=env_name,
-            config_host="10.211.55.4",
-            config_port="3306",
-            database_name="tbx_runner",
-            database_type="mysql",
-            config_username="root",
-            config_password="root",
-            config_desc="服务器2",
-            created_user=INIT_CREATED_USER,
-        ),
-        # 主表3：FILE
-        FILEEnvConfigCreate(
-            project_id=project_id,
-            config_name="ToolBox工具箱后端1",
-            env_name=env_name,
-            config_host="10.208.24.12",
-            config_port="8888",
-            config_username="root",
-            config_password="root",
-            is_no_password=True,
-            config_desc="服务器1",
-            created_user=INIT_CREATED_USER,
-        ),
-        FILEEnvConfigCreate(
-            project_id=project_id,
-            config_name="ToolBox工具箱后端2",
-            env_name=env_name,
-            config_host="10.208.24.14",
-            config_port="8888",
-            config_username="root",
-            config_password="root",
-            is_no_password=True,
-            config_desc="服务器2",
-            created_user=INIT_CREATED_USER,
-        ),
-    ]
+    # 占位种子：每个环境为 APP/DB/FILE 各生成两条，地址与端口按环境序号区分，使用方按真实环境修正
+    seed_configs: List[AutoTestEnvConfigCreate] = []
+    for env_index, env_name in enumerate(("UAT1", "UAT2", "UAT3"), start=1):
+        seed_configs.append(
+            APPEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-APP配置1",
+                env_name=env_name,
+                config_host="192.168.1.27",
+                config_port="8520",
+                config_desc=f"ToolBox工具箱, 后端服务器{env_name}环境APP配置1",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            APPEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-APP配置2",
+                env_name=env_name,
+                config_host="192.168.1.28",
+                config_port="8520",
+                config_desc=f"ToolBox工具箱, 后端服务器{env_name}环境APP配置2",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            APPEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-TCP&JSON报文",
+                env_name=env_name,
+                config_host="192.168.1.27",
+                config_port="9991",
+                config_desc=f"JSON请求(银行账户交易查询→XML响应)",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            APPEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-TCP&XML报文",
+                env_name=env_name,
+                config_host="192.168.1.27",
+                config_port="9992",
+                config_desc=f"XML请求(贷款申请→XML响应)",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            APPEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-10进制8位不包含",
+                env_name=env_name,
+                config_host="192.168.1.27",
+                config_port="9993",
+                config_desc=f"TCP协议：10进制/8位长度位/不包含长度位",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            APPEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-16进制4位包含",
+                env_name=env_name,
+                config_host="192.168.1.27",
+                config_port="9994",
+                config_desc=f"TCP协议：16进制/4位长度位/包含长度位",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            APPEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-不使用进制数",
+                env_name=env_name,
+                config_host="192.168.1.27",
+                config_port="9995",
+                config_desc=f"TCP协议：进制数不使用，请求/响应结束符\r\n",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            APPEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-10进制8位不包含&开启HEX",
+                env_name=env_name,
+                config_host="192.168.1.27",
+                config_port="9996",
+                config_desc=f"TCP协议：10进制/8位/不包含长度位/HEX开启",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            APPEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-10进制8位不包含&GBK编码",
+                env_name=env_name,
+                config_host="192.168.1.27",
+                config_port="9997",
+                config_desc=f"TCP协议：10进制/8位/不包含长度位/GBK编码",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            APPEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-不使用进制数且无结束符",
+                env_name=env_name,
+                config_host="192.168.1.27",
+                config_port="9998",
+                config_desc=f"TCP协议：进制数不使用且无结束符，报文原样收发",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            APPEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-帧字段共存组合",
+                env_name=env_name,
+                config_host="192.168.1.27",
+                config_port="9999",
+                config_desc=f"TCP协议：帧字段共存组合（进制数与结束符不互斥）：推导按优先级取长度前缀，结束符保留不参与成帧",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            DBEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-DB配置1",
+                env_name=env_name,
+                config_host="10.211.55.3",
+                config_port="3306",
+                database_name="krun",
+                database_type="mysql",
+                config_username="root",
+                config_password="root",
+                config_desc=f"ToolBox工具箱, 后端服务器{env_name}环境DB配置1",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            DBEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-DB配置2",
+                env_name=env_name,
+                config_host="10.211.55.3",
+                config_port="3307",
+                database_name="krun",
+                database_type="mysql",
+                config_username="root",
+                config_password="root",
+                config_desc=f"ToolBox工具箱, 后端服务器{env_name}环境DB配置2",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            FILEEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-FILE配置1",
+                env_name=env_name,
+                config_host="10.208.24.12",
+                config_port="8888",
+                config_username="root",
+                config_password="root",
+                is_no_password=True,
+                config_desc=f"ToolBox工具箱, 后端服务器{env_name}环境FILE配置1",
+                created_user=TESTER,
+            )
+        )
+        seed_configs.append(
+            FILEEnvConfigCreate(
+                project_id=project_id,
+                config_name="ToolBox工具箱-FILE配置2",
+                env_name=env_name,
+                config_host="10.208.24.12",
+                config_port="9999",
+                config_username="root",
+                config_password="root",
+                is_no_password=True,
+                config_desc=f"ToolBox工具箱, 后端服务器{env_name}环境FILE配置2",
+                created_user=TESTER,
+            )
+        )
 
     for config_in in seed_configs:
         try:
-            created = await config_crud.create_config(config_in)
+            created = await config_crud.create_config(config_in, scope=scope)
             LOGGER.info(
-                f"创建[环境配置]成功: env={env_name}, type={type(config_in).__name__}, "
+                f"创建[环境配置]成功: env={config_in.env_name}, type={type(config_in).__name__}, "
                 f"name={created.config_name}, id={created.id}"
             )
         except Exception as e:
             LOGGER.error(
-                f"创建[环境配置]失败: env={env_name}, type={type(config_in).__name__}, "
+                f"创建[环境配置]失败: env={config_in.env_name}, type={type(config_in).__name__}, "
                 f"name={config_in.config_name}: {e}"
             )
 
-    LOGGER.info("创建[环境配置]初始化完成: ToolBox工具箱 / SIT1 (APP/DB/FILE)")
+    LOGGER.info("创建[环境配置]初始化完成: ToolBox工具箱 & UAT1-UAT3(APP/DB/FILE)")
 
 
 async def init_database_table(app: FastAPI):

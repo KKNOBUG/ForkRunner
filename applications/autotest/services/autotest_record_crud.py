@@ -19,7 +19,7 @@ from celery_scheduler.celery_task_contract import list_attachments_from_summary,
 from configure import LOGGER
 from core.exceptions import ParameterException, NotFoundException, NoPermissionException
 from enums import AutoTestTaskStatus, AutoTestTaskType
-from services import DataScope
+from services import DataScope, normalize_username
 
 # 终态状态值集合：仅终态(成功/失败/部分成功)记录允许删除
 _RECORD_FINAL_STATUS_VALUES = frozenset(
@@ -37,10 +37,10 @@ def _remove_artifact_files(record: AutoTestRecordModel) -> None:
             file_path = resolve_storage_path(storage_key)
             if os.path.isfile(file_path):
                 os.remove(file_path)
-        except ValueError as e:
-            LOGGER.warning(f"清理产物文件失败, 非法storage_key[{storage_key}], 异常描述: {e}")
-        except OSError as e:
-            LOGGER.warning(f"清理产物文件失败, 文件[{storage_key}], 异常描述: {e}")
+        except ValueError:
+            LOGGER.warning(f"清理产物文件失败, 非法storage_key[{storage_key}]\n{traceback.format_exc()}")
+        except OSError:
+            LOGGER.warning(f"清理产物文件失败, 文件[{storage_key}]\n{traceback.format_exc()}")
 
 
 class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate, AutoTestRecordUpdate]):
@@ -141,7 +141,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
         if not update_dict.get("updated_user"):
             username = str(record.created_user).strip() if record.created_user else None
             if username:
-                update_dict["updated_user"] = username.upper()[:16]
+                update_dict["updated_user"] = normalize_username(username)
 
         return await self.update(id=record.id, obj_in=update_dict)
 
@@ -192,7 +192,8 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
             if record_in.task_type_in:
                 type_vals = [getattr(t, "value", t) for t in record_in.task_type_in]
                 q &= Q(task_type__in=type_vals)
-            else:
+            elif record_in.task_type is None:
+                # 默认排除仅用于异步中心缺省查询，显式单值类型不得再叠加相反条件
                 q &= Q(task_type__not_in=[
                     AutoTestTaskType.MULTIPLE_CASE_EXECUTE,
                     AutoTestTaskType.SINGLE_CASE_EXECUTE,
@@ -241,7 +242,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
             )
             return total, list(instances)
         except FieldError as e:
-            error_message: str = f"查询任务执行记录异常, 错误描述: {e}"
+            error_message: str = "查询任务执行记录失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
@@ -253,15 +254,16 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
         信封中的产物文件，单个文件清理失败仅告警不影响删除结果。
 
         :param record_id: 执行记录主键
-        :param scope: 数据权限上下文，仅允许删除创建人为自己的执行记录
+        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的执行记录
         :return: 删除的记录数(0或1)
         :raises NotFoundException: 记录不存在
-        :raises NoPermissionException: 记录创建人非当前用户
+        :raises NoPermissionException: 记录创建人不在当前用户可删除范围内
         :raises ParameterException: 记录未到终态(等待执行/正在执行)不允许删除
         """
         record = await self.get_by_id(record_id=record_id, on_error=True, state__not=1)
+        await scope.load_owners([record.created_user])
         if not scope.can_delete(record.created_user):
-            error_message: str = f"删除执行记录失败, 记录[id={record_id}]创建人[{record.created_user}]非当前用户, 无权操作"
+            error_message: str = f"删除执行记录失败, 记录[id={record_id}]创建人[{record.created_user}]不在当前用户可删除范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         status_val = getattr(record.celery_status, "value", record.celery_status)
@@ -278,10 +280,10 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
         批量删除终态执行记录并物理清理产物文件；先全量校验，任一记录不满足条件则整批拒绝。
 
         :param record_in: 执行记录ID列表
-        :param scope: 数据权限上下文，仅允许删除创建人为自己的执行记录
+        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的执行记录
         :return: 实际删除的记录数
         :raises NotFoundException: 存在记录不存在
-        :raises NoPermissionException: 存在记录创建人非当前用户
+        :raises NoPermissionException: 存在记录创建人不在当前用户可删除范围内
         :raises ParameterException: 存在记录未到终态(等待执行/正在执行)不允许删除
         """
         unique_ids: List[int] = list(dict.fromkeys(int(rid) for rid in record_in.record_ids))
@@ -293,10 +295,11 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
 
+        await scope.load_owners([instance.created_user for instance in targets])
         for instance in targets:
             if not scope.can_delete(instance.created_user):
                 error_message: str = (
-                    f"批量删除执行记录失败, 记录[id={instance.id}]创建人[{instance.created_user}]非当前用户, 无权操作"
+                    f"批量删除执行记录失败, 记录[id={instance.id}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
                 )
                 LOGGER.error(error_message)
                 raise NoPermissionException(message=error_message)

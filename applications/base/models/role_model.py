@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 from tortoise import fields
 
-from applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
+from applications.base.services.scaffold import (
+    MaintainMixin,
+    ScaffoldModel,
+    TimestampMixin,
+)
 from enums import DataScopeEnum
 
 
@@ -15,7 +19,10 @@ class Role(ScaffoldModel, MaintainMixin, TimestampMixin):
     update_scope = fields.CharEnumField(DataScopeEnum, default=DataScopeEnum.SELF, max_length=16, description="数据可写范围")
     delete_scope = fields.CharEnumField(DataScopeEnum, default=DataScopeEnum.SELF, max_length=16, description="数据可删范围")
     menus = fields.ManyToManyField(model_name="models.Menu", related_name="role_menus", through="tbx_role_menus")
-    routers = fields.ManyToManyField(model_name="models.Router",related_name="role_routers", through="tbx_role_routers")
+    routers = fields.ManyToManyField(model_name="models.Router", related_name="role_routers", through="tbx_role_routers")
 
     class Meta:
         table = "tbx_role"
+
+    def __str__(self):
+        return f"Role(code={self.code}, name={self.name})"

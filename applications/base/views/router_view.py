@@ -9,13 +9,15 @@ from applications.base.dependencies import get_router_crud
 from applications.base.schemas.router_schema import RouterCreate, RouterUpdate, RouterSelect
 from applications.base.services.router_crud import RouterCrud
 from configure import LOGGER
-from core.exceptions import DataAlreadyExistsException, NotFoundException
+from core.exceptions import DataAlreadyExistsException, DataBaseStorageException, NotFoundException
 from core.responses import (
     SuccessResponse,
     FailureResponse,
     DataAlreadyExistsResponse,
+    DataBaseStorageResponse,
     NotFoundResponse,
 )
+from services import DependSuperUser
 
 router = APIRouter()
 
@@ -82,6 +84,10 @@ async def update_router(
         instance = await router_crud.update_router(router_in)
         data = await instance.to_dict(replace_fields={"id": "router_id"})
         return SuccessResponse(message="更新成功", data=data, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except Exception as e:
@@ -157,7 +163,7 @@ async def get_routers(
 @router.get("/list", summary="查询路由列表(Query)", description="根据条件分页查询路由列表信息(Query)")
 async def list_router(
         page: int = Query(default=1, ge=1, description="页码"),
-        page_size: int = Query(default=10, ge=10, description="每页数量"),
+        page_size: int = Query(default=10, ge=10, le=99999, description="每页数量"),
         order: list = Query(default_factory=lambda: ["id"], description="排序字段"),
         path: str = Query(None, description="路由请求路径"),
         summary: str = Query(None, description="路由作用简介"),
@@ -194,7 +200,12 @@ async def list_router(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@router.post("/refresh", summary="刷新路由列表", description="重新获取项目中所有的APIRouter信息进行数据库更新")
+@router.post(
+    "/refresh",
+    summary="刷新路由列表",
+    description="重新获取项目中所有的APIRouter信息进行数据库更新",
+    dependencies=[DependSuperUser],
+)
 async def refresh_router(
         request: Request,
         router_crud: RouterCrud = Depends(get_router_crud),

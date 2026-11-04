@@ -2,11 +2,11 @@
 from tortoise import fields
 
 from applications.base.services.scaffold import (
-    ScaffoldModel,
     MaintainMixin,
-    TimestampMixin,
-    StateModel,
     ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 from enums import AutoTestReportType
@@ -47,5 +47,4 @@ class AutoTestReportModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回报告标识代码。"""
-        return self.report_code
+        return f"AutoTestReportModel(case_id={self.case_id}, batch_code={self.batch_code}, report_code={self.report_code}, task_code={self.task_code})"

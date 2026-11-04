@@ -99,7 +99,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_tag(self, tag_in: AutoTestTagCreate, scope: Optional[DataScope] = None) -> AutoTestTagModel:
+    async def create_tag(self, tag_in: AutoTestTagCreate, scope: DataScope) -> AutoTestTagModel:
         """
         创建标签；同应用下同大类/名称活跃记录报错，软删记录在写权限内恢复并更新。
 
@@ -125,8 +125,12 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
                 instance: AutoTestTagModel = await self.create(obj_in=tag_dict)
                 return instance
             except IntegrityError as e:
-                error_message: str = f"新增标签信息失败, 违反约束规则: {e}"
-                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                error_message: str = "新增标签信息失败，相同应用下标签大类和名称可能重复，或关联应用无效，请检查后重试"
+                LOGGER.error(
+                    f"{error_message}, 关键字段: [tag_project={tag_project}, "
+                    f"tag_mode={tag_mode}, tag_name={tag_name}]\n"
+                    f"{traceback.format_exc()}"
+                )
                 raise DataBaseStorageException(message=error_message) from e
 
         try:
@@ -135,8 +139,9 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
             # 软删恢复不得跨写范围接管他人标签，且不覆盖原创建人
-            if scope is not None and not scope.can_write(existing_tag.created_user):
-                error_message: str = f"新增标签信息失败, 标签[{tag_name}]创建人[{existing_tag.created_user}]非当前用户, 无权操作"
+            await scope.load_owners([existing_tag.created_user])
+            if not scope.can_write(existing_tag.created_user):
+                error_message: str = f"新增标签信息失败, 标签[{tag_name}]创建人[{existing_tag.created_user}]不在当前用户可操作范围内, 无权操作"
                 LOGGER.error(error_message)
                 raise NoPermissionException(message=error_message)
             tag_dict.pop("created_user", None)
@@ -144,8 +149,12 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
             instance: AutoTestTagModel = await self.update(id=existing_tag.id, obj_in=tag_dict)
             return instance
         except (DoesNotExist, IntegrityError) as e:
-            error_message: str = f"新增(更新)标签信息异常, 违反约束规则或空指针异常: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "恢复标签信息失败，目标标签可能已被删除，或标签信息与现有记录冲突，请刷新后重试"
+            LOGGER.error(
+                f"{error_message}, 关键字段: [tag_id={existing_tag.id}, tag_project={tag_project}, "
+                f"tag_mode={tag_mode}, tag_name={tag_name}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_tag(self, tag_in: AutoTestTagUpdate, scope: DataScope) -> AutoTestTagModel:
@@ -153,7 +162,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
         更新标签，根据tag_id或tag_code定位并校验(tag_project, tag_mode, tag_name)唯一。
 
         :param tag_in: 标签更新schema
-        :param scope: 数据权限上下文，仅允许修改创建人为自己的标签
+        :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的标签
         :return: 更新后的标签实例
         """
         tag_id: Optional[int] = tag_in.tag_id
@@ -164,8 +173,9 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
             instance = await self.get_by_code(tag_code=tag_code, on_error=True, state__not=1)
             tag_id = instance.id
 
+        await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message: str = f"更新标签信息失败, 标签[{instance.tag_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            error_message: str = f"更新标签信息失败, 标签[{instance.tag_name}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -195,19 +205,25 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
             instance = await self.update(id=tag_id, obj_in=update_dict)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新标签信息失败, 记录[id={tag_id}]或[code={tag_code}]不存在, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新标签信息失败，目标标签不存在或已被删除，请刷新后重试"
+            LOGGER.error(
+                f"{error_message}, 关键字段: [tag_id={tag_id}, tag_code={tag_code}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = f"更新标签信息异常, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新标签信息失败，相同应用下标签大类和名称可能重复，或关联应用无效，请检查后重试"
+            LOGGER.error(
+                f"{error_message}, 关键字段: [tag_id={tag_id}, tag_code={tag_code}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def delete_tag(self, scope: DataScope, tag_id: Optional[int] = None, tag_code: Optional[str] = None) -> AutoTestTagModel:
         """
         物理删除标签；需无用例关联该标签。
 
-        :param scope: 数据权限上下文，仅允许删除创建人为自己的标签
+        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的标签
         :param tag_id: 标签主键ID，与tag_code二选一
         :param tag_code: 标签标识代码，与tag_id二选一
         :return: 删除后的标签实例快照
@@ -221,8 +237,9 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
         else:
             instance = await self.get_by_code(tag_code=tag_code, on_error=True, state__not=1)
 
+        await scope.load_owners([instance.created_user])
         if not scope.can_delete(instance.created_user):
-            error_message: str = f"删除标签信息失败, 标签[{instance.tag_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            error_message: str = f"删除标签信息失败, 标签[{instance.tag_name}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -241,7 +258,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
         根据ID或code列表批量软删除标签；逐条复用单删关联校验。
 
         :param tag_in: 标签删除schema
-        :param scope: 数据权限上下文，仅允许删除创建人为自己的标签
+        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的标签
         :return: 更新条数
         """
         tag_ids: Optional[List[int]] = tag_in.tag_ids
@@ -286,9 +303,10 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
 
         # 先全量校验行级权限与引用关系，再单次批量软删，保证批量操作全有或全无
         from applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
+        await scope.load_owners([instance.created_user for instance in targets])
         for instance in targets:
             if not scope.can_delete(instance.created_user):
-                error_message: str = f"删除标签信息失败, 标签[{instance.tag_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+                error_message: str = f"删除标签信息失败, 标签[{instance.tag_name}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
                 LOGGER.error(error_message)
                 raise NoPermissionException(message=error_message)
             cases_count = await AutoTestCaseCrud().model.filter(case_tags__contains=[instance.id], state__not=1).count()
@@ -312,6 +330,6 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = f"查询标签信息失败, 错误描述: {e}"
+            error_message: str = "查询标签信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e

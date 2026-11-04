@@ -4,7 +4,13 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from applications.base.services.scaffold import UpperStr
-from enums import AutoTestCaseType, AutoTestCaseAttr, AutoTestStepType, AutoTestReqArgsType, AutoTestSessionTransfer
+from enums import (
+    AutoTestCaseType,
+    AutoTestCaseAttr,
+    AutoTestStepType,
+    AutoTestReqArgsType,
+    AutoTestSessionTransfer
+)
 
 
 class AutoTestCaseMeta(BaseModel):
@@ -55,12 +61,32 @@ class AutoTestCaseCreate(AutoTestCaseBase):
     session_transfer: AutoTestSessionTransfer = Field(default=AutoTestSessionTransfer.DISABLE, description="变量池传递开关")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
+    @field_validator("case_name", mode="before")
+    @classmethod
+    def _validate_case_name(cls, value: Any) -> Any:
+        """用例名称去空白。"""
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("参数[case_name]不允许为空")
+        return value
+
 
 class AutoTestCaseUpdate(AutoTestCaseMeta, AutoTestCaseBase):
     """更新用例入参。"""
 
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+
+    @field_validator("case_name", mode="before")
+    @classmethod
+    def _validate_case_name(cls, value: Any) -> Any:
+        """用例名称去空白。"""
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("参数[case_name]不允许为空")
+        return value
 
 
 class AutoTestCaseScriptGenerate(BaseModel):
@@ -111,7 +137,7 @@ class AutoTestCaseScriptGenerate(BaseModel):
 
 
 class AutoTestCaseDelete(BaseModel):
-    """批量删除用例入参：批量删除保持软删除，case_ids与case_codes二选一。"""
+    """批量删除用例入参。"""
 
     case_ids: Optional[List[int]] = Field(None, description="用例ID列表")
     case_codes: Optional[List[str]] = Field(None, description="用例标识代码列表")
@@ -121,7 +147,7 @@ class AutoTestCaseSelect(AutoTestCaseMeta, AutoTestCaseBase):
     """分页查询用例入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=10, description="每页数量")
+    page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-created_time"], description="排序字段")
     case_ids: Optional[List[int]] = Field(None, description="用例ID列表")
 

@@ -104,7 +104,7 @@ async def delete_task(
     :param task_id: 任务主键ID
     :param task_code: 任务业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的任务
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的任务
     :return: 统一HTTP响应
     """
     try:
@@ -142,7 +142,7 @@ async def update_task(
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改创建人为自己的任务
+    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的任务
     :return: 统一HTTP响应
     """
     try:
@@ -194,6 +194,7 @@ async def get_task(
             instance = await services.task_curd.get_by_id(task_id=task_id, on_error=True, state__not=1)
         else:
             instance = await services.task_curd.get_by_code(task_code=task_code, on_error=True, state__not=1)
+        await scope.load_owners([instance.created_user])
         if not scope.can_read(instance.created_user):  # 详情需收口到可见范围
             raise NoPermissionException(
                 message=f"查询任务失败, 任务[{instance.task_code}]创建人[{instance.created_user}]不在当前用户可见范围"
@@ -292,10 +293,10 @@ async def search_tasks(
             ) for obj in instances
         ]
         # 步骤执行环境映射 + 行级可删标记（按当前资源族的删除范围判定，含部门范围）
+        await scope.load_owners([obj.created_user for obj in instances])
         for task_dict, obj in zip(data, instances):
             task_dict["steps_execute_env"] = extract_steps_execute_envs(task_dict.get("cases_execute_config"))
             task_dict["can_delete"] = scope.can_delete(obj.created_user)
-        LOGGER.info(f"根据条件分页查询任务列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -321,12 +322,16 @@ async def run_task(
     try:
         task_id: int = task_in.task_id
         instance = await services.task_curd.get_by_id(task_id=task_id, on_error=True, state__not=1)
+        await scope.load_owners([instance.created_user])
         if not scope.can_read(instance.created_user):
             error_message: str = f"任务[{instance.task_name}]创建人[{instance.created_user}]不在当前用户可见范围"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         # 存量任务可能挂载了越权用例，执行前按用例资源族重新收敛
         await assert_cases_readable(scope, instance.task_case_ids or [])
+        # 运行态互斥的前置提示：真正的一致性由 Worker 原子抢占保证，这里避免重复入队
+        if await services.task_curd.is_execution_running(task_id):
+            return ParameterResponse(message="任务正在执行中, 请等待本次执行结束后再触发")
         from celery_scheduler.tasks.task_autotest_case import run_autotest_task
         from enums import AutoTestReportType
         # __task_id会随消息传到Worker，task_prerun从request.properties取出；
@@ -364,7 +369,7 @@ async def start_task(
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许启停创建人为自己的任务
+    :param scope: 数据权限上下文，仅允许启停归属人在当前用户可操作范围内的任务
     :return: 统一HTTP响应
     """
     try:
@@ -406,7 +411,7 @@ async def stop_task(
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许启停创建人为自己的任务
+    :param scope: 数据权限上下文，仅允许启停归属人在当前用户可操作范围内的任务
     :return: 统一HTTP响应
     """
     try:
@@ -487,7 +492,7 @@ async def copy_task(
         return FailureResponse(message=f"复制失败，异常描述: {e}")
 
 
-@autotest_task.post("/schedule_preview", summary="查询定时执行预览", description="按时效与定时表达式正推即将到来的触发日期时间(近10次)")
+@autotest_task.post("/get_schedule_preview", summary="查询定时执行预览", description="按时效与定时表达式正推即将到来的触发日期时间(近10次)")
 async def preview_task_schedule(
         preview_in: AutoTestTaskSchedulePreview = Body(..., description="预览条件"),
 ):
@@ -538,6 +543,7 @@ async def search_task_records(
             for obj in instances
         ]
         # 行级可删标记：记录创建人是归属口径，按当前资源族的删除范围判定
+        await scope.load_owners([obj.created_user for obj in instances])
         for item, obj in zip(data, instances):
             item["can_delete"] = scope.can_delete(obj.created_user)
         LOGGER.info(f"根据条件分页查询任务执行记录成功, 结果数量: {total}")
@@ -569,6 +575,7 @@ async def download_task_record_attachment(
         record = await services.record_curd.get_or_none(id=record_id, state__not=1)
         if not record:
             return ParameterResponse(message=f"执行记录不存在: record_id={record_id}")
+        await scope.load_owners([record.created_user])
         if not scope.can_read(record.created_user):  # 产物文件归属于记录创建人，需收口到可见范围
             raise NoPermissionException(
                 message=f"下载附件失败, 记录[id={record_id}]创建人[{record.created_user}]不在当前用户可见范围"
@@ -612,7 +619,7 @@ async def delete_task_record(
 
     :param record_id: 执行记录主键
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的执行记录
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的执行记录
     :return: 统一HTTP响应
     """
     try:
@@ -643,7 +650,7 @@ async def delete_task_records(
 
     :param record_in: 执行记录ID列表
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的执行记录
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的执行记录
     :return: 统一HTTP响应，data为实际删除的记录数量
     """
     try:

@@ -2,18 +2,18 @@
 from tortoise import fields
 
 from applications.base.services.scaffold import (
-    ScaffoldModel,
     MaintainMixin,
-    TimestampMixin,
-    StateModel,
     ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 
 
 class AutoTestProjectModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    project_name = fields.CharField(max_length=255, null=True, description="应用名称")
-    project_mark = fields.CharField(max_length=255, null=True, description="应用标识")
+    project_name = fields.CharField(max_length=255, default="", description="应用名称")
+    project_mark = fields.CharField(max_length=255, default="", description="应用标识")
     project_desc = fields.CharField(max_length=2048, null=True, description="应用描述")
     project_state = fields.CharField(max_length=64, null=True, description="应用状态")
     project_phase = fields.CharField(max_length=64, null=True, description="应用阶段")
@@ -37,5 +37,4 @@ class AutoTestProjectModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMo
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回项目名称。"""
-        return self.project_name
+        return f"AutoTestProjectModel(project_name={self.project_name}, project_mark={self.project_mark})"

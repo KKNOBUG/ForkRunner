@@ -2,12 +2,12 @@
 from tortoise import fields
 
 from applications.base.services.scaffold import (
-    ScaffoldModel,
-    MaintainMixin,
-    TimestampMixin,
-    StateModel,
-    ReserveFields,
     JSONTextField,
+    MaintainMixin,
+    ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
 )
 from enums import (
     AutoTestStepType,
@@ -132,5 +132,4 @@ class AutoTestDetailModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回步骤标识代码。"""
-        return self.step_code
+        return f"AutoTestDetailModel(case_id={self.case_id}, step_id={self.step_id}, step_type={self.step_type})"
