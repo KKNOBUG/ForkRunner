@@ -172,7 +172,7 @@ def _resolve_interface_template(interface_style: str) -> tuple[str, str]:
     return _resolve_template_file(_INTERFACE_TEMPLATE_FILES[style])
 
 
-@autotest_data_generate.post("/tasks", summary="创建测试数据生成任务")
+@autotest_data_generate.post("/tasks_create", summary="创建测试数据生成任务")
 async def create_task(
         case_id: int = Form(..., ge=1),
         step_id: int = Form(..., ge=1),
@@ -320,7 +320,7 @@ async def create_task(
         return FailureResponse(message="创建数据生成任务失败")
 
 
-@autotest_data_generate.post("/tasks/intelligent", summary="创建智能测试数据生成任务")
+@autotest_data_generate.post("/tasks/intelligent_create", summary="创建智能测试数据生成任务")
 async def create_intelligent_task(
         case_id: int = Form(..., ge=1),
         step_id: int = Form(..., ge=1),
@@ -328,7 +328,15 @@ async def create_intelligent_task(
         scenario_file: UploadFile = File(..., description="智能生成场景规则文档，仅支持xlsx"),
         services: DataGenerationApiServices = Depends(get_data_generation_api_services),
 ):
-    """调用业务服务提交智能生成任务，并映射为统一HTTP响应。"""
+    """校验上传的场景规则文档并创建智能生成任务，返回提交状态。
+
+    :param case_id: 场景文档所属的测试用例 ID。
+    :param step_id: 当前请求步骤 ID。
+    :param step_code: 用于确认步骤归属的步骤编码。
+    :param scenario_file: 用户上传的 XLSX 场景规则文档。
+    :param services: 提供用例、步骤和任务 CRUD 的接口服务集合。
+    :return: 任务提交结果；校验、查找或提交失败时返回对应错误响应。
+    """
     try:
         result = await AutoTestIntelligentTaskSubmissionService().submit(
             case_id=case_id,
@@ -362,10 +370,15 @@ async def create_intelligent_task(
         return FailureResponse(message="创建智能生成任务失败")
 
 
-@autotest_data_generate.get("/records", summary="查询数据生成记录")
+@autotest_data_generate.get("/records_list", summary="查询数据生成记录")
 async def list_records(
         step_code: str = Query(..., min_length=1, max_length=64),
 ):
+    """查询指定步骤最近五条数据生成任务并返回列表。
+
+    :param step_code: 用于筛选任务的步骤编码。
+    :return: 生成记录列表和总数；查询失败时返回对应错误响应。
+    """
     try:
         selector = AutoTestDataGenerateTaskSelect(
             step_code=step_code,
@@ -383,8 +396,13 @@ async def list_records(
         return FailureResponse(message="查询数据生成记录失败")
 
 
-@autotest_data_generate.get("/templates/{interface_style}", summary="下载接口文档模板")
+@autotest_data_generate.get("/templates/{interface_style}_download", summary="下载接口文档模板")
 async def download_interface_template(interface_style: str):
+    """按接口样式定位预设模板并返回下载文件流。
+
+    :param interface_style: ESB、项目或整合接口的样式标识。
+    :return: 模板文件流；样式不支持或文件不存在时返回对应错误响应。
+    """
     try:
         file_path, file_name = _resolve_interface_template(interface_style)
         return _download_response(file_path, file_name)
@@ -397,7 +415,7 @@ async def download_interface_template(interface_style: str):
         return FailureResponse(message="下载接口文档模板失败")
 
 
-@autotest_data_generate.get("/templates/intelligent/platform-loan", summary="下载平台贷场景文档模板")
+@autotest_data_generate.get("/templates/intelligent/platform-loan_download", summary="下载平台贷场景文档模板")
 async def download_platform_loan_template():
     """从模板目录下载平台贷场景文档模板，缺失时返回统一错误响应。
 
@@ -415,8 +433,13 @@ async def download_platform_loan_template():
         return FailureResponse(message="下载平台贷场景文档模板失败")
 
 
-@autotest_data_generate.get("/{task_id}/detail", summary="查询数据生成任务详情")
+@autotest_data_generate.get("/{task_id}/detail_get", summary="查询数据生成任务详情")
 async def task_detail(task_id: int):
+    """读取指定生成任务的详情和结果汇总。
+
+    :param task_id: 待查询的数据生成任务 ID。
+    :return: 任务详情；记录不存在或读取失败时返回对应错误响应。
+    """
     try:
         detail = await AutoTestDataGenerateRecordService().detail(task_id)
         task = detail["task"]
@@ -437,8 +460,13 @@ async def task_detail(task_id: int):
         return FailureResponse(message="查询数据生成任务详情失败")
 
 
-@autotest_data_generate.get("/{task_id}/refresh", summary="刷新单条数据生成任务")
+@autotest_data_generate.get("/{task_id}/refresh_get", summary="刷新单条数据生成任务")
 async def refresh_task(task_id: int):
+    """重新读取单条任务的最新状态，不触发任务重新执行。
+
+    :param task_id: 待刷新的数据生成任务 ID。
+    :return: 最新任务摘要；记录不存在或读取失败时返回对应错误响应。
+    """
     try:
         task = await AutoTestDataGenerateTaskCrud().get_by_id(task_id, on_error=True, state__not=1)
         return SuccessResponse(message="刷新成功", data=_serialize_task(task), total=1)
@@ -451,11 +479,17 @@ async def refresh_task(task_id: int):
         return FailureResponse(message="刷新数据生成任务失败")
 
 
-@autotest_data_generate.post("/{task_id}/apply", summary="应用生成结果到数据编辑")
+@autotest_data_generate.post("/{task_id}/apply_update", summary="应用生成结果到数据编辑")
 async def apply_task(
         task_id: int,
         services: DataGenerationApiServices = Depends(get_data_generation_api_services),
 ):
+    """将成功任务生成的场景追加到数据编辑的数据源。
+
+    :param task_id: 待应用的数据生成任务 ID。
+    :param services: 提供步骤和数据源 CRUD 的接口服务集合。
+    :return: 更新后的数据源矩阵；目标数据源不存在时先创建，失败时返回对应错误响应。
+    """
     try:
         instance = await AutoTestDataGenerateRecordService().apply(task_id, services)
         return SuccessResponse(
@@ -482,8 +516,13 @@ async def apply_task(
         return FailureResponse(message="应用数据生成任务失败")
 
 
-@autotest_data_generate.delete("/{task_id}", summary="删除数据生成记录")
+@autotest_data_generate.delete("/{task_id}_delete", summary="删除数据生成记录")
 async def delete_task(task_id: int):
+    """软删除指定生成任务，拒绝删除正在执行的任务。
+
+    :param task_id: 待删除的数据生成任务 ID。
+    :return: 已删除的任务 ID；任务进行中、不存在或删除失败时返回对应错误响应。
+    """
     try:
         crud = AutoTestDataGenerateTaskCrud()
         task = await crud.get_by_id(task_id, on_error=True, state__not=1)
@@ -500,8 +539,13 @@ async def delete_task(task_id: int):
         return FailureResponse(message="删除数据生成任务失败")
 
 
-@autotest_data_generate.get("/{task_id}/generated-document", summary="下载数据生成文档")
+@autotest_data_generate.get("/{task_id}/generated-document_download", summary="下载数据生成文档")
 async def download_generated_document(task_id: int):
+    """定位或导出成功任务的生成文档并返回下载文件流。
+
+    :param task_id: 待下载文档的数据生成任务 ID。
+    :return: 生成文档文件流；任务未成功、文件不存在或导出失败时返回对应错误响应。
+    """
     try:
         service = AutoTestDataGenerateRecordService()
         exported = await service.ensure_generated_file(task_id)
@@ -515,10 +559,12 @@ async def download_generated_document(task_id: int):
         return FailureResponse(message="下载数据生成文档失败")
 
 
-@autotest_data_generate.get("/{task_id}/interface-document", summary="下载接口文档")
+@autotest_data_generate.get("/{task_id}/interface-document_download", summary="下载接口文档")
 async def download_interface_document(task_id: int):
-    """
-        根据数据生成任务ID，找到该任务对应的接口文档，并以附件形式流式返回给浏览器下载
+    """按任务 ID 定位上传时保存的接口文档并返回下载文件流。
+
+    :param task_id: 原始接口文档所属的数据生成任务 ID。
+    :return: 接口文档文件流；任务或文件不存在时返回对应错误响应。
     """
     try:
         task = await AutoTestDataGenerateTaskCrud().get_by_id(task_id, on_error=True, state__not=1)
