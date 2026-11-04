@@ -16,7 +16,7 @@ from core.initializations.permission_contract import bind_route_contracts, valid
 from core.responses import SuccessResponse
 
 try:
-    from configure import LOGGER, PROJECT_CONFIG
+    from backend.configure import PROJECT_CONFIG
 except ImportError as e:
     from core.exceptions import NotImplementedException
 
@@ -25,9 +25,6 @@ except ImportError as e:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if PROJECT_CONFIG.AUTH_TEMPORARY_TOKEN:
-        LOGGER.warning("[安全] 已启用开发联调阶段临时令牌(AUTH_TEMPORARY_TOKEN), 生产环境请置空禁用;")
-    # 路由已全部注册，启动时统一绑定契约并自检；问题只告警不阻断启动
     bind_route_contracts(app)
     validate_route_contracts(app)
     try:
@@ -74,16 +71,3 @@ if __name__ == '__main__':
         log_config=None,
         log_level=None,
     )
-
-    # 记录依赖：pip list --format=freeze > requirements.txt
-    # Redis停止：终端执行 sudo lsof -i:6379 | grep -v PID | awk '{print $2}' | xargs sudo kill -9
-    # Redis停止：终端执行 sudo lsof -i:6379 | grep -v PID | awk '{print $2}' | xargs sudo kill -9 2>/dev/null
-    # Redis启动：终端执行 /usr/local/bin/redis-server
-    # redis配置文件：/usr/local/etc/redis-6.2.9/redis.conf
-    # redis持久文件：/usr/local/etc/redis-6.2.9/dump
-    # echo "alias redis-server='/usr/local/bin/redis-server /usr/local/etc/redis-6.2.9/redis.conf'" >> ~/.zshrc
-    # source ~/.zshrc
-    # redis-server
-
-    # MacOS: gunicorn -c backend/gunicorn.conf.py backend_main:app
-    # MacOS: OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES backend/.venv/bin/gunicorn -c backend/gunicorn.conf.py backend_main:app
