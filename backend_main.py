@@ -16,7 +16,7 @@ from core.initializations.permission_contract import bind_route_contracts, valid
 from core.responses import SuccessResponse
 
 try:
-    from backend.configure import PROJECT_CONFIG
+    from configure import PROJECT_CONFIG
 except ImportError as e:
     from core.exceptions import NotImplementedException
 
