@@ -24,7 +24,6 @@ AUDITED_ACTIONS: frozenset = frozenset({
 
 # ==================== 路径动词 -> 接口行为 ====================
 # 单一事实源：一个动词只归属一种行为，禁止同一动词出现在多个分组。
-# 新增动词必须同步 backend/README.md「接口路径与行为规范」。
 VERB_ACTIONS: Dict[str, str] = {
     # 新增
     "create": ACTION_CREATE,

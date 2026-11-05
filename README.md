@@ -319,69 +319,51 @@ celery -A celery_scheduler.celery_worker beat -l INFO
 - Beat 仅承载调度扫描入口（每 60 秒触发一次），业务定时任务的定义与到期判断在数据库侧完成
 - 日志统一落 `output/logs/celery_logs/celery_beat.log`
 
-## API 接口 summary 编写规范
 
-新增或修改 `applications/**/views/**/*.py` 中的路由时，**必须**为装饰器填写规范的 `summary`。  
-权限初始化与「刷新路由」自动补绑依赖 `summary` 前缀动词识别行为类型，写法不规范会导致角色权限漏绑或错绑。
+# 接口路径与行为规范
 
-### 强制前缀（按行为选择其一）
+接口的「行为」由**路径末段动词**决定，不再看 summary。新增/改名接口必须遵守，否则启动日志会输出 ERROR（不阻断启动，但必须纠正）。
 
-| 行为 | summary 必须以…开头 | 说明 | 标准用户 | 宾客用户 |
-|------|---------------------|------|:--------:|:--------:|
-| 查询 | `查询` / `导出` / `下载` | 读操作；列表/详情/搜索/导出均属此类 | ✓ | ✓ |
-| 新增 | `新增` | 创建资源 | ✓ | ✓ |
-| 更新 | `更新` | 修改已有资源（含保存、解绑、移动等写变更） | ✓ | ✗ |
-| 删除 | `删除` / `批量删除` / `清空` | 删除或清理 | ✓ | ✗ |
-| 执行 | `执行` / `调试` / `启动` / `停止` | 运行、调试、启停类操作 | ✓ | ✗ |
-| 导入 | `导入` / `上传` | 导入文件或上传数据 | ✓ | ✗ |
-| 运维 | `刷新` | 如刷新路由，仅管理员 | ✗ | ✗ |
+## 1. 判定规则（`common/permission_action.py` 的 `derive_action`）
 
-### 允许的特例（个人白名单 / 公开接口）
+1. `DELETE` 方法一律判为「删除」；
+2. 路径末段按 `_` 分词，取**位置最后的已知动词**决定行为（`query_export` → 导出，`export_query` → 查询）；
+3. `GET` 方法无动词时回落为「查询」；
+4. 其余方法（POST/PUT/PATCH）无动词则为 `unknown`：不进审计、不参与资源域判定，并在启动时输出 ERROR。
 
-| summary | 用途 |
-|---------|------|
-| `更新用户密码(个人)` | 当前登录用户改密（标准/宾客可绑；与管理员侧 `更新用户密码(重置)` 区分） |
-| `用户登出` | 退出登录（标准/宾客可绑） |
-| `生成访问令牌` | 登录换 Token（公开接口） |
+## 2. 动词表（一个动词只归属一种行为）
 
-### 写法要求
+| 行为 | 动词 |
+|------|------|
+| 新增 | `create`、`add`、`copy`、`duplicate`、`generate`、`register` |
+| 更新 | `update`、`save`、`move`、`pin`、`bind`、`unbind`、`transfer`、`authorized`、`reset`、`assign`、`enable`、`disable` |
+| 删除 | `delete`、`deletes`（批量）、`remove`、`clear`、`logout`、`revoke` |
+| 上传 | `upload`、`import`、`parse` |
+| 下载 | `download`、`export` |
+| 执行 | `run`、`start`、`stop`、`debug`、`debugging`、`execute`、`compare`、`precheck`、`test`、`connection`、`login` |
+| 查询 | `search`、`list`、`get`、`query`、`validate`、`build`、`read`、`fetch` |
+| 运维 | `refresh` |
 
-1. **动词必须在开头**：`查询用户列表` ✓；`用户列表查询` ✗；`按条件查询用户` ✗（应写 `查询用户列表`）。
-2. **统一同义词**：
-   - 不要用 `创建` → 用 `新增`
-   - 不要用 `编辑` / `修改` → 用 `更新`（个人改密写 `更新用户密码(个人)`）
-   - 不要用 `查看` / `获取` / `预览` / `读取` → 用 `查询`
-   - 不要用 `保存` / `移动` / `解绑` 单独作前缀 → 用 `更新…`
-   - 异步导出写 `导出…(异步)`，不要写 `异步导出…`
-3. **系统域与业务域**：路由 `tags` 使用 `一级目录:二级模块`（如 `系统管理:用户`、`自动化测试:用例`），与侧边栏菜单对齐；`summary` 只表达行为，不重复写模块名到前缀里。
-4. **示例**：
+新增动词需同时改 `VERB_ACTIONS` 与本文表格。
 
-```python
-@xxx.get("/get", summary="查询用例")
-@xxx.post("/create", summary="新增用例")
-@xxx.post("/update", summary="更新用例")
-@xxx.delete("/delete", summary="删除用例")
-@xxx.post("/search", summary="查询用例列表")
-@xxx.post("/run", summary="执行任务")
-@xxx.post("/import_scripts", summary="导入公共接口脚本")
-@xxx.post("/export_scripts", summary="导出公共接口脚本")
-@xxx.post("/upload", summary="上传文件")
-@xxx.get("/download", summary="下载文件")
-```
+## 3. 资源族（`enums/resource_enum.py` 的 `ResourceTag`）
 
-5. **自检**：提交前确认 `summary` 能被上表某一行前缀匹配；若匹配不到，先改 summary，再合入。
+路由 `tags` 的 label 必须能在 `ResourceTag` 注册表中精确命中（如 `自动化测试:用例` → `autotest.case`），否则视为未登记：不参与内置角色自动绑定，且启动时输出 ERROR。新增业务模块时先登记资源族，再挂路由。
 
-### 角色权限与刷新路由
+## 4. 认证模式（`core/initializations/permission_contract.py`）
 
-内置角色路由分配规则见 `applications/base/services/permission_rule.py`，与上表行为一致：
+| 模式 | 路由依赖 | 是否写 `krun_router` | 说明 |
+|------|----------|----------------------|------|
+| 公开 | 无 | 否 | 登录等无需令牌接口 |
+| 仅认证 | `DependAuth` | 否 | 当前用户自身操作（改密、登出、菜单、权限键） |
+| 权限 | `DependPermission` | 是 | 参与角色绑定与审计 |
 
-- **管理员**（`Administrators`）：全部路由；`admin` 用户另有 `is_superuser` 旁路
-- **标准用户**（`Users`）：业务域全开；系统域仅「查询/导出/下载」；个人白名单可绑
-- **宾客用户**（`Guests`）：业务域仅「查询/导出/下载」与「新增」；系统域仅读；个人白名单可绑
+管理员专属接口在权限模式上再叠加 `DependSuperUser`，契约标记 `available_only_admin`：不自动绑定给非管理员角色，角色保存时忽略该分配，刷新时回收残留。
 
-「刷新路由」在同步 `tbx_router` 后，会：
-1. 对 **summary 无法按规范分类** 的路由打告警日志；
-2. 按上述规则对三角色 **补绑缺失路由**（只追加）；
-3. 将库中全部菜单 **补绑到三角色**（只追加，系统菜单对标准/宾客可见，写操作仍由路由约束）。
+认证执行链路：`auth_middleware` 先认证（非白名单），RBAC 在路由依赖 `DependPermission` 中完成；认证结果缓存在 `request.state.current_user`，同一请求的中间件/依赖/审计只查一次用户表。所有业务接口必须携带有效登录令牌，不再接受任何开发阶段临时令牌。
 
-首次空库初始化顺序：`菜单 → 路由 → 角色 → 部门 → 用户 → 应用 → 标签`。
+## 5. 自检
+
+- 启动日志出现 `[权限契约]` / `[权限规则]` ERROR：按本规范修正路径或登记资源族；
+- 新增/改名接口后执行 `POST /base/router/refresh`，并确认日志无契约告警、角色补绑符合预期。
+

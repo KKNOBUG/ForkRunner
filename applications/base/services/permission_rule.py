@@ -131,16 +131,10 @@ class PermissionRule:
             path = getattr(router, "path", "")
             tags = cls._norm_text(router.tags)
             if cls._resource(router) is None:
-                LOGGER.error(
-                    f"[权限规则]路由资源族未登记, method={method}, path={path}, tags={tags!r}。"
-                    f"请按 backend/README.md「接口路径与行为规范」修正"
-                )
+                LOGGER.error(f"[权限规则]路由资源族未登记, method={method}, path={path}, tags={tags!r}。")
                 count += 1
             if cls.classify_router_action(router) == ACTION_UNKNOWN:
-                LOGGER.error(
-                    f"[权限规则]路由路径末段缺少已知动词, method={method}, path={path}, tags={tags!r}。"
-                    f"请按 backend/README.md「接口路径与行为规范」修正"
-                )
+                LOGGER.error(f"[权限规则]路由路径末段缺少已知动词, method={method}, path={path}, tags={tags!r}。")
                 count += 1
         if count:
             LOGGER.error(f"[权限规则]共 {count} 条路由契约异常，已按默认策略处理，请尽快修正")
