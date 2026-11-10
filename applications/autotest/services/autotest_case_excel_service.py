@@ -77,7 +77,7 @@ class CaseExcelService:
 
     # ==================== 常量：脚本模板布局 ====================
     # 公共接口导出开关：为True时输出"变量/提取/断言"三列，为False时不输出；
-    EXPORT_VAR_EXT_ASS: bool = True
+    EXPORT_VAR_EXT_ASS: bool = False
     # 可选尾列：必须恒位于列定义末尾，_required_columns 依赖该约定截取必需列
     OPTIONAL_SHEET_COLUMNS: Tuple[str, ...] = ("变量", "提取", "断言")
     TCP_SHEET_NAME = "TCP模板"
