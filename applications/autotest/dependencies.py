@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
 
+from fastapi import Depends
+
 from applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 from applications.autotest.services.autotest_case_transfer_crud import AutoTestCaseTransferCrud
 from applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
@@ -52,3 +54,6 @@ async def get_autotest_api_services() -> AutoTestServices:
         tag_curd=AutoTestTagCrud(),
         task_curd=AutoTestTaskCrud(),
     )
+
+
+DependAutoTestServices = Depends(get_autotest_api_services)

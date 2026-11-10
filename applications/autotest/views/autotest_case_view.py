@@ -9,7 +9,7 @@ from fastapi import APIRouter, Body, Query, Depends, UploadFile, File
 from starlette.responses import StreamingResponse
 from tortoise.expressions import Q
 
-from applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
+from applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
 from applications.autotest.schemas.autotest_case_schema import (
     AutoTestCaseCreate,
     AutoTestCaseDelete,
@@ -49,7 +49,7 @@ autotest_case = APIRouter()
 @autotest_case.post("/create", summary="新增用例", description="新增用例信息")
 async def create_case(
         case_in: AutoTestCaseCreate = Body(..., description="用例信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -91,7 +91,7 @@ async def create_case(
 async def delete_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -131,7 +131,7 @@ async def delete_case(
 @autotest_case.post("/deletes", summary="批量删除用例", description="根据id或code列表批量软删除用例及其步骤")
 async def batch_delete_cases(
         case_in: AutoTestCaseDelete = Body(..., description="用例信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -163,7 +163,7 @@ async def batch_delete_cases(
 @autotest_case.post("/update", summary="更新用例", description="根据id或code更新用例信息")
 async def update_case(
         case_in: AutoTestCaseUpdate = Body(..., description="用例信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -205,7 +205,7 @@ async def update_case(
 async def get_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -352,7 +352,7 @@ def _protocol_from_step_type(step_type: Any) -> Optional[str]:
 @autotest_case.post("/search", summary="查询用例列表", description="根据条件分页查询用例列表信息(Body)")
 async def search_cases(
         case_in: AutoTestCaseSelect = Body(..., description="查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -493,7 +493,7 @@ async def search_cases(
 async def get_request_step_selected_project_ids(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -533,7 +533,7 @@ async def get_request_step_selected_project_ids(
 @autotest_case.post("/generate_case_scripts_async", summary="新增公共脚本(异步)", description="将指定的公共接口用例批量转换为独立的脚本用例")
 async def generate_case_scripts_async(
         generate_in: AutoTestCaseScriptGenerate = Body(..., description="脚本生成入参"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
 ):
     """
     将指定的公共接口用例批量转换为独立的脚本用例。
@@ -655,7 +655,7 @@ async def import_case_scripts_async(
 @autotest_case.post("/export_case_datagram_async", summary="导出公共接口(异步)", description="将指定的公共接口用例的报文数据导出到模板文件提供下载")
 async def export_case_datagram_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
 ):
     """
     将指定的公共接口用例的报文数据导出到模板文件提供下载。
@@ -697,7 +697,7 @@ async def export_case_datagram_async(
 @autotest_case.post("/export_case_scripts_async", summary="导出公共脚本(异步)", description="将指定的公共脚本用例的完整数据导出到模板文件提供下载")
 async def export_case_scripts_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
 ):
     """
     将指定的公共脚本用例的完整数据导出到模板文件提供下载。

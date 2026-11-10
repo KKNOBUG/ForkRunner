@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
+from applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
 from applications.autotest.models.autotest_case_model import AutoTestCaseModel
 from applications.autotest.schemas.autotest_case_schema import AutoTestCaseUpdate
 from applications.autotest.schemas.autotest_step_schema import (
@@ -64,7 +64,7 @@ autotest_step = APIRouter()
 @autotest_step.post("/create", summary="新增步骤", description="新增步骤信息")
 async def create_step(
         step_in: AutoTestStepCreate = Body(..., description="步骤信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -106,7 +106,7 @@ async def create_step(
 async def delete_step(
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -148,7 +148,7 @@ async def delete_step(
 @autotest_step.post("/update", summary="更新步骤", description="根据id或code更新步骤信息")
 async def update_step(
         step_in: AutoTestStepUpdate = Body(..., description="步骤信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -190,7 +190,7 @@ async def update_step(
 async def get_step(
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -234,7 +234,7 @@ async def get_step(
 @autotest_step.post("/search", summary="查询步骤列表", description="根据条件分页查询步骤列表信息(Body)")
 async def search_steps(
         step_in: AutoTestStepSelect = Body(..., description="查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -301,7 +301,7 @@ async def search_steps(
 async def get_step_tree(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -338,7 +338,7 @@ async def get_step_tree(
 async def copy_step_tree(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -369,7 +369,7 @@ async def copy_step_tree(
 @autotest_step.post("/build_splice_tree", summary="查询拼接步骤树结构", description="根据用例id或code列表批量查询并拼接步骤树结构")
 async def splice_step_tree(
         splice_in: AutoTestStepTreeSplice = Body(..., description="拼接查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -406,7 +406,7 @@ async def splice_step_tree(
 @autotest_step.post("/update_or_create_tree", summary="更新步骤树结构", description="更新或创建用例级步骤树结构")
 async def batch_update_steps_tree(
         tree_in: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -699,7 +699,7 @@ async def validate_step_tree(
 @autotest_step.post("/http_debugging", summary="调试HTTP请求", description="调试HTTP请求步骤")
 async def debug_http_request(
         debug_in: AutoTestHttpDebugRequest = Body(..., description="HTTP请求步骤数据"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -729,7 +729,7 @@ async def debug_http_request(
 @autotest_step.post("/tcp_debugging", summary="调试TCP请求", description="调试TCP请求步骤")
 async def debug_tcp_request(
         debug_in: AutoTestTcpDebugRequest = Body(..., description="TCP请求步骤数据"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -788,7 +788,7 @@ async def debug_python_code(
 @autotest_step.post("/redis_debugging", summary="调试Redis请求", description="调试Redis请求步骤")
 async def debug_redis_request(
         debug_in: AutoTestRedisDebugRequest = Body(..., description="Redis请求步骤数据"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -818,7 +818,7 @@ async def debug_redis_request(
 @autotest_step.post("/execute_or_debugging", summary="执行或调试步骤树", description="执行或调试步骤树结构")
 async def execute_step_tree(
         exec_in: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -1076,7 +1076,7 @@ async def execute_step_tree(
 @autotest_step.post("/batch_execute", summary="执行批量用例", description="批量异步执行用例")
 async def batch_execute_cases(
         batch_in: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """

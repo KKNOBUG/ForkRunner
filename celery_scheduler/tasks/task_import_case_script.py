@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
+from applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
 from applications.autotest.services.autotest_case_excel_service import CaseExcelService
 from celery_scheduler.celery_worker import celery
 from common import AsyncEventLoopContextIOPool
