@@ -10,11 +10,16 @@ from enums import AutoTestReqArgsType
 
 @dataclass
 class HttpBodyPayloads:
-    """HTTP请求体装配结果。"""
+    """HTTP请求体装配结果（与httpx参数一一对应，None表示该通道未使用）。"""
+    # JSON 请求体（httpx json=）
     json_payload: Optional[Any] = None
+    # 非 JSON 请求体：RAW 文本 / form-data / urlencoded（httpx data=）
     data_payload: Optional[Any] = None
+    # 原始内容请求体，如 XML 文本（httpx content=）
     content_payload: Optional[Any] = None
+    # form-data 文件字段（httpx files=）
     file_payload: Optional[Any] = None
+    # 最终请求头；XML 分支可能就地补充 Content-Type
     headers: Optional[Dict[str, Any]] = None
 
 
@@ -29,7 +34,16 @@ def assemble_http_body_payloads(
         headers: Optional[Dict[str, Any]],
 ) -> HttpBodyPayloads:
     """
-    按request_args_type装配HTTP请求体字段；XML缺省时补齐Content-Type。
+    按 request_args_type 装配 HTTP 请求体，返回与 httpx 参数对应的载荷。
+
+    类型口径：
+    - None：按 raw(request_text) → form-data(form_data/form_files) → urlencoded → json(request_body) 顺序推断；
+    - NONE/PARAMS：不产生 body（PARAMS 走查询参数）；
+    - RAW → data_payload；JSON → json_payload；XML → content_payload；
+      FORM_DATA → data+files；X_WWW_FORM_URLENCODED → data_payload。
+
+    XML 分支在缺少 Content-Type 时补 application/xml; charset=utf-8：headers 为 None 时新建字典，
+    否则在传入字典上就地追加（返回值与入参可能是同一对象）。
 
     :param request_args_type: 请求体类型枚举，None时走兼容推断
     :param request_text: 文本/XML/RAW请求体
@@ -37,7 +51,7 @@ def assemble_http_body_payloads(
     :param form_data: form-data字段
     :param form_files: form-data文件字段
     :param urlencoded: x-www-form-urlencoded字段
-    :param headers: 请求头（可能就地补Content-Type）
+    :param headers: 请求头（XML分支可能就地补Content-Type）
     :return: 装配后的载荷与（可能更新后的）headers
     """
     json_payload: Optional[Any] = None
@@ -89,6 +103,8 @@ def encode_http_header_values(headers: Optional[Dict[str, Any]]) -> Optional[Dic
     """
     对请求头字符串值做UTF-8百分号编码，避免中文等非ASCII导致发送失败；同时剔除key为空的项。
 
+    非字符串值原样保留；safe 集合保留 URL 保留字符与 %，避免已编码内容被二次编码。
+
     :param headers: 原始请求头
     :return: 编码后的请求头；入参为空则原样返回
     """
@@ -114,12 +130,12 @@ def build_httpx_request_kwargs(
         encode_headers: bool = True,
 ) -> Dict[str, Any]:
     """
-    组装httpx.request可用的kwargs，过滤None，可选编码headers。
+    组装httpx.request可用的kwargs：先剔除值为None的键，再按需编码请求头。
 
     :param headers: 请求头
     :param params: 查询参数
     :param data: 非JSON请求体
-    :param json_data: JSON请求体
+    :param json_data: JSON请求体（输出键名固定为 json=）
     :param content: 原始内容（如XML）
     :param files: 上传文件
     :param timeout: 超时配置
@@ -154,6 +170,9 @@ def infer_http_actual_body(
 ) -> Tuple[str, Any]:
     """
     推断调试回显用的实际请求体类型与内容。
+
+    判定优先级 json → content(xml) → data；data 的 body_type 按 request_args_type 细化，
+    类型缺失时按 form_data/form_files 是否存在判定；文件载荷以 __files 键并入 body。
 
     :param request_args_type: 请求体类型
     :param json_payload: JSON载荷
@@ -191,34 +210,9 @@ def infer_http_actual_body(
 
 def format_byte_size(size: int) -> str:
     """
-    将字节数格式化为可读字符串。
+    将字节数格式化为可读字符串，仅在大于1024字节时换算KB（1024B仍显示为B）。
 
     :param size: 字节数
     :return: 如12.34KB或512B
     """
     return f"{size / 1024:.2f}KB" if size > 1024 else f"{size}B"
-
-
-def is_absolute_http_url(url: Optional[str]) -> bool:
-    """判断是否已是带协议的绝对HTTP/HTTPS地址。"""
-    return (url or "").strip().lower().startswith(("http://", "https://"))
-
-
-def build_absolute_http_url(host: str, port: Optional[str], path: str) -> str:
-    """
-    将环境host/port与相对路径拼成绝对HTTP URL。
-
-    path为空或/时表示根路径，结果带末尾斜杠。
-
-    :param host: 主机（可带或不带协议）
-    :param port: 端口字符串，可空
-    :param path: 相对路径
-    :return: 绝对URL
-    """
-    host = (host or "").strip().rstrip("/").rstrip(":")
-    port = (str(port).strip() if port is not None and str(port).strip() else "")
-    path = (path or "").lstrip("/")
-    if not host.lower().startswith(("http://", "https://")):
-        host = f"http://{host}"
-    origin = f"{host}:{port}" if port else host
-    return f"{origin}/{path}" if path else f"{origin}/"
