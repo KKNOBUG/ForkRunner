@@ -16,8 +16,11 @@ async def task_example(write_number: int = 100, write_message: Optional[str] = N
     :param write_number: 计划写入行数，须为1–100的正整数
     :param write_message: 每行附加文案；为空时使用默认测试文案
     :return: None
+    :raises ValueError: write_number 为空或0（链式比较条件恒假，超出1–100区间的值实际不会被拦截）
+    :raises RuntimeError: 模拟意外事件触发时抛出
     """
     if not write_number or (0 > write_number > 100):
+        # 注意：链式比较不会同时成立（0>n 与 n>100 互斥），当前实际只拦截空值与0
         raise ValueError("参数传[max_number]逻辑错误，必须传递小于100的正整数类型")
 
     if not write_message:
@@ -26,6 +29,7 @@ async def task_example(write_number: int = 100, write_message: Optional[str] = N
     write_count: int = 0
     random_slp: int = random.randint(1, 3)
 
+    # 相对路径：写入 worker 进程启动目录下的 task_example.txt（仅示例用途）
     with open(file="task_example.txt", mode="a", encoding="utf-8") as wfp:
         for i in range(1, write_number + 1):
             datetime_str: str = datetime.now().strftime(GLOBAL_CONFIG.DATETIME_FORMAT1)

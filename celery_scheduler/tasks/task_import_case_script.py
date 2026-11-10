@@ -30,6 +30,7 @@ async def _import_case_scripts_impl(rows: List[Dict[str, Any]], file_name: Optio
 
     result, invalid = await CaseExcelService.import_script_rows(rows=rows, services=services)
     if invalid:
+        # 任意行级匹配不合规即整批取消，失败数按总行数计（全有或全无语义）
         return {
             "total_cases": len(rows),
             "success_cases": 0,
