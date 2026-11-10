@@ -354,7 +354,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             "alias": data.get("username"),
             "phone": data.get("telPhone"),
             "gender": int(data.get("gender") or 0),
-            "email": data.get("email"),
+            "email": data.get("email", ""),
             "user_type": int(data.get("userType") or 0),
             "is_superuser": False,
             "dept_id": dept.id,
