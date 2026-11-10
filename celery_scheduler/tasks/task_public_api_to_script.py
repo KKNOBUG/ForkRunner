@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from tortoise.transactions import in_transaction
 
-from applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
+from applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from applications.autotest.schemas.autotest_case_schema import AutoTestCaseUpdate
 from applications.autotest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateItem,
