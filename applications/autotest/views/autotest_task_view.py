@@ -3,7 +3,7 @@ import os
 import traceback
 from typing import Optional
 
-from fastapi import APIRouter, Body, Query, Depends, Path
+from fastapi import APIRouter, Body, Query, Path
 from starlette.responses import FileResponse
 from tortoise.expressions import Q
 
@@ -60,7 +60,7 @@ async def create_task(
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，恢复软删任务时要求创建人允许当前用户写入
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -104,7 +104,7 @@ async def delete_task(
     :param task_id: 任务主键ID
     :param task_code: 任务业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的任务
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -142,7 +142,7 @@ async def update_task(
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的任务
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -186,7 +186,7 @@ async def get_task(
     :param task_id: 任务主键ID
     :param task_code: 任务业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验任务创建人可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -232,7 +232,7 @@ async def search_tasks(
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，按创建人过滤可见范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -316,7 +316,7 @@ async def run_task(
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，执行会写报告/执行记录，需先校验任务可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -332,8 +332,8 @@ async def run_task(
         # 运行态互斥的前置提示：真正的一致性由 Worker 原子抢占保证，这里避免重复入队
         if await services.task_curd.is_execution_running(task_id):
             return ParameterResponse(message="任务正在执行中, 请等待本次执行结束后再触发")
-        from celery_scheduler.tasks.task_autotest_case import run_autotest_task
-        from enums import AutoTestReportType
+        from backend.celery_scheduler.tasks.task_autotest_case import run_autotest_task
+        from backend.enums import AutoTestReportType
         # __task_id会随消息传到Worker，task_prerun从request.properties取出；
         # 只有传了__task_id，Worker端_create_task_record才会查任务表并写入record的task_id/task_name。
         # created_user 写入执行记录（Worker 无 HTTP 鉴权上下文）。
@@ -369,7 +369,7 @@ async def start_task(
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许启停归属人在当前用户可操作范围内的任务
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -411,7 +411,7 @@ async def stop_task(
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许启停归属人在当前用户可操作范围内的任务
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -456,7 +456,7 @@ async def copy_task(
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，源任务须在可见范围内，新任务挂载的用例须可见
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -530,7 +530,7 @@ async def search_task_records(
 
     :param record_in: 任务执行记录查询入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，按创建人过滤可见范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -568,7 +568,7 @@ async def download_task_record_attachment(
     :param record_id: 执行记录主键
     :param key: 附件标识（信封attachments[].key）
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验记录创建人可见性
+    :param scope: 数据权限上下文
     :return: 文件流响应
     """
     try:
@@ -619,7 +619,7 @@ async def delete_task_record(
 
     :param record_id: 执行记录主键
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的执行记录
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -650,7 +650,7 @@ async def delete_task_records(
 
     :param record_in: 执行记录ID列表
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的执行记录
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应，data为实际删除的记录数量
     """
     try:

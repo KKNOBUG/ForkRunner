@@ -146,7 +146,7 @@ class APPEnvConfigCreate(AutoTestEnvConfigCreate):
 class APPEnvConfigUpdate(AutoTestEnvConfigUpdate):
     """修改APP类型环境配置入参。"""
 
-    env_name: str = Field(..., max_length=64, description="环境名称")
+    env_name: Optional[str] = Field(None, max_length=64, description="环境名称")
     project_id: int = Field(..., ge=1, description="环境绑定应用ID")
     config_id: int = Field(..., ge=1, description="配置ID")
     config_name: str = Field(..., max_length=128, description="配置名称")
@@ -167,7 +167,7 @@ class DBEnvConfigCreate(AutoTestEnvConfigCreate):
 class DBEnvConfigUpdate(AutoTestEnvConfigUpdate):
     """修改DB(database)类型环境配置入参。"""
 
-    env_name: str = Field(..., max_length=64, description="环境名称")
+    env_name: Optional[str] = Field(None, max_length=64, description="环境名称")
     project_id: int = Field(..., ge=1, description="环境绑定应用ID")
 
     config_id: int = Field(..., ge=1, description="配置ID")
@@ -190,7 +190,7 @@ class FILEEnvConfigCreate(AutoTestEnvConfigCreate):
 class FILEEnvConfigUpdate(AutoTestEnvConfigUpdate):
     """修改FILE类型环境配置入参。"""
 
-    env_name: str = Field(..., max_length=64, description="环境名称")
+    env_name: Optional[str] = Field(None, max_length=64, description="环境名称")
     project_id: int = Field(..., ge=1, description="环境绑定应用ID")
     config_id: int = Field(..., ge=1, description="配置ID")
     config_name: str = Field(..., max_length=128, description="配置名称")
@@ -212,7 +212,7 @@ class RedisEnvConfigCreate(AutoTestEnvConfigCreate):
 class RedisEnvConfigUpdate(AutoTestEnvConfigUpdate):
     """修改REDIS类型环境配置入参。"""
 
-    env_name: str = Field(..., max_length=64, description="环境名称")
+    env_name: Optional[str] = Field(None, max_length=64, description="环境名称")
     project_id: int = Field(..., ge=1, description="环境绑定应用ID")
     config_id: int = Field(..., ge=1, description="配置ID")
     config_name: str = Field(..., max_length=128, description="配置名称")

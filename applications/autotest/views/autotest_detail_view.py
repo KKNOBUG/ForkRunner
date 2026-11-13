@@ -2,7 +2,7 @@
 import traceback
 from typing import Optional
 
-from fastapi import APIRouter, Body, Query, Depends
+from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
 from applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
@@ -84,7 +84,7 @@ async def delete_step_detail(
     :param step_code: 步骤业务标识
     :param report_code: 报告业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的明细
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -126,7 +126,7 @@ async def delete_step_details(
 
     :param detail_in: 明细ID列表
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的明细
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应，data为实际删除的明细数量
     """
     try:
@@ -198,7 +198,7 @@ async def get_step_detail(
     :param step_code: 步骤业务标识
     :param report_code: 报告业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验明细创建人可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:

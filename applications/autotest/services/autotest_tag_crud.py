@@ -164,7 +164,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
             # 软删恢复不得跨写范围接管他人标签，且不覆盖原创建人
             await scope.load_owners([existing_tag.created_user])
             if not scope.can_write(existing_tag.created_user):
-                error_message: str = f"新增标签信息失败, 标签[{tag_name}]创建人[{existing_tag.created_user}]不在当前用户可操作范围内, 无权操作"
+                error_message: str = f"新增标签信息失败, 标签[{tag_name}]创建人[{existing_tag.created_user}]不在当前用户可操作范围内"
                 LOGGER.error(error_message)
                 raise NoPermissionException(message=error_message)
             tag_dict.pop("created_user", None)
@@ -206,7 +206,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
 
         await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message: str = f"更新标签信息失败, 标签[{instance.tag_name}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
+            error_message: str = f"更新标签信息失败, 标签[{instance.tag_name}]创建人[{instance.created_user}]不在当前用户可操作范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -274,11 +274,11 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
 
         await scope.load_owners([instance.created_user])
         if not scope.can_delete(instance.created_user):
-            error_message: str = f"删除标签信息失败, 标签[{instance.tag_name}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
+            error_message: str = f"删除标签信息失败, 标签[{instance.tag_name}]创建人[{instance.created_user}]不在当前用户可删除范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
-        from applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
+        from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
         cases_count = await AutoTestCaseCrud().model.filter(case_tags__contains=[instance.id], state__not=1).count()
         if cases_count > 0:
             error_message: str = f"删除标签信息失败, 记录[id={instance.id}]被{cases_count}个用例关联"
@@ -344,11 +344,11 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
                 targets.append(instance)
 
         # 先全量校验行级权限与引用关系，再单次批量软删，保证批量操作全有或全无
-        from applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
+        from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
         await scope.load_owners([instance.created_user for instance in targets])
         for instance in targets:
             if not scope.can_delete(instance.created_user):
-                error_message: str = f"删除标签信息失败, 标签[{instance.tag_name}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
+                error_message: str = f"删除标签信息失败, 标签[{instance.tag_name}]创建人[{instance.created_user}]不在当前用户可删除范围内"
                 LOGGER.error(error_message)
                 raise NoPermissionException(message=error_message)
             cases_count = await AutoTestCaseCrud().model.filter(case_tags__contains=[instance.id], state__not=1).count()

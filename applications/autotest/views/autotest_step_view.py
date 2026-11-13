@@ -72,7 +72,7 @@ async def create_step(
 
     :param step_in: 步骤入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，步骤归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -115,7 +115,7 @@ async def delete_step(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，步骤归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -156,7 +156,7 @@ async def update_step(
 
     :param step_in: 步骤入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，步骤归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -199,7 +199,7 @@ async def get_step(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验步骤所属用例是否在当前用户可见范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -242,7 +242,7 @@ async def search_steps(
 
     :param step_in: 步骤入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅返回所属用例在当前用户可见范围内的步骤
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -310,7 +310,7 @@ async def get_step_tree(
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验用例所属人的读范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -347,7 +347,7 @@ async def copy_step_tree(
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验用例所属人的读范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -380,7 +380,7 @@ async def splice_step_tree(
 
     :param splice_in: 拼接查询入参(case_ids与case_codes二选一)
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，逐个校验用例所属人的读范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -414,7 +414,7 @@ async def batch_update_steps_tree(
 
     :param tree_in: 步骤树入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许保存归属人在当前用户可操作范围内的用例
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -548,8 +548,8 @@ async def batch_update_steps_tree(
                 #     递归收集，口径与 IF 分支子步骤"先删后建"一致；全程同一事务，任一步失败整体回滚。
                 deleted_step_count: int = 0
                 target_case_id: Optional[int] = (
-                                                    success_case_detail[0].get("case_id") if success_case_detail else None
-                                                ) or getattr(case_data, "case_id", None)
+                    success_case_detail[0].get("case_id") if success_case_detail else None
+                ) or getattr(case_data, "case_id", None)
                 if target_case_id:
                     retained_codes: Set[str] = set()
                     retained_ids: Set[int] = set()
@@ -707,7 +707,7 @@ async def debug_http_request(
 
     :param debug_in: 步骤调试入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，解析环境配置前校验应用与配置可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -737,7 +737,7 @@ async def debug_tcp_request(
 
     :param debug_in: 步骤调试入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，解析环境配置前校验应用与配置可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -796,7 +796,7 @@ async def debug_redis_request(
 
     :param debug_in: 步骤调试入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，解析每条操作的环境配置前校验应用与配置可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -826,7 +826,7 @@ async def execute_step_tree(
 
     :param exec_in: 业务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，执行会写报告/明细并回写用例，需先校验用例可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -1084,7 +1084,7 @@ async def batch_execute_cases(
 
     :param batch_in: 业务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，执行会写报告/明细，需先校验全部用例可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:

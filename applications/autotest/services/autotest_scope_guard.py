@@ -9,9 +9,9 @@ from enums import PUBLIC_CASE_TYPES, ResourceTag
 from services.data_scope import DataScope
 
 # 父资源所属资源族：与路由注册标签同源，父/子资源的范围才可独立配置
-PROJECT_TAG = ResourceTag.PROJECT.value
-ENV_TAG = ResourceTag.ENV.value
-CASE_TAG = ResourceTag.CASE.value
+PROJECT_TAG: str = ResourceTag.PROJECT.value
+ENV_TAG: str = ResourceTag.ENV.value
+CASE_TAG: str = ResourceTag.CASE.value
 
 
 async def load_readable_project(scope: Optional[DataScope], project_id: int) -> AutoTestProjectModel:

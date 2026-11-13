@@ -85,7 +85,7 @@ async def delete_report(
     :param report_id: 报告主键ID
     :param report_code: 报告业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的报告
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -122,7 +122,7 @@ async def delete_reports(
 
     :param report_in: 报告ID列表或报告代码列表(二选一)
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的报告
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应，data为实际删除的报告数量
     """
     try:
@@ -192,7 +192,7 @@ async def get_report(
     :param report_id: 报告主键ID
     :param report_code: 报告业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验报告创建人可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -313,7 +313,7 @@ async def search_batch_reports(
 
     :param batch_detail_in: 批次报告查询入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅返回可见范围内的报告
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -352,7 +352,7 @@ async def search_task_batches(
 
     :param batch_in: 含必填task_code；page/page_size针对批次数
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅聚合可见范围内的报告
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -381,7 +381,7 @@ async def search_report_batch_scripts(
 
     :param script_in: 含必填batch_code；page/page_size针对脚本数
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅聚合可见范围内的报告
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -411,7 +411,7 @@ async def search_script_round_reports(
 
     :param report_in: 含必填batch_code、case_id, 可选round_no
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅返回可见范围内的报告
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:

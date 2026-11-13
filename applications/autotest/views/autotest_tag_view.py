@@ -2,7 +2,7 @@
 import traceback
 from typing import Optional
 
-from fastapi import APIRouter, Body, Query, Depends
+from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
 from applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
@@ -44,7 +44,7 @@ async def create_tag(
 
     :param tag_in: 标签入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，恢复软删标签时要求创建人允许当前用户写入
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -87,7 +87,7 @@ async def delete_tag(
     :param tag_id: 标签主键ID
     :param tag_code: 标签业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的标签
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -126,7 +126,7 @@ async def batch_delete_tags(
 
     :param tag_in: 标签入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的标签
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -156,7 +156,7 @@ async def update_tag(
 
     :param tag_in: 标签入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的标签
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -199,7 +199,7 @@ async def get_tag(
     :param tag_id: 标签主键ID
     :param tag_code: 标签业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验标签创建人可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
