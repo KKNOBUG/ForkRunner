@@ -161,7 +161,7 @@ class FileTransfer:
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [destination={destination}, filename={filename}, file_size={file_size}]\n"
-                f"{traceback.format_exc()}"
+                f"异常回溯: {traceback.format_exc()}"
             )
             return False, error_message
 
@@ -208,6 +208,6 @@ class FileTransfer:
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [filepath={download_file}]\n"
-                f"{traceback.format_exc()}"
+                f"异常回溯: {traceback.format_exc()}"
             )
             raise
