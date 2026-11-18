@@ -17,6 +17,10 @@ from core.responses import SuccessResponse
 
 try:
     from configure import PROJECT_CONFIG
+    from configure.logging_config import loguru_logging
+
+    # 应用日志按天复用初始化：gunicorn 各 worker 独立 import 本模块，均落到当天同一执行日志文件
+    loguru_logging()
 except ImportError as e:
     from core.exceptions import NotImplementedException
 
@@ -66,8 +70,6 @@ if __name__ == '__main__':
         app=PROJECT_CONFIG.SERVER_APP,
         host=PROJECT_CONFIG.SERVER_HOST,
         port=PROJECT_CONFIG.SERVER_PORT,
-        # reload=PROJECT_CONFIG.SERVER_DEBUG,
-        # reload_delay=PROJECT_CONFIG.SERVER_DELAY,
         log_config=None,
         log_level=None,
     )
