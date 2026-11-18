@@ -8,12 +8,10 @@ from applications.autotest.services.autotest_runtime.exchange.extractors import 
 
 
 class ExtractPipeline:
-    """
-    批量执行变量提取，同时产出「name -> value」字典与逐项结果列表。
+    """批量执行变量提取，同时产出「name -> value」字典与逐项结果列表。"""
 
-    规则不完整时跳过且不产生结果项；单项异常只记入该项结果，不中断其余规则；
-    成功项的name写入字典，同名以最后一次成功值为准。
-    """
+    # 规则不完整时跳过且不产生结果项；单项异常只记入该项结果，不中断其余规则；
+    # 成功项的name写入字典，同名以最后一次成功值为准
 
     @classmethod
     def run_extract_variables(
@@ -35,9 +33,6 @@ class ExtractPipeline:
         """
         根据提取规则列表从请求/响应/变量池中提取变量。
 
-        完整性口径：name、source为必填，scope不为ALL时expr必填；不完整规则仅记日志并跳过（不产生结果项）。
-        每条规则独立try捕获，异常只让该项success=False，不中断其余规则。
-
         :param extract_variables: 提取规则列表
         :param response_text: 响应正文
         :param response_json: 响应JSON，或DB/Redis步骤的操作结果列表
@@ -53,6 +48,8 @@ class ExtractPipeline:
         :return: (name->value字典, 逐项结果列表)；成功项才写入字典，同名后者覆盖前者
         :raises TypeError: extract_variables或其子项类型不合法
         """
+        # 完整性口径：name、source为必填，scope不为ALL时expr必填；不完整规则仅记日志并跳过（不产生结果项）；
+        # 每条规则独立try捕获，异常只让该项success=False，不中断其余规则
         extract_results_dict: Dict[str, Any] = {}
         extract_results_list: List[Dict[str, Any]] = []
         if not extract_variables:
