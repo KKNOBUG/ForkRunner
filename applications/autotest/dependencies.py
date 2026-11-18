@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 from dataclasses import dataclass
 
 from fastapi import Depends
@@ -10,6 +11,7 @@ from applications.autotest.services.autotest_detail_crud import AutoTestDetailCr
 from applications.autotest.services.autotest_env_config_crud import AutoTestEnvConfigCrud
 from applications.autotest.services.autotest_env_crud import AutoTestEnvCrud
 from applications.autotest.services.autotest_project_crud import AutoTestProjectCrud
+from applications.autotest.services.autotest_project_sync_service import AutoTestProjectSyncService
 from applications.autotest.services.autotest_record_crud import AutoTestRecordCrud
 from applications.autotest.services.autotest_report_crud import AutoTestReportCrud
 from applications.autotest.services.autotest_step_crud import AutoTestStepCrud
@@ -27,6 +29,7 @@ class AutoTestServices:
     env_config_curd: AutoTestEnvConfigCrud
     env_curd: AutoTestEnvCrud
     project_curd: AutoTestProjectCrud
+    project_sync_service: AutoTestProjectSyncService
     record_curd: AutoTestRecordCrud
     report_curd: AutoTestReportCrud
     step_curd: AutoTestStepCrud
@@ -40,6 +43,7 @@ async def get_autotest_api_services() -> AutoTestServices:
 
     :return: AutoTestServices 实例
     """
+    project_curd = AutoTestProjectCrud()
     return AutoTestServices(
         case_curd=AutoTestCaseCrud(),
         case_transfer_curd=AutoTestCaseTransferCrud(),
@@ -47,7 +51,8 @@ async def get_autotest_api_services() -> AutoTestServices:
         detail_curd=AutoTestDetailCrud(),
         env_config_curd=AutoTestEnvConfigCrud(),
         env_curd=AutoTestEnvCrud(),
-        project_curd=AutoTestProjectCrud(),
+        project_curd=project_curd,
+        project_sync_service=AutoTestProjectSyncService(project_curd),
         record_curd=AutoTestRecordCrud(),
         report_curd=AutoTestReportCrud(),
         step_curd=AutoTestStepCrud(),
