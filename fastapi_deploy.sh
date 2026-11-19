@@ -1,138 +1,133 @@
 #!/bin/bash
-# -*- coding: utf-8 -*-
-# FastAPI 部署脚本
-# 原手动部署流程:
-#   cd /zdhgj/python_projects/fastapi-toolbox-runner
-#   source .venv/bin/activate
-#   pkill -f -9 “backend_main:app”
-#   pkill -f -9 celery
-#   nohup celery -A celery_scheduler.celery_worker worker -Q 8520_default,8520_autotest -c 4 -l INFO > /zdhgj/python_projects/fastapi-toolbox-runner/output/logs/celery_logs/celery_worker.log 2>&1 &
-#   nohup celery -A celery_scheduler.celery_worker beat -l INFO > /zdhgj/python_projects/fastapi-toolbox-runner/output/logs/celery_logs/celery_beat.log 2>&1 &
-#   ps aux | grep celery
-#   nohup gunicorn -c gunicorn.conf.py backend_main:app > /zdhgj/python_projects/fastapi-toolbox-runner/toolbox-runner.log 2>&1
-#   ps aux | grep gunicorn
-# ==================== 基础路径 ====================
-# 部署约定: 本脚本与.venv虚拟环境同置于项目根目录
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_DIR="${PROJECT_ROOT}/.venv"
-# 项目约定: 所有依赖均在.venv内, 必须先激活虚拟环境再启动服务
-if [ ! -f "${VENV_DIR}/bin/activate" ]; then
-    echo "虚拟环境不存在: ${VENV_DIR}"
+# FastAPI 部署脚本（只管 FastAPI 服务，Celery 由 celery_deploy.sh 管理）
+# 用法: ./fastapi_deploy.sh start|restart|stop|status
+# start: 停止 -> 强制拉取 GIT_BRANCH 覆盖本地 -> 启动 FastAPI；restart 不拉取代码
+# 同机多实例: 各部署目录 .env 的 SERVER_PORT 错开
+
+# 脚本所在目录即项目根目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="${PROJECT_ROOT:-$SCRIPT_DIR}"
+
+# 顶层包导入，PYTHONPATH 指向项目根
+export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}"
+cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; }
+
+# 自动激活虚拟环境（已激活则跳过）
+if [ -z "${VIRTUAL_ENV:-}" ] && [ -f "${PROJECT_ROOT}/.venv/bin/activate" ]; then
+    # shellcheck disable=SC1091
+    source "${PROJECT_ROOT}/.venv/bin/activate"
+fi
+
+# 服务端口从 .env 读取：PID/日志/进程名均以端口区分
+SERVER_PORT="$(grep -E '^SERVER_PORT=' "${PROJECT_ROOT}/.env" 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' \r')"
+if [ -z "$SERVER_PORT" ]; then
+    echo "[ERROR] 环境配置文件 .env 缺少 SERVER_PORT 配置" >&2
     exit 1
 fi
-source "${VENV_DIR}/bin/activate"
 
-# Gunicorn 应用标识(启动参数; 同时作为pgrep/pkill -f的进程匹配模式, 与手动执行pkill -f "backend_main:app"命令保持一致)
+# 配置Gunicorn服务
 GUNICORN_APP="backend_main:app"
 GUNICORN_CONFIG_FILE="${PROJECT_ROOT}/gunicorn.conf.py"
-FASTAPI_LOG_FILE="${PROJECT_ROOT}/toolbox-runner.log"
+GUNICORN_PID_FILE="${PROJECT_ROOT}/gunicorn_${SERVER_PORT}.pid"
+FASTAPI_LOG="${PROJECT_ROOT}/backend_main_${SERVER_PORT}.log"
 
-# Git配置: 与手动执行git pull origin toolbox-runner/git reset --hard origin/toolbox-runner命令保持一致
-GIT_BRANCH="toolbox-runner"
-GIT_USERNAME="CS4224"
-GIT_PASSWORD='KFuser01@!'
+# Git配置（支持环境变量覆盖）
+GIT_BRANCH="${GIT_BRANCH:-toolbox-runner}"
+GIT_USERNAME="${GIT_USERNAME:-CS4224}"
+GIT_PASSWORD="${GIT_PASSWORD:-KFuser01@!}"
 
-cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; }
-export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
+print_info() {
+    echo -e "\033[32m[INFO]\033[0m $1"
+}
 
-# ==================== 输出函数 ====================
-print_info()  { echo -e "\033[32m[INFO]\033[0m $1"; }
-print_warn()  { echo -e "\033[33m[WARN]\033[0m $1"; }
-print_error() { echo -e "\033[31m[ERROR]\033[0m $1"; }
-print_step()  { echo -e "\n\033[36m========================================\033[0m"; echo -e "\033[36m$1\033[0m"; echo -e "\033[36m========================================\033[0m"; }
+print_warn() {
+    echo -e "\033[33m[WARN]\033[0m $1"
+}
 
-# ==================== 工具函数 ====================
-pids_of() {
-    pgrep -f "$1" 2> /dev/null | grep -vw "$$" || true
+print_error() {
+    echo -e "\033[31m[ERROR]\033[0m $1"
+}
+
+print_step() {
+    echo -e "\n"
+    echo -e "\033[36m========================================\033[0m"
+    echo -e "\033[36m$1\033[0m"
+    echo -e "\033[36m========================================\033[0m"
+}
+
+check_command() {
+    if ! command -v "$1" &> /dev/null; then
+        print_error "$1 未安装, 请先安装..."
+        exit 1
+    fi
 }
 
 is_running() {
-    [ -n "$(pids_of "$1")" ]
-}
-
-format_pids() {
-    echo "$(pids_of "$1")" | tr '\n' ' ' | sed 's/ $//'
-}
-
-kill_by_pattern() {
-    local pattern="$1"
-    local name="$2"
-    local timeout_s="${3:-10}"
-    local pids pid waited
-
-    pids="$(pids_of "$pattern")"
-    if [ -z "$pids" ]; then
-        print_info "${name} 未运行(跳过)..."
-        return 0
-    fi
-
-    print_info "停止 ${name}(PID: $(format_pids "$pattern"))..."
-    for pid in $pids; do
-        kill -TERM "$pid" 2> /dev/null || true
-    done
-
-    waited=0
-    while [ "$waited" -lt "$timeout_s" ] && is_running "$pattern"; do
-        sleep 1
-        waited=$((waited + 1))
-    done
-
-    pids="$(pids_of "$pattern")"
-    if [ -n "$pids" ]; then
-        print_warn "${name} ${timeout_s}s 内未退出, 强制 kill -9..."
-        for pid in $pids; do
-            kill -9 "$pid" 2> /dev/null || true
-        done
-        sleep 1
-    fi
-
-    if is_running "$pattern"; then
-        print_error "${name} 停止失败, 存活进程: $(format_pids "$pattern")"
-        return 1
-    fi
-    print_info "${name} 已停止..."
-    return 0
-}
-
-# 启动后等待10秒, 进程仍存在即判定成功
-wait_gunicorn_alive() {
-    sleep 10
-    if is_running "$GUNICORN_APP"; then
-        print_info "FastAPI(Gunicorn) 启动成功 (PID: $(format_pids "$GUNICORN_APP"))"
-        print_info "日志文件: $FASTAPI_LOG_FILE"
-        return 0
-    fi
-    print_error "FastAPI(Gunicorn) 启动失败, 请查看日志: $FASTAPI_LOG_FILE"
-    if [ -f "$FASTAPI_LOG_FILE" ]; then
-        print_error "----- 最近日志 -----"
-        tail -n 50 "$FASTAPI_LOG_FILE" 2> /dev/null || true
+    local pid_file=$1
+    if [ -f "$pid_file" ]; then
+        local pid=$(cat "$pid_file")
+        if ps -p "$pid" > /dev/null 2>&1; then
+            return 0
+        else
+            rm -f "$pid_file"
+        fi
     fi
     return 1
 }
 
-# ==================== 服务控制 ====================
-# 停止旧服务(与手动执行pkill -f "backend_main:app"命令保持一致)
-stop_services() {
-    print_step "停止旧服务"
-    kill_by_pattern "$GUNICORN_APP" "FastAPI(Gunicorn)"
+stop_process() {
+    local pid_file=$1
+    local process_name=$2
+
+    if ! is_running "$pid_file"; then
+        print_info "${process_name} 未运行(跳过)..."
+        return 1
+    fi
+
+    local pid=$(cat "$pid_file")
+    print_info "停止 ${process_name}(PID: $pid)..."
+
+    kill -TERM "$pid" 2>/dev/null
+
+    local count=0
+    while ps -p "$pid" > /dev/null 2>&1 && [ $count -lt 10 ]; do
+        sleep 1
+        count=$((count + 1))
+    done
+
+    if ps -p "$pid" > /dev/null 2>&1; then
+        print_warn "${process_name} 未正常退出, 强制终止..."
+        kill -9 "$pid" 2>/dev/null
+    fi
+
+    rm -f "$pid_file"
+    print_info "${process_name} 已停止..."
+    return 0
 }
 
-# 拉取最新代码(与手动执行一致: git pull 失败/冲突时 git reset --hard 强制覆盖)
+# 步骤1: 停止旧服务
+stop_services() {
+    print_step "步骤1: 停止旧服务"
+    stop_process "$GUNICORN_PID_FILE" "Gunicorn"
+    sleep 2
+}
+
+# 步骤2: 强制拉取远端 GIT_BRANCH 覆盖本地（fetch + reset，不做合并）
 pull_code() {
-    print_step "拉取 ${GIT_BRANCH} 分支最新代码"
+    print_step "步骤2: 拉取 ${GIT_BRANCH} 分支最新代码"
 
     if ! command -v git > /dev/null 2>&1; then
         print_error "git 未安装, 请先安装..."
-        return 1
+        exit 1
     fi
     if ! command -v expect > /dev/null 2>&1; then
         print_error "expect 未安装, 请先安装: yum install expect"
-        return 1
+        exit 1
     fi
 
     expect <<EOF
 set timeout 60
-spawn git pull origin "$GIT_BRANCH"
+spawn git fetch origin "$GIT_BRANCH"
 expect {
     "Username" {
         send "${GIT_USERNAME}\r"
@@ -149,99 +144,104 @@ EOF
     pull_rc=$?
 
     if [ "$pull_rc" -ne 0 ]; then
-        print_warn "git pull 失败(可能存在未提交改动或网络问题), 尝试强制对齐远端..."
+        print_error "git fetch 失败, 请检查网络/凭证/远端分支后重试"
+        exit 1
     fi
 
-    # 与手动部署一致: 放弃本地改动, 由 origin/$GIT_BRANCH 分支代码覆盖
-    if ! git reset --hard "origin/${GIT_BRANCH}"; then
-        print_error "git reset --hard origin/${GIT_BRANCH} 失败, 请检查远端分支是否存在"
-        return 1
+    # 放弃本地改动, 由远端 GIT_BRANCH 最新代码覆盖
+    if ! git reset --hard FETCH_HEAD; then
+        print_error "git reset --hard FETCH_HEAD 失败"
+        exit 1
     fi
-    [ "$pull_rc" -ne 0 ] && print_warn "已强制对齐本地仓库到 origin/${GIT_BRANCH}(如拉取失败请检查网络/凭证后重试)"
     print_info "代码更新成功(${GIT_BRANCH} 分支)"
 }
 
-# 启动 FastAPI 应用(与手动一致: nohup gunicorn -c gunicorn.conf.py backend_main:app)
+# 步骤3: 启动FastAPI应用
 start_fastapi() {
-    print_step "启动 FastAPI 应用"
+    print_step "步骤3: 启动FastAPI应用"
 
-    if is_running "$GUNICORN_APP"; then
-        print_warn "FastAPI(Gunicorn) 已在运行(PID: $(format_pids "$GUNICORN_APP")), 跳过启动"
+    check_command "gunicorn"
+
+    if is_running "$GUNICORN_PID_FILE"; then
+        print_warn "Gunicorn已在运行, 跳过启动"
         return 0
     fi
 
-    if [ ! -f "$GUNICORN_CONFIG_FILE" ]; then
-        print_error "Gunicorn 配置文件不存在: $GUNICORN_CONFIG_FILE"
-        return 1
+    if ! [ -f "$GUNICORN_CONFIG_FILE" ]; then
+      print_error "Gunicorn配置文件不存在: $GUNICORN_CONFIG_FILE"
+      exit 1
     fi
 
-    print_info "启动 Gunicorn 服务 (配置文件: $GUNICORN_CONFIG_FILE)"
-    print_info "日志文件: $FASTAPI_LOG_FILE"
+    print_info "启动Gunicorn服务(使用配置文件: $GUNICORN_CONFIG_FILE)"
+
     nohup gunicorn -c "$GUNICORN_CONFIG_FILE" "$GUNICORN_APP" \
-        > "$FASTAPI_LOG_FILE" 2>&1 &
+        --pid="$GUNICORN_PID_FILE" \
+        --name="gunicorn_${SERVER_PORT}" \
+        > "$FASTAPI_LOG" 2>&1 &
 
-    wait_gunicorn_alive
-}
+    sleep 5
 
-# 查看服务运行状态
-show_status() {
-    print_step "服务运行状态"
-
-    if is_running "$GUNICORN_APP"; then
-        print_info "[✓] FastAPI(Gunicorn): 运行中 (PID: $(format_pids "$GUNICORN_APP"))"
-        ps -o pid,ppid,user,etime,command -p "$(format_pids "$GUNICORN_APP" | tr ' ' ',')" | tail -n +2
+    if is_running "$GUNICORN_PID_FILE"; then
+        local pid=$(cat "$GUNICORN_PID_FILE")
+        print_info "Gunicorn服务启动成功 (PID: $pid)"
+        print_info "PID文件: $GUNICORN_PID_FILE"
+        print_info "日志文件: $FASTAPI_LOG"
     else
-        print_warn "[×] FastAPI(Gunicorn): 未运行"
-    fi
-
-    if [ -f "$FASTAPI_LOG_FILE" ]; then
-        echo "  日志: $FASTAPI_LOG_FILE ($(du -h "$FASTAPI_LOG_FILE" 2> /dev/null | cut -f1))"
+        print_error "Gunicorn服务启动失败, 请检查日志: tail -n 50 $FASTAPI_LOG"
+        exit 1
     fi
 }
 
-# ==================== 完整流程 ====================
+# 步骤4: 检查服务状态
+check_status() {
+    print_step "步骤4: 检查服务状态"
+
+    echo ""
+    print_info "========== 服务运行状态 =========="
+
+    if is_running "$GUNICORN_PID_FILE"; then
+        local pid=$(cat "$GUNICORN_PID_FILE")
+        print_info "[✓] Gunicorn: 运行中 (PID: $pid)"
+    else
+        print_error "[×] Gunicorn: 未运行"
+    fi
+
+    echo ""
+    print_info "========== 服务运行状态 =========="
+}
+
 full_deploy() {
     print_info "开始完整部署流程..."
     print_info "项目目录: $PROJECT_ROOT"
-    print_info "Git 分支: $GIT_BRANCH"
+    print_info "Git拉取分支: $GIT_BRANCH"
+    print_info "Gunicorn 配置: $GUNICORN_CONFIG_FILE"
+    echo ""
 
-    stop_services || exit 1
-    pull_code || exit 1
-    start_fastapi || exit 1
-
-    show_status
-    print_info "部署完成!"
+    stop_services
+    pull_code
+    start_fastapi
+    check_status
 }
 
-# 仅重启服务(不拉取代码)
 restart_services() {
     print_step "重启服务(不拉取代码)"
-    stop_services || exit 1
-    start_fastapi || exit 1
 
-    show_status
-    print_info "重启完成!"
+    stop_services
+    sleep 2
+    start_fastapi
+    check_status
 }
 
-show_help() {
-    echo "==================== ToolBox 项目部署脚本 ===================="
-    echo "命令说明:"
-    echo "  start         # 完整部署(停止服务 -> 拉取${GIT_BRANCH}分支代码 -> 启动FastAPI服务)"
-    echo "  restart       # 仅重启服务(不拉取代码)"
-    echo "  stop          # 停止所有服务"
-    echo "  status        # 查看服务运行状态"
-    echo "  pull          # 拉取${GIT_BRANCH}分支代码"
-    echo ""
-    echo "使用提示:"
-    echo "  1. 首次使用前, 请先通过 requirements.txt 安装依赖"
-    echo "  2. 确保gunicorn.conf.py配置文件正确"
-    echo "  3. 确保configure.project_config.py配置文件正确"
-    echo "  4. 发生改动但未提交的文件会被直接放弃, 由 $GIT_BRANCH 分支代码覆盖"
-    echo "==================== ToolBox 项目部署脚本 ===================="
-    exit 1
+stop_all() {
+    print_step "停止所有服务"
+    stop_services
 }
 
-# ==================== 主入口 ====================
+show_status() {
+    print_step "查看服务运行状态"
+    check_status
+}
+
 main() {
     case "${1:-}" in
         start)
@@ -251,17 +251,29 @@ main() {
             restart_services
             ;;
         stop)
-            print_step "停止所有服务"
-            stop_services
+            stop_all
             ;;
         status)
             show_status
             ;;
-        pull)
-            pull_code
-            ;;
         *)
-            show_help
+            echo "==================== FastAPI 部署脚本 ===================="
+            echo "命令说明:"
+            echo "  start         # 完整部署(停止服务 -> 拉取 $GIT_BRANCH 分支代码 -> 启动FastAPI服务)"
+            echo "  restart       # 仅重启服务(不拉取代码)"
+            echo "  stop          # 停止FastAPI服务"
+            echo "  status        # 查看服务运行状态"
+            echo ""
+            echo "使用提示:"
+            echo "  1. 首次使用前, 请确保已安装依赖(.venv 存在时脚本自动激活)"
+            echo "  2. 确保 gunicorn.conf.py 配置文件正确(bind 随 .env 的 SERVER_PORT)"
+            echo "  3. 确保 .env 配置正确(SERVER_PORT/数据库/Redis库号)"
+            echo "  4. 同机多实例: 各目录 SERVER_PORT 错开; 共用 Redis 时 CELERY_REDBEAT_DB 必须不同"
+            echo "  5. start 强制拉取 $GIT_BRANCH 覆盖本地(放弃未提交改动); 不想拉取用 restart"
+            echo "  6. Git 拉取依赖 expect(yum install expect); GIT_BRANCH/GIT_USERNAME/GIT_PASSWORD 可用环境变量覆盖"
+            echo "  7. Celery 服务由 celery_deploy.sh 单独管理"
+            echo "==================== FastAPI 部署脚本 ===================="
+            exit 1
             ;;
     esac
 }
