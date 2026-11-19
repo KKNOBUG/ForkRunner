@@ -33,6 +33,9 @@ autotest.include_router(autotest_tag, prefix="/tag", tags=[ResourceTag.TAG.desc]
 autotest.include_router(autotest_task, prefix="/task", tags=[ResourceTag.TASK.desc])
 autotest.include_router(autotest_tool, prefix="/tool", tags=[ResourceTag.TOOL.desc])
 autotest.include_router(autotest_data_source, prefix="/data_source", tags=[ResourceTag.DATASET.desc])
-autotest.include_router(autotest_tcp_test, prefix="/tcp_test", tags=[ResourceTag.DEBUG.desc])
 autotest.include_router(autotest_http_xml_test, prefix="/http_xml_test", tags=[ResourceTag.DEBUG.desc])
 autotest.include_router(datagram_diff_router, prefix="/datagram_diff", tags=[ResourceTag.HTTP_COMPARE.desc])
+
+# 公开路由蓝图：TCP 测试服务器管理无需用户认证（配套 auth_middleware 白名单放行），
+autotest_public = APIRouter()
+autotest_public.include_router(autotest_tcp_test, prefix="/tcp_test", tags=[ResourceTag.DEBUG.desc])
