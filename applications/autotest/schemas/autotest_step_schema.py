@@ -35,7 +35,7 @@ class DataBaseOperates(BaseModel):
     project_name: str = Field(..., max_length=128, description="所属应用名称")
     variable_name: str = Field(..., max_length=128, description="存储变量名称")
     config_mode: str = Field(..., max_length=64, description="所属环境配置逻辑标识")
-    # 展示引用：指向 krun_autotest_env_config 行，仅用于前端反显库名；执行期库名一律取 config_mode 的解析结果
+    # 仅用于前端反显库名；执行期库名一律取 config_mode 的解析结果
     config_id: Optional[int] = Field(None, ge=1, description="数据库名称展示引用(环境配置行ID)")
     desc: Optional[str] = Field(None, max_length=2048, description="数据库操作描述")
 
