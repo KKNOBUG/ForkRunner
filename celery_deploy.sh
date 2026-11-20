@@ -27,7 +27,7 @@ if [ -z "$SERVER_PORT" ]; then
     echo "[ERROR] 环境配置文件 .env 缺少 SERVER_PORT 配置" >&2
     exit 1
 fi
-CELERY_WORKER_QUEUES="${CELERY_WORKER_QUEUES:-${SERVER_PORT}_default,${SERVER_PORT}_autotest,${SERVER_PORT}_perf}"
+CELERY_WORKER_QUEUES="${CELERY_WORKER_QUEUES:-${SERVER_PORT}_default,${SERVER_PORT}_autotest}"
 CELERY_BEAT_SCHEDULER="${CELERY_BEAT_SCHEDULER:-redbeat.schedulers:RedBeatScheduler}"
 CELERY_LOG_DIR="${PROJECT_ROOT}/output/logs/celery_logs"
 mkdir -p "$CELERY_LOG_DIR"
