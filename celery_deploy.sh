@@ -1,6 +1,18 @@
 #!/bin/bash
 # Celery Worker / Beat 部署脚本
-# 用法: ./celery_deploy.sh start|restart|stop|status ...
+# 原手动部署流程:
+#   cd /zdhgj/python_projects/fastapi-toolbox-runner
+#   source .venv/bin/activate
+#   pkill -f -9 “backend_main:app”
+#   pkill -f -9 celery
+#   nohup celery -A celery_scheduler.celery_worker worker -Q 8520_default,8520_autotest -c 4 -l INFO > /zdhgj/python_projects/fastapi-toolbox-runner/output/logs/celery_logs/celery_worker.log 2>&1 &
+#   nohup celery -A celery_scheduler.celery_worker beat -l INFO > /zdhgj/python_projects/fastapi-toolbox-runner/output/logs/celery_logs/celery_beat.log 2>&1 &
+#   ps aux | grep celery
+#   nohup gunicorn -c gunicorn.conf.py backend_main:app > /zdhgj/python_projects/fastapi-toolbox-runner/toolbox-runner.log 2>&1
+#   ps aux | grep gunicorn
+# 现自动部署流程
+#   cd /zdhgj/python_projects/fastapi-toolbox-runner
+#   ./celery_deploy.sh start|restart|stop|status ...
 # 同机多实例: 各部署目录 .env 的 SERVER_PORT 错开；共用 Redis 时 CELERY_REDBEAT_DB 必须不同
 
 # 脚本所在目录
