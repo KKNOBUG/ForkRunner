@@ -1196,6 +1196,7 @@ class BaseStepExecutor:
 
     # 是否在执行前解析本步骤defined_variables并注入变量池；引用壳执行器关闭（自身无目标环境，无法提供内置变量）
     resolve_own_defined_variables: bool = True
+    excluded_defined_variable_keys: frozenset[str] = frozenset()
 
     def __init__(self, step: AutoTestStepTreeUpdateItem, context: StepExecutionContext):
         """
@@ -1576,6 +1577,7 @@ class BaseStepExecutor:
                 step_defined_variables: List[StepVariablesBase] = [
                     item for item in (self.step.defined_variables or [])
                     if isinstance(item, StepVariablesBase) and item.key and item.key.strip()
+                    and item.key not in self.excluded_defined_variable_keys
                 ]
                 # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
                 resolved_defined_variables: List[StepVariablesBase] = self.context.resolve_placeholders(
@@ -2753,7 +2755,7 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
         # 同名提取/断言则按执行先后自然覆盖；返回 model_copy 副本不修改被引用用例树上的原对象
         if not self.allowed_merge_and_override_fields:
             return quote_step
-        if quote_step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+        if quote_step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP, AutoTestStepType.OPEN_API):
             return quote_step
         update: Dict[str, Any] = {}
         for field_name in self.allowed_append_fields_container:
@@ -4316,6 +4318,12 @@ class DefaultStepExecutor(BaseStepExecutor):
             raise StepExecutionError(result.error) from e
 
 
+def _create_open_api_executor(step: AutoTestStepTreeUpdateItem, context: StepExecutionContext) -> BaseStepExecutor:
+    from applications.autotest.services.autotest_open_api_step_executor import OpenApiStepExecutor
+
+    return OpenApiStepExecutor(step, context)
+
+
 class StepExecutorFactory:
     """步骤执行器工厂：按 step_type 从 EXECUTOR_MAP 取实现，未映射的合法类型回落到 DefaultStepExecutor。"""
 
@@ -4325,6 +4333,7 @@ class StepExecutorFactory:
     EXECUTOR_MAP: Dict[AutoTestStepType, Callable[[AutoTestStepTreeUpdateItem, StepExecutionContext], BaseStepExecutor]] = {
         AutoTestStepType.TCP: TcpStepExecutor,
         AutoTestStepType.HTTP: HttpStepExecutor,
+        AutoTestStepType.OPEN_API: _create_open_api_executor,
         AutoTestStepType.PYTHON: PythonStepExecutor,
         AutoTestStepType.DATABASE: DataBaseStepExecutor,
         AutoTestStepType.REDIS: RedisStepExecutor,

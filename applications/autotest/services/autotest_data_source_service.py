@@ -35,9 +35,14 @@ class DataSourceService:
     # ==================== 常量 ====================
     DEFAULT_SCENE_NAMES: Tuple[str, ...] = ("场景1名称",)
     NORMAL_SCENE_NAME: str = "正交易场景"
-    REQUEST_STEP_TYPES: Tuple = (AutoTestStepType.HTTP, AutoTestStepType.TCP)
+    REQUEST_STEP_TYPES: Tuple = (AutoTestStepType.HTTP, AutoTestStepType.TCP, AutoTestStepType.OPEN_API)
     # 数据源指针清理覆盖的步骤类型：在REQUEST_STEP_TYPES基础上纳入引用公共接口（用户脚本宿主的引用步骤可挂数据源，删除/解绑时须同步清指针防悬空）
-    CLEAR_META_STEP_TYPES: Tuple = (AutoTestStepType.HTTP, AutoTestStepType.TCP, AutoTestStepType.QUOTE_PUBLIC_API)
+    CLEAR_META_STEP_TYPES: Tuple = (
+        AutoTestStepType.HTTP,
+        AutoTestStepType.TCP,
+        AutoTestStepType.QUOTE_PUBLIC_API,
+        AutoTestStepType.OPEN_API,
+    )
 
     # ==================== 通用工具 ====================
 

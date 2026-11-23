@@ -120,7 +120,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
 
         step_q = Q(
             state__not=1,
-            step_type__in=[AutoTestStepType.TCP.value, AutoTestStepType.HTTP.value],
+            step_type__in=[AutoTestStepType.TCP.value, AutoTestStepType.HTTP.value, AutoTestStepType.OPEN_API.value],
         ) & ~Q(case_id__isnull=True)
         if step_type is not None:
             step_q &= Q(step_type=step_type.value)
@@ -593,7 +593,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         only_step: AutoTestStepModel = root_steps[0]
-        if only_step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+        if only_step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP, AutoTestStepType.OPEN_API):
             error_message: str = (
                 f"用例({case_instance.case_name})不允许切换为公共接口, "
                 f"公共接口仅支持HTTP/TCP请求步骤, 当前步骤类型为({only_step.step_type})"

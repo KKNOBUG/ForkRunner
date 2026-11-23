@@ -35,6 +35,7 @@ class AutoTestStepType(StringEnum):
     LOOP = "循环结构"
     TCP = "TCP请求"
     HTTP = "HTTP请求"
+    OPEN_API = "openai报文"
     PYTHON = "代码请求(Python)"
     DATABASE = "数据库请求"
     REDIS = "Redis请求"

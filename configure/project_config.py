@@ -114,6 +114,9 @@ class ProjectConfig(BaseSettings):
 
     # 调试配置
     SERVER_APP: str = "backend_main:app"
+    OPEN_API_RELAY_URL: str = Field(
+        default="", validation_alias=AliasChoices("OPEN_API_RELAY_URL", "OPENAI_RELAY_URL")
+    )
     # SERVER_HOST: str = ShellUtils.acquire_localhost()
     SERVER_HOST: str = "192.168.11.76"
     SERVER_SYSTEM: str = platform.system()
