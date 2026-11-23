@@ -567,7 +567,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             递归收集HTTP/TCP/DB/Redis步骤上的project_id到外层集合。
             """
             st_e = _norm_step_type(step.step_type)
-            if st_e in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+            if st_e in (AutoTestStepType.HTTP, AutoTestStepType.TCP, AutoTestStepType.OPEN_API):
                 _collect_project_id(step.request_project_id)
             elif st_e == AutoTestStepType.DATABASE:
                 for db_operate in step.database_operates or []:
@@ -1033,7 +1033,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         only_step = steps_data[0]
-        if only_step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+        if only_step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP, AutoTestStepType.OPEN_API):
             error_message: str = f"公共接口用例仅支持HTTP/TCP请求步骤，当前步骤类型为({only_step.step_type})"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)

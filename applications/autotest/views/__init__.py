@@ -10,6 +10,7 @@ from .autotest_detail_view import autotest_detail
 from .autotest_env_config_view import autotest_env_config
 from .autotest_env_view import autotest_env
 from .autotest_http_xml_test_view import autotest_http_xml_test
+from .autotest_open_api_step_view import autotest_open_api_step
 from .autotest_project_view import autotest_project
 from .autotest_report_view import autotest_report
 from .autotest_step_view import autotest_step
@@ -24,6 +25,7 @@ autotest = APIRouter()
 autotest.include_router(autotest_case, prefix="/case", tags=[ResourceTag.CASE.desc])
 autotest.include_router(autotest_case_transfer, prefix="/case/transfer", tags=[ResourceTag.CASE.desc])
 autotest.include_router(autotest_step, prefix="/step", tags=[ResourceTag.STEP.desc])
+autotest.include_router(autotest_open_api_step, prefix="/step", tags=[ResourceTag.STEP.desc])
 autotest.include_router(autotest_report, prefix="/report", tags=[ResourceTag.REPORT.desc])
 autotest.include_router(autotest_detail, prefix="/detail", tags=[ResourceTag.DETAIL.desc])
 autotest.include_router(autotest_project, prefix="/project", tags=[ResourceTag.PROJECT.desc])

@@ -1110,7 +1110,12 @@ async def single_step_dataset_upload(
         return FailureResponse(message=f"查询步骤失败，异常描述: {e}")
 
     # 引用公共接口步骤放行上传：数据源挂载在用户脚本宿主的引用步骤上，公共宿主由下方用例类型检查拒绝
-    if step_instance.step_type not in (AutoTestStepType.HTTP.value, AutoTestStepType.TCP.value, AutoTestStepType.QUOTE_PUBLIC_API.value):
+    if step_instance.step_type not in (
+        AutoTestStepType.HTTP.value,
+        AutoTestStepType.TCP.value,
+        AutoTestStepType.QUOTE_PUBLIC_API.value,
+        AutoTestStepType.OPEN_API.value,
+    ):
         return ParameterResponse(message="仅支持对HTTP/TCP请求步骤及引用接口上传数据源文件")
 
     try:
@@ -1296,7 +1301,12 @@ async def single_step_template_download(
     if not step_instance:
         return NotFoundResponse(message="查询步骤失败, 记录不存在")
     # 引用公共接口步骤放行：模板矩阵取自被引用用例的请求步骤报文（引用壳本身无报文）
-    if step_instance.step_type not in (AutoTestStepType.HTTP.value, AutoTestStepType.TCP.value, AutoTestStepType.QUOTE_PUBLIC_API.value):
+    if step_instance.step_type not in (
+        AutoTestStepType.HTTP.value,
+        AutoTestStepType.TCP.value,
+        AutoTestStepType.QUOTE_PUBLIC_API.value,
+        AutoTestStepType.OPEN_API.value,
+    ):
         return ParameterResponse(message="仅支持对HTTP/TCP请求步骤下载数据源模板")
 
     try:

@@ -346,6 +346,8 @@ def _protocol_from_step_type(step_type: Any) -> Optional[str]:
         return "HTTP"
     if value == AutoTestStepType.TCP.value:
         return "TCP"
+    if value == AutoTestStepType.OPEN_API.value:
+        return "OPENAPI"
     return None
 
 

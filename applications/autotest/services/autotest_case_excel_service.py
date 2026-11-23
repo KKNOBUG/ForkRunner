@@ -36,6 +36,7 @@ from enums import (
     AutoTestTcpRadix,
     HTTPMethod,
 )
+from applications.autotest.services.autotest_runtime.protocol_open_api import RELAY_SECRET_VARIABLES, RELAY_VARIABLES
 from services import get_current_username
 
 __all__ = ["CaseExcelService"]
@@ -56,6 +57,13 @@ class CaseExcelService:
     # ==================== 常量：协议标识与导出样式 ====================
     TCP_PROTOCOL: str = "TCP"
     HTTP_PROTOCOL: str = "HTTP"
+    OPEN_API_PROTOCOL: str = "OPENAPI"
+    PROTOCOL_TYPES = {
+        HTTP_PROTOCOL: AutoTestStepType.HTTP,
+        TCP_PROTOCOL: AutoTestStepType.TCP,
+        OPEN_API_PROTOCOL: AutoTestStepType.OPEN_API,
+    }
+    STEP_PROTOCOLS = {step_type: protocol for protocol, step_type in PROTOCOL_TYPES.items()}
     # 用例数超过该阈值才额外生成“目录”sheet；等于阈值时不生成
     GENERATE_DIRECTORY_THRESHOLD: int = 2
     # Excel 页签名长度上限，超长需截断
@@ -268,7 +276,7 @@ class CaseExcelService:
                 continue
             step = own_steps[0]
             step_type = getattr(step, "step_type", None)
-            if step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+            if step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP, AutoTestStepType.OPEN_API):
                 invalid.append({"case_id": case_id, "case_name": case_name, "reason": "步骤类型不被允许"})
                 continue
             if getattr(step, "data_source_id", None):
@@ -280,7 +288,7 @@ class CaseExcelService:
                 "case": case,
                 "case_name": case_name,
                 "step": step,
-                "is_http": step_type == AutoTestStepType.HTTP,
+                "protocol": cls.STEP_PROTOCOLS[step_type],
                 "project_name": project_names.get(project_id, ""),
             })
         return valid, invalid
@@ -486,7 +494,7 @@ class CaseExcelService:
         loaded, invalid = await cls._load_public_api_cases(case_ids, services)
         valid = [{
             "case_name": item["case_name"],
-            "protocol": cls.HTTP_PROTOCOL if item["is_http"] else cls.TCP_PROTOCOL,
+            "protocol": item["protocol"],
             "project_name": item["project_name"],
             "case_desc": getattr(item["case"], "case_desc", None) or "",
             "created_user": getattr(item["case"], "created_user", None) or "",
@@ -653,7 +661,8 @@ class CaseExcelService:
         rows: List[Dict[str, str]] = []
         for item in loaded:
             case, step = item["case"], item["step"]
-            case_id, case_name, is_http = item["case_id"], item["case_name"], item["is_http"]
+            case_id, case_name, protocol = item["case_id"], item["case_name"], item["protocol"]
+            is_http = protocol != cls.TCP_PROTOCOL
             args = cls._enum_val(getattr(step, "request_args_type", None))
             method = cls._enum_val(getattr(step, "request_method", None))
 
@@ -673,7 +682,10 @@ class CaseExcelService:
             # 可选三列仅在导出开关开启时编码与校验：关闭时不落盘，其往返安全校验一并跳过（不参与导出即无错位风险）
             optional_texts: Dict[str, str] = {}
             if cls.EXPORT_VAR_EXT_ASS:
-                optional_texts["变量"] = CaseScriptCodec.encode_kv_lines(getattr(step, "defined_variables", None), column="变量", problems=problems)
+                variables = getattr(step, "defined_variables", None)
+                if protocol == cls.OPEN_API_PROTOCOL and isinstance(variables, list):
+                    variables = [item for item in variables if item.get("key") not in RELAY_SECRET_VARIABLES]
+                optional_texts["变量"] = CaseScriptCodec.encode_kv_lines(variables, column="变量", problems=problems)
                 problems.extend(CaseScriptCodec.check_extract_roundtrip(getattr(step, "extract_variables", None)))
                 problems.extend(CaseScriptCodec.check_assert_roundtrip(getattr(step, "assert_validators", None)))
                 optional_texts["提取"] = CaseScriptCodec.encode_extract_lines(getattr(step, "extract_variables", None))
@@ -687,7 +699,7 @@ class CaseExcelService:
             row = {
                 "接口名称": case_name,
                 "所属应用": item["project_name"],
-                "协议类型": cls.HTTP_PROTOCOL if is_http else cls.TCP_PROTOCOL,
+                "协议类型": protocol,
                 "接口描述": getattr(case, "case_desc", None) or "",
                 "请求方式": method if is_http else "",
                 "配置名称": getattr(step, "request_config_name", None) or "",
@@ -738,7 +750,7 @@ class CaseExcelService:
         :return: 填充完成的工作簿
         :raises RuntimeError: 模板缺失、页签缺失、表头不合法或开关开启但模板缺可选列时
         """
-        has_http = any(row.get("协议类型") == cls.HTTP_PROTOCOL for row in rows)
+        has_http = any(row.get("协议类型") in (cls.HTTP_PROTOCOL, cls.OPEN_API_PROTOCOL) for row in rows)
         has_tcp = any(row.get("协议类型") == cls.TCP_PROTOCOL for row in rows)
         template_name = cls.SCRIPT_TEMPLATE_FILES.get((has_http, has_tcp))
         if template_name is None:
@@ -752,7 +764,8 @@ class CaseExcelService:
 
         workbook = load_workbook(template_path)
         for protocol, (sheet_name, columns) in cls.SCRIPT_SHEET_LAYOUTS.items():
-            protocol_rows = [row for row in rows if row.get("协议类型") == protocol]
+            accepted = (protocol, cls.OPEN_API_PROTOCOL) if protocol == cls.HTTP_PROTOCOL else (protocol,)
+            protocol_rows = [row for row in rows if row.get("协议类型") in accepted]
             if not protocol_rows:
                 continue
             sheet, physical_header = cls._resolve_script_sheet(workbook, template_name, sheet_name, columns)
@@ -927,14 +940,16 @@ class CaseExcelService:
         case_name, project_name = cells["接口名称"], cells["所属应用"]
         protocol_raw = cells["协议类型"]
         protocol: Optional[str] = protocol_raw.upper()
+        if protocol == "OPENAI":
+            protocol = cls.OPEN_API_PROTOCOL
         if not case_name:
             errors.append("接口名称不允许为空")
         if not project_name:
             errors.append("所属应用不允许为空")
-        if protocol not in (cls.HTTP_PROTOCOL, cls.TCP_PROTOCOL):
+        if protocol not in cls.PROTOCOL_TYPES:
             errors.append(f"协议类型 {protocol_raw} 不被允许")
             protocol = None
-        elif protocol != sheet_protocol:
+        elif protocol != sheet_protocol and (protocol, sheet_protocol) != (cls.OPEN_API_PROTOCOL, cls.HTTP_PROTOCOL):
             errors.append(f"协议类型 {protocol} 与模板页签不一致, 当前页签仅支持{sheet_protocol}协议")
             protocol = None
         return case_name, project_name, protocol, errors
@@ -990,6 +1005,13 @@ class CaseExcelService:
 
         args_type, args_errors = cls._validate_args_type(cells, sheet_protocol)
         errors.extend(args_errors)
+        if protocol == cls.OPEN_API_PROTOCOL:
+            if args_type != AutoTestReqArgsType.JSON.value or method != HTTPMethod.POST.value:
+                errors.append("openApi 协议要求 POST 和 json 请求体")
+            if not request_url.startswith("/") or request_url.startswith("//"):
+                errors.append("openApi 协议要求以 / 开头的业务相对路径")
+            if header_text:
+                errors.append("openApi 协议不支持自定义请求头")
 
         args_ok = (
                 protocol is not None
@@ -1101,7 +1123,7 @@ class CaseExcelService:
         return {
             "step_name": item["step_name"],
             "step_desc": item["case_desc"] or "",
-            "step_type": AutoTestStepType.HTTP if item["protocol"] == cls.HTTP_PROTOCOL else AutoTestStepType.TCP,
+            "step_type": cls.PROTOCOL_TYPES[item["protocol"]],
             "request_project_id": item["project_id"],
             "request_method": item["request_method"],
             "request_url": item["request_url"],
@@ -1292,6 +1314,16 @@ class CaseExcelService:
         async with in_transaction():
             for item in prepared:
                 step_payload = cls._build_import_step_payload(item)
+                if item["protocol"] == cls.OPEN_API_PROTOCOL:
+                    variables = {row["key"]: row for row in (step_payload["defined_variables"] or [])}
+                    existing = item["existing_step"]
+                    if existing and existing.step_type == AutoTestStepType.OPEN_API:
+                        for row in existing.defined_variables or []:
+                            if row["key"] in RELAY_VARIABLES:
+                                variables.setdefault(row["key"], row)
+                    for key in RELAY_VARIABLES:
+                        variables.setdefault(key, {"key": key, "value": "", "desc": ""})
+                    step_payload["defined_variables"] = list(variables.values())
                 if item["existing_case"] is None:
                     new_case = await services.case_curd.create(obj_in={
                         "case_name": item["case_name"],
