@@ -56,10 +56,10 @@ class ExecutorFieldsValidation:
                 return
 
             # 按步骤类型收集缺失字段；同一类型内多项缺失会一次性全部记录
-            if step_type == AutoTestStepType.HTTP:
+            if step_type in (AutoTestStepType.HTTP, AutoTestStepType.OPEN_API):
                 if not step.request_url:
                     missing.append("request_url")
-                if not step.request_method:
+                if step_type == AutoTestStepType.HTTP and not step.request_method:
                     missing.append("request_method")
                 if not step.request_project_id:
                     missing.append("request_project_id")
