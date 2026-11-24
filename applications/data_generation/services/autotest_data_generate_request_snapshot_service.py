@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping
+from typing import TYPE_CHECKING, Any, Dict, Mapping
 
 import orjson
 
@@ -14,7 +14,39 @@ from applications.data_generation.services.autotest_data_generate_service import
 )
 from applications.autotest.services.autotest_data_source_service import DataSourceService
 from core.exceptions import ParameterException
-from enums import AutoTestReqArgsType
+from enums import AutoTestCaseType, AutoTestReqArgsType, AutoTestStepType
+
+if TYPE_CHECKING:
+    from applications.autotest.models.autotest_case_model import AutoTestCaseModel
+    from applications.autotest.models.autotest_step_model import AutoTestStepModel
+    from applications.data_generation.dependencies import DataGenerationApiServices
+
+
+async def resolve_generation_request_step(
+    services: DataGenerationApiServices,
+    case: AutoTestCaseModel,
+    step: AutoTestStepModel,
+) -> AutoTestStepModel:
+    """校验生成任务的归属步骤，并定位用于读取报文的请求步骤。"""
+    DataSourceService.ensure_request_step(step, case=case)
+    DataSourceService.ensure_case_allows_data_source(case)
+    if step.step_type != AutoTestStepType.QUOTE_PUBLIC_API:
+        return step
+
+    quoted_case = None
+    if step.quote_case_id:
+        quoted_case = await services.case_curd.get_by_id(
+            case_id=step.quote_case_id,
+            case_type=AutoTestCaseType.PUBLIC_API,
+            state__not=1,
+        )
+    if quoted_case is None:
+        raise ParameterException(message="引用的公共接口不存在或已失效")
+
+    request_step = await DataSourceService.resolve_datagram_source_step(services, step)
+    if request_step.step_type not in DataSourceService.REQUEST_STEP_TYPES:
+        raise ParameterException(message="引用的公共接口没有可用的HTTP/TCP请求步骤")
+    return request_step
 
 
 def build_request_body_snapshot(step: Any) -> Dict[str, Any]:

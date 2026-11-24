@@ -32,6 +32,7 @@ from applications.data_generation.services.autotest_data_generate_submission_com
 )
 from applications.data_generation.services.autotest_data_generate_request_snapshot_service import (
     build_intelligent_request_snapshot,
+    resolve_generation_request_step,
 )
 from celery_scheduler.tasks.task_autotest_data_generate import (
     dispatch_data_generate_task,
@@ -88,7 +89,7 @@ class AutoTestIntelligentTaskSubmissionService:
         """保存并校验场景文件，创建智能生成任务后投递到Celery。
 
         :param case_id: 场景文件所属的测试用例ID。
-        :param step_id: 当前请求步骤ID。
+        :param step_id: 当前脚本的请求步骤或引用接口步骤ID。
         :param step_code: 用于确认步骤归属的步骤编码。
         :param scenario_file: 用户上传的XLSX场景规则文件。
         :param services: 提供用例、步骤和数据生成任务CRUD的接口服务集合。
@@ -118,9 +119,8 @@ class AutoTestIntelligentTaskSubmissionService:
                 step_id=step_id,
                 step_code=step_code,
             )
-            DataSourceService.ensure_request_step(step)
-            DataSourceService.ensure_case_allows_data_source(case)
-            request_snapshot = build_intelligent_request_snapshot(step)
+            request_step = await resolve_generation_request_step(services, case, step)
+            request_snapshot = build_intelligent_request_snapshot(request_step)
 
             destination = os.path.join(
                 "autotest_data_generate",

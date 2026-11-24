@@ -16,6 +16,9 @@ from applications.data_generation.services.autotest_data_generate_export_service
     AutoTestDataGenerateExportService,
     DataGenerateExportFile,
 )
+from applications.data_generation.services.autotest_data_generate_request_snapshot_service import (
+    resolve_generation_request_step,
+)
 from applications.data_generation.services.autotest_data_generate_result_crud import (
     AutoTestDataGenerateResultCrud,
 )
@@ -281,17 +284,15 @@ class AutoTestDataGenerateRecordService:
             case_id=task.case_id,
             step_id=task.step_id,
         )
-        DataSourceService.ensure_request_step(step)
-        DataSourceService.ensure_case_allows_data_source(case)
-
-        results = await self.result_crud.list_by_task_id(task.id)
         async with in_transaction() as connection:
             # 先锁定步骤槽位，既串行化多任务应用，也覆盖“数据源尚未创建”的并发场景。
-            locked_step = await services.step_curd.model.filter(id=step.id).using_db(
+            step = await services.step_curd.model.filter(id=step.id, state__not=1).using_db(
                 connection
             ).select_for_update().first()
-            if locked_step is None:
+            if step is None:
                 raise ParameterException(message="应用目标步骤不存在")
+            request_step = await resolve_generation_request_step(services, case, step)
+            results = await self.result_crud.list_by_task_id(task.id)
             existing = await services.data_source_curd.model.filter(
                 case_id=case.id,
                 step_id=step.id,
@@ -301,7 +302,7 @@ class AutoTestDataGenerateRecordService:
             base_matrix = (
                 existing.dataframe
                 if existing and isinstance(existing.dataframe, list) and existing.dataframe
-                else DataSourceService.build_vertical_matrix_from_step(step)
+                else DataSourceService.build_vertical_matrix_from_step(request_step)
             )
             dataset, dataset_names, dataframe, axis = append_generated_scenarios(
                 base_matrix,

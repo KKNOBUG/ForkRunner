@@ -37,6 +37,7 @@ from applications.data_generation.services.autotest_data_generate_file_utils imp
 )
 from applications.data_generation.services.autotest_data_generate_request_snapshot_service import (
     build_request_body_snapshot,
+    resolve_generation_request_step,
 )
 from applications.data_generation.services.autotest_data_generate_submission_common import (
     dispatch_and_load_task,
@@ -185,7 +186,7 @@ async def create_task(
     """校验并保存普通生成任务的输入快照，创建任务后投递 Celery。
 
     :param case_id: 接口文档所属的测试用例 ID。
-    :param step_id: 当前请求步骤 ID。
+    :param step_id: 当前脚本的请求步骤或引用接口步骤 ID。
     :param step_code: 用于确认步骤归属的步骤编码。
     :param interface_style: ESB、项目或整合接口的文档样式。
     :param rule_codes: 普通生成任务使用的规则编码列表。
@@ -216,9 +217,8 @@ async def create_task(
             step_id=step_id,
             step_code=step_code,
         )
-        DataSourceService.ensure_request_step(step)
-        DataSourceService.ensure_case_allows_data_source(case)
-        raw_request_type = getattr(step, "request_args_type", None)
+        request_step = await resolve_generation_request_step(services, case, step)
+        raw_request_type = getattr(request_step, "request_args_type", None)
         request_type = str(
             getattr(raw_request_type, "value", raw_request_type) or ""
         ).strip()
@@ -227,7 +227,7 @@ async def create_task(
                 and request_type != AutoTestReqArgsType.XML.value
         ):
             raise ParameterException(message="只支持xml格式的报文")
-        request_snapshot = build_request_body_snapshot(step)
+        request_snapshot = build_request_body_snapshot(request_step)
 
         content = await file.read(MAX_DOCUMENT_SIZE + 1)
         await file.seek(0)
@@ -331,7 +331,7 @@ async def create_intelligent_task(
     """校验上传的场景规则文档并创建智能生成任务，返回提交状态。
 
     :param case_id: 场景文档所属的测试用例 ID。
-    :param step_id: 当前请求步骤 ID。
+    :param step_id: 当前脚本的请求步骤或引用接口步骤 ID。
     :param step_code: 用于确认步骤归属的步骤编码。
     :param scenario_file: 用户上传的 XLSX 场景规则文档。
     :param services: 提供用例、步骤和任务 CRUD 的接口服务集合。
