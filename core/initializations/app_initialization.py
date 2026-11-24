@@ -20,18 +20,20 @@ from tortoise.contrib.fastapi import register_tortoise
 from tortoise.exceptions import DoesNotExist
 
 from configure import PROJECT_CONFIG, LOGGER
-from core.exceptions import NoPermissionException
+from core.exceptions import BaseExceptions, NoPermissionException
 from core.exceptions.http_exceptions import (
     request_validation_exception_handler,
     response_validation_exception_handler,
     http_exception_handler,
     no_permission_exception_handler,
+    base_exceptions_handler,
     null_point_exception_handler,
     app_exception_handler,
 )
 from core.middlewares.app_middleware import logging_middleware
 from core.middlewares.auth_middleware import auth_middleware
 from core.middlewares.request_context_middleware import request_context_middleware
+from enums import ResourceTag
 from services import DependAuth, DependPermission
 
 
@@ -110,9 +112,9 @@ async def register_database(app: FastAPI) -> None:
         )
         return
 
-    # 生成迁移文件
+    # 生成迁移文件；no_input=True：无人值守场景遇同类型删列+增列默认按 rename 处理，避免 aerich click.prompt 等待 stdin 卡死启动
     try:
-        await command.migrate(name="auto_migrate")
+        await command.migrate(name="auto_migrate", no_input=True)
     except AttributeError as e:
         LOGGER.error(f"无法从数据库中检索模型历史记录, 请检查[migration]与[aerich]表记录是否一致: {e}\n错误回溯: {traceback.format_exc()}")
         if PROJECT_CONFIG.aerich_should_run_on_startup:
@@ -162,6 +164,11 @@ def register_exceptions(app: FastAPI) -> None:
     app.add_exception_handler(
         exc_class_or_status_code=NoPermissionException,
         handler=no_permission_exception_handler
+    )
+    # 其余项目自定义业务异常统一按告警记录并还原业务提示，避免被通用兜底改写为未知错误
+    app.add_exception_handler(
+        exc_class_or_status_code=BaseExceptions,
+        handler=base_exceptions_handler
     )
     # 当使用 Tortoise ORM 进行数据库查询时，如果查询结果为空，会触发 DoesNotExist 异常
     app.add_exception_handler(
@@ -238,27 +245,28 @@ def register_routers(app: FastAPI) -> None:
     redoc_modules = sys.modules["fastapi.openapi.docs"].get_redoc_html.__kwdefaults__
     redoc_modules["redoc_js_url"] = PROJECT_CONFIG.APP_OPENAPI_JS_URL_REDOC
     redoc_modules["redoc_favicon_url"] = PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL_REDOC
-    app.add_route(PROJECT_CONFIG.APP_DOCS_URL, enhancer_swagger_docs_html, name="swagger_docs_html")
+    app.add_route(PROJECT_CONFIG.APP_DOCS_URL, enhancer_swagger_docs_html, name="enhancer_swagger_docs_html")
 
     # 导入路由蓝图
     from applications.base.views import router_secure, menu_secure, role_secure, audit_secure, file_secure
     from applications.department.views.department_view import dept
     from applications.user.views.user_view import user_public, user_self, user_secure
     from applications.toolbox.views import toolbox
-    from applications.autotest.views import autotest
+    from applications.autotest.views import autotest, autotest_public
     from applications.data_generation.views import data_generation
 
     # 挂在路由蓝图
     # tags 采用「一级目录:二级模块」，与侧边栏菜单对齐，便于角色权限按模块制定规则
-    app.include_router(router=router_secure, prefix="/yk/base", tags=["系统管理:路由"], dependencies=[DependPermission])
-    app.include_router(router=menu_secure, prefix="/yk/base", tags=["系统管理:菜单"], dependencies=[DependPermission])
-    app.include_router(router=role_secure, prefix="/yk/base", tags=["系统管理:角色"], dependencies=[DependPermission])
-    app.include_router(router=audit_secure, prefix="/yk/base", tags=["系统管理:审计"], dependencies=[DependPermission])
-    app.include_router(router=file_secure, prefix="/yk/base", tags=["系统管理:文件"], dependencies=[DependPermission])
+    app.include_router(router=router_secure, prefix="/yk/base", tags=[ResourceTag.ROUTER.desc], dependencies=[DependPermission])
+    app.include_router(router=menu_secure, prefix="/yk/base", tags=[ResourceTag.MENU.desc], dependencies=[DependPermission])
+    app.include_router(router=role_secure, prefix="/yk/base", tags=[ResourceTag.ROLE.desc], dependencies=[DependPermission])
+    app.include_router(router=audit_secure, prefix="/yk/base", tags=[ResourceTag.AUDIT.desc], dependencies=[DependPermission])
+    app.include_router(router=file_secure, prefix="/yk/base", tags=[ResourceTag.FILE.desc], dependencies=[DependPermission])
     app.include_router(router=user_public, prefix="/yk/user", tags=["系统管理:用户"])
     app.include_router(router=user_self, prefix="/yk/user", tags=["系统管理:用户"], dependencies=[DependAuth])
     app.include_router(router=user_secure, prefix="/yk/user", tags=["系统管理:用户"], dependencies=[DependPermission])
-    app.include_router(router=dept, prefix="/yk/dept", tags=["系统管理:部门"], dependencies=[DependPermission])
+    app.include_router(router=dept, prefix="/yk/dept", tags=[ResourceTag.DEPT.desc], dependencies=[DependPermission])
     app.include_router(router=toolbox, prefix="/yk/toolbox", tags=["便捷工具:工具箱"], dependencies=[DependPermission])
     app.include_router(router=autotest, prefix="/yk/autotest", dependencies=[DependPermission])
+    app.include_router(router=autotest_public, prefix="/yk/autotest")
     app.include_router(router=data_generation, prefix="/yk/autotest", dependencies=[DependPermission])

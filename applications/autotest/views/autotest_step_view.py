@@ -72,7 +72,7 @@ async def create_step(
 
     :param step_in: 步骤入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，步骤归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -115,7 +115,7 @@ async def delete_step(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，步骤归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -156,7 +156,7 @@ async def update_step(
 
     :param step_in: 步骤入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，步骤归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -199,7 +199,7 @@ async def get_step(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验步骤所属用例是否在当前用户可见范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -242,7 +242,7 @@ async def search_steps(
 
     :param step_in: 步骤入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅返回所属用例在当前用户可见范围内的步骤
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -310,7 +310,7 @@ async def get_step_tree(
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验用例所属人的读范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -342,12 +342,12 @@ async def copy_step_tree(
         scope: DataScope = DependTagScope,
 ):
     """
-    复制用例步骤树（返回未保存的副本）。
+    复制用例步骤树：返回未保存的副本。
 
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验用例所属人的读范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -375,14 +375,13 @@ async def splice_step_tree(
     """
     批量查询多用例步骤树并拼接为一个列表。
 
-    data.details: 所有用例拼接后的步骤节点, 结构与/tree接口data一致;
-    data.groups: case_id到details中对应步骤索引的映射。
-
     :param splice_in: 拼接查询入参(case_ids与case_codes二选一)
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，逐个校验用例所属人的读范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # data.details: 所有用例拼接后的步骤节点, 结构与/tree接口data一致;
+    # data.groups: case_id到details中对应步骤索引的映射
     try:
         if not splice_in.case_ids and not splice_in.case_codes:
             return BadReqResponse(message="参数[case_ids, case_codes]不允许同时为空")
@@ -414,7 +413,7 @@ async def batch_update_steps_tree(
 
     :param tree_in: 步骤树入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许保存归属人在当前用户可操作范围内的用例
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -431,7 +430,7 @@ async def batch_update_steps_tree(
 
         # 1.5 校验数据源场景列名一致性（HTTP/TCP步骤 + 引用公共接口壳上挂载的数据源；含树上尚未带回 data_source_id、但库中已落库的数据源）
         def _walk_data_source_steps(steps: List[AutoTestStepTreeUpdateItem]) -> List[AutoTestStepTreeUpdateItem]:
-            """收集步骤树中全部可挂载数据源的步骤(HTTP/TCP/引用壳，含 children 与条件分支子步骤)；壳不依赖载荷回传data_source_id。"""
+            """收集步骤树中全部可挂载数据源的步骤, 覆盖HTTP/TCP/引用壳, 含children与条件分支子步骤；壳不依赖载荷回传data_source_id。"""
             collected: List[AutoTestStepTreeUpdateItem] = []
             for s in steps or []:
                 if s.step_type in DataSourceService.CLEAR_META_STEP_TYPES:
@@ -548,14 +547,14 @@ async def batch_update_steps_tree(
                 #     递归收集，口径与 IF 分支子步骤"先删后建"一致；全程同一事务，任一步失败整体回滚。
                 deleted_step_count: int = 0
                 target_case_id: Optional[int] = (
-                                                    success_case_detail[0].get("case_id") if success_case_detail else None
-                                                ) or getattr(case_data, "case_id", None)
+                    success_case_detail[0].get("case_id") if success_case_detail else None
+                ) or getattr(case_data, "case_id", None)
                 if target_case_id:
                     retained_codes: Set[str] = set()
                     retained_ids: Set[int] = set()
 
                     def collect_retained_identities(steps: List[AutoTestStepTreeUpdateItem]) -> None:
-                        """递归收集整树中仍保留步骤的 step_code/step_id（含 children 与条件分支子步骤）。"""
+                        """递归收集整树中仍保留步骤的 step_code/step_id, 含children与条件分支子步骤。"""
                         for s in steps or []:
                             if s.step_code:
                                 retained_codes.add(s.step_code)
@@ -707,7 +706,7 @@ async def debug_http_request(
 
     :param debug_in: 步骤调试入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，解析环境配置前校验应用与配置可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -737,7 +736,7 @@ async def debug_tcp_request(
 
     :param debug_in: 步骤调试入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，解析环境配置前校验应用与配置可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -762,9 +761,6 @@ async def debug_python_code(
 ):
     """
     Python代码调试。
-
-    该端点只执行沙箱代码，不读取应用/环境/配置，不存在可按 project_id+env_name+config_name
-    访问他人凭据的数据范围入口；沙箱隔离由 UserCodeSandbox 承担。
 
     :param debug_in: 步骤调试入参
     :return: 统一HTTP响应
@@ -796,7 +792,7 @@ async def debug_redis_request(
 
     :param debug_in: 步骤调试入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，解析每条操作的环境配置前校验应用与配置可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -826,7 +822,7 @@ async def execute_step_tree(
 
     :param exec_in: 业务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，执行会写报告/明细并回写用例，需先校验用例可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -854,7 +850,7 @@ async def execute_step_tree(
         await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
 
         def serialize_result(r: Any) -> Dict[str, Any]:
-            """递归序列化步骤执行结果（含children）。"""
+            """递归序列化步骤执行结果, 含children明细。"""
             return {
                 "case_id": r.case_id,
                 "step_id": r.step_id,
@@ -936,7 +932,7 @@ async def execute_step_tree(
                     f"dataset_count={len(selected_dataset_names)}"
                 )
                 return SuccessResponse(
-                    message="执行任务已提交后台执行，请稍后在异步中心查看结果",
+                    message="执行任务已提交后台执行，请稍后在执行历史中查看结果",
                     data={
                         "parameterized": True,
                         "async": True,
@@ -1084,7 +1080,7 @@ async def batch_execute_cases(
 
     :param batch_in: 业务入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，执行会写报告/明细，需先校验全部用例可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -1103,9 +1099,9 @@ async def batch_execute_cases(
             raise NoPermissionException(message=error_message)
 
         initial_variables = batch_in.initial_variables or []
-        if batch_in.env_name:
+        if batch_in.env_id:
             LOGGER.warning(
-                f"批量执行入参[env_name={batch_in.env_name}]暂未接入执行引擎, "
+                f"批量执行入参[env_id={batch_in.env_id}]暂未接入执行引擎, "
                 f"请通过步骤执行配置steps_execute_config指定环境"
             )
 

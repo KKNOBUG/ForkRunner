@@ -6,17 +6,21 @@ from tortoise import Tortoise
 from tortoise.exceptions import DBConnectionError
 
 from core.initializations import (
+    init_database_table,
     register_database,
     register_exceptions,
     register_middlewares,
     register_routers,
-    init_database_table,
 )
 from core.initializations.permission_contract import bind_route_contracts, validate_route_contracts
 from core.responses import SuccessResponse
 
 try:
-    from configure import PROJECT_CONFIG
+    from configure import LOGGER, PROJECT_CONFIG
+    from configure.logging_config import loguru_logging
+
+    # 应用日志按天复用初始化：gunicorn 各 worker 独立 import 本模块，均落到当天同一执行日志文件
+    loguru_logging()
 except ImportError as e:
     from core.exceptions import NotImplementedException
 
@@ -34,6 +38,19 @@ async def lifespan(app: FastAPI):
     await init_database_table(app)
 
     yield
+
+    # 关停时释放业务DB/Redis连接池，避免进程退出后连接残留；单池失败不阻断关停
+    from common.cache.redis_connection_pool import get_app_redis_pool
+    from common.database.database_connection_pool import get_app_database_pool
+
+    try:
+        await get_app_database_pool().close()
+    except Exception as e:
+        LOGGER.warning(f"关停时释放数据库连接池失败: {e}")
+    try:
+        await get_app_redis_pool().close()
+    except Exception as e:
+        LOGGER.warning(f"关停时释放Redis连接失败: {e}")
 
     await Tortoise.close_connections()
 
@@ -66,8 +83,6 @@ if __name__ == '__main__':
         app=PROJECT_CONFIG.SERVER_APP,
         host=PROJECT_CONFIG.SERVER_HOST,
         port=PROJECT_CONFIG.SERVER_PORT,
-        # reload=PROJECT_CONFIG.SERVER_DEBUG,
-        # reload_delay=PROJECT_CONFIG.SERVER_DELAY,
         log_config=None,
         log_level=None,
     )

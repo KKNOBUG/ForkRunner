@@ -10,7 +10,7 @@ from configure import LOGGER, PROJECT_CONFIG
 from core.responses import InternalErrorResponse, UnauthorizedResponse
 from services import AuthControl
 
-# 公开入口白名单：登录、根路径、文档与静态资源；
+# 公开入口白名单：登录、根路径、文档、静态资源与 TCP 测试服务器管理；
 PUBLIC_WHITELIST: tuple[str, ...] = (
     # login
     "POST /yk/user/login",
@@ -25,6 +25,9 @@ PUBLIC_WHITELIST: tuple[str, ...] = (
 
     # static assets
     "* /static/*",
+
+    # TCP 测试服务
+    "* /yk/autotest/tcp_test/*",
 )
 
 # 幂等登出允许失效凭证完成本地退出；

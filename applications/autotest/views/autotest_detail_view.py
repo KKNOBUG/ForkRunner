@@ -40,10 +40,11 @@ async def create_step_detail(
         _current_user: User = DependSuperUser,
 ):
     """
-    新增明细(仅任务执行引擎或管理员可直调)。
+    新增明细：仅任务执行引擎或管理员可直调。
 
     :param detail_in: 明细入参
     :param services: 自动化测试CRUD依赖聚合
+    :param _current_user: 当前用户，由DependSuperUser限定为管理员或任务执行引擎
     :return: 统一HTTP响应
     """
     try:
@@ -84,7 +85,7 @@ async def delete_step_detail(
     :param step_code: 步骤业务标识
     :param report_code: 报告业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的明细
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -122,11 +123,11 @@ async def delete_step_details(
         scope: DataScope = DependTagScope,
 ):
     """
-    批量删除执行明细(物理删除)。
+    批量删除执行明细：物理删除。
 
     :param detail_in: 明细ID列表
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的明细
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应，data为实际删除的明细数量
     """
     try:
@@ -151,7 +152,7 @@ async def update_step_detail(
         _current_user: User = DependSuperUser,
 ):
     """
-    根据id或code更新明细信息(仅任务执行引擎或管理员可直调)。
+    根据id或code更新明细信息：仅任务执行引擎或管理员可直调。
 
     :param detail_in: 明细入参
     :param services: 自动化测试CRUD依赖聚合
@@ -198,7 +199,7 @@ async def get_step_detail(
     :param step_code: 步骤业务标识
     :param report_code: 报告业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验明细创建人可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:

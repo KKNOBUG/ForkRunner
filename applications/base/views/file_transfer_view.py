@@ -34,14 +34,14 @@ async def upload_file(
     """
     上传文件。
 
-    :param file: 文件对象
-    :param path: 文件上传目的地
-    :param add_timestamp: 是否为上传的文件添加时间戳
-    :param check_filename: 是否检查文件名称是否符合规范
-    :param check_filetype: 是否检查文件后缀是否符合规范
-    :param check_filesize: 是否检查文件体积是否符合规范
-    :param upload_file_size: 文件的体积限制
-    :return: 统一HTTP响应
+    :param file: 上传的文件对象
+    :param path: 文件保存的相对路径（以上传目录为根）
+    :param add_timestamp: 是否为文件名添加时间戳
+    :param check_filename: 是否校验文件名是否合规
+    :param check_filetype: 是否校验文件后缀是否合规
+    :param check_filesize: 是否校验文件体积是否合规
+    :param upload_file_size: 文件体积限制档位，传入枚举 value
+    :return: 统一响应，成功时 data 为文件保存后的服务器绝对路径，失败时仅返回可读提示
     """
     try:
         state, detail = await FileTransfer.save_upload_file_chunks(
@@ -59,16 +59,17 @@ async def upload_file(
             error_message: str = "上传文件失败，请检查文件名称、格式与大小是否符合要求后重试"
             LOGGER.error(
                 f"{error_message}, "
-                f"关键字段: [filename={file.filename}, destination={path}, 失败原因={detail}]"
+                f"关键字段: [filename={file.filename}, destination={path}]\n"
+                f"异常回溯: {detail}]"
             )
             return FailureResponse(message=error_message)
         return SuccessResponse(message="上传成功", data=detail)
     except Exception:
-        error_message: str = "上传文件失败，暂时无法完成上传，请稍后重试"
+        error_message: str = "暂时无法上传文件，请稍后重试"
         LOGGER.error(
             f"{error_message}, "
             f"关键字段: [filename={file.filename}, destination={path}]\n"
-            f"{traceback.format_exc()}"
+            f"异常回溯: {traceback.format_exc()}"
         )
         return FailureResponse(message=error_message)
 
@@ -76,31 +77,57 @@ async def upload_file(
 @file_transfer.post("/download", summary="下载文件", description="根据路径下载文件")
 async def download_file(path: Union[str, Path] = Form(..., description="文件下载路径")):
     """
-    下载文件。
+    按相对路径下载文件，返回带附件头的流式响应。
 
-    :param path: 文件下载路径
-    :return: 文件流响应
+    :param path: 文件下载路径（相对输出目录）
+    :return: 文件流响应，文件名按 UTF-8 编码写入 Content-Disposition
     """
-    filepath: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, path)
-    filename: str = quote(os.path.basename(path).encode("utf-8"))
-    return StreamingResponse(
-        content=FileTransfer.iter_download_file_chunks(download_file=filepath),
-        media_type="application/octet-stream",
-        headers={
-            "filename": filename,
-            "Content-Disposition": f"attachment; filename*=utf-8''{filename}"
-        }
-    )
+    # 以输出目录为根拼接相对路径，并规范化为绝对路径
+    filepath: str = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, path))
+    try:
+        # 流式响应头发出后异常无法转为统一响应，可预见的失败必须前置拦截
+        if not filepath.startswith(PROJECT_CONFIG.OUTPUT_DIR):
+            error_message: str = "下载文件失败，请求路径不被允许"
+            LOGGER.warning(
+                f"{error_message}, "
+                f"关键字段: [filepath={filepath}]"
+            )
+            return FailureResponse(message=error_message)
+        if not os.path.isfile(filepath):
+            error_message: str = "下载文件失败，文件不存在或已被删除，请确认文件路径后重试"
+            LOGGER.warning(
+                f"{error_message}, "
+                f"关键字段: [filepath={filepath}]"
+            )
+            return NotFoundResponse(message=error_message)
+        filename: str = quote(os.path.basename(path).encode("utf-8"))
+        return StreamingResponse(
+            content=FileTransfer.iter_download_file_chunks(download_file=filepath),
+            media_type="application/octet-stream",
+            headers={
+                "filename": filename,
+                "Content-Disposition": f"attachment; filename*=utf-8''{filename}"
+            }
+        )
+    except Exception:
+        error_message: str = "暂时无法下载文件，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [filepath={filepath}]\n"
+            f"异常回溯: {traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @file_transfer.post("/read", summary="查询文件内容", description="根据路径读取文件内容")
 async def read_file(path: Union[str, Path] = Form(..., description="文件读取路径")):
     """
-    读取文件。
+    读取文件文本内容，文件不存在返回 404。
 
-    :param path: 文件读取路径
-    :return: 统一HTTP响应
+    :param path: 文件读取路径（相对输出目录）
+    :return: 统一响应，成功时 data 为 UTF-8 文本内容
     """
+    # 以输出目录为根拼接相对路径
     filepath: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, path)
     try:
         with open(file=filepath, mode="r", encoding="utf-8") as fp:
@@ -109,14 +136,17 @@ async def read_file(path: Union[str, Path] = Form(..., description="文件读取
     except FileNotFoundError:
         # 绝对路径只写日志，避免把服务器目录结构返回给用户
         error_message: str = "读取文件失败，文件不存在或已被删除，请确认文件路径后重试"
-        LOGGER.warning(f"{error_message}, 关键字段: [filepath={filepath}]")
+        LOGGER.warning(
+            f"{error_message}, "
+            f"关键字段: [filepath={filepath}]"
+        )
         return NotFoundResponse(message=error_message)
     except Exception:
-        error_message: str = "读取文件失败，暂时无法读取文件内容，请稍后重试"
+        error_message: str = "暂时无法读取文件，请稍后重试"
         LOGGER.error(
             f"{error_message}, "
             f"关键字段: [filepath={filepath}]\n"
-            f"{traceback.format_exc()}"
+            f"异常回溯: {traceback.format_exc()}"
         )
         return FailureResponse(message=error_message)
 
@@ -127,11 +157,11 @@ async def move_file(
         dst_path: Union[str, Path] = Form(..., description="文件目标路径"),
 ):
     """
-    移动文件。
+    移动或重命名文件。
 
-    :param src_path: 文件原始路径
-    :param dst_path: 文件目标路径
-    :return: 统一HTTP响应
+    :param src_path: 文件原始路径（相对输出目录）
+    :param dst_path: 文件目标路径（相对输出目录）
+    :return: 统一响应，成功时 data 含 src_path、dst_path 与 state，路径字段为服务器绝对路径
     """
     src_file_path: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, src_path)
     dst_file_path: str = os.path.join(PROJECT_CONFIG.OUTPUT_DIR, dst_path)
@@ -143,6 +173,6 @@ async def move_file(
         LOGGER.error(
             f"{error_message}, "
             f"关键字段: [src_path={src_file_path}, dst_path={dst_file_path}]\n"
-            f"{traceback.format_exc()}"
+            f"异常回溯: {traceback.format_exc()}"
         )
         return FailureResponse(message=error_message)

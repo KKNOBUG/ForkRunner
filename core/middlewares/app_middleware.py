@@ -11,6 +11,7 @@ from starlette.datastructures import FormData
 from applications.base.models.audit_model import Audit
 from applications.user.models.user_model import User
 from common.permission_action import ACTION_UNKNOWN, AUDITED_ACTIONS, derive_action
+from common.request_context import get_span_id, get_trace_id
 from configure import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER
 from enums import ResourceTag
 from services import AuthControl
@@ -49,6 +50,21 @@ MASKED_VALUE: str = "******"
 NON_JSON_CONTENT: str = "<NON-JSON CONTENT>"
 
 
+def _mask_secret_value(value: Any) -> Any:
+    """
+    遮蔽单个凭证值并保留首尾各三分之一；非字符串与空值原样返回，长度不足三时整体遮蔽。
+
+    :param value: 凭证字段值
+    :returns: 遮蔽后的值
+    """
+    if not isinstance(value, str) or not value:
+        return value
+    keep: int = len(value) // 3
+    if keep <= 0:
+        return MASKED_VALUE
+    return f"{value[:keep]}{MASKED_VALUE}{value[-keep:]}"
+
+
 def _mask_sensitive(payload: Any) -> Any:
     """递归遮蔽字典/列表中的凭证字段，保留原始结构以保留审计可读性。
 
@@ -58,7 +74,7 @@ def _mask_sensitive(payload: Any) -> Any:
     if isinstance(payload, dict):
         return {
             key: (
-                MASKED_VALUE
+                _mask_secret_value(value)
                 if any(word in str(key).lower() for word in MASKED_FIELD_KEYWORDS)
                 else _mask_sensitive(value)
             )
@@ -202,7 +218,8 @@ async def logging_middleware(request: Request, call_next):
     # 即使是排除路由也要落审计，避免越权探测无痕
     excluded_route: bool = request_router.startswith("/static/") or request_router in (
         '/',
-        '/base/audit/list',
+        '/yk/base/audit/list',
+        '/yk/base/audit/search',
         PROJECT_CONFIG.APP_DOCS_URL,
         PROJECT_CONFIG.APP_REDOC_URL,
         PROJECT_CONFIG.APP_OPENAPI_URL,
@@ -277,6 +294,7 @@ async def logging_middleware(request: Request, call_next):
             f"\n> > > > > > > > > > > > > > > > > > > >\n"
             f"请求时间：{audit_log.get('request_time')}\n"
             f"请求模块：{ResourceTag.label_of(request_tags)}\n"
+            f"请求标识：{get_trace_id()}:{get_span_id()}\n"
             f"请求接口：{audit_log.get('request_summary')}\n"
             f"请求方式：{audit_log.get('request_method')}\n"
             f"请求路由：{audit_log.get('request_router')}\n"

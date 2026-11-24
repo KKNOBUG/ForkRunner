@@ -29,6 +29,7 @@ from .http_exceptions import (
     response_validation_exception_handler,
     http_exception_handler,
     no_permission_exception_handler,
+    base_exceptions_handler,
     null_point_exception_handler,
     app_exception_handler,
 )
@@ -60,6 +61,7 @@ __all__ = (
     response_validation_exception_handler,
     http_exception_handler,
     no_permission_exception_handler,
+    base_exceptions_handler,
     null_point_exception_handler,
     app_exception_handler,
 )

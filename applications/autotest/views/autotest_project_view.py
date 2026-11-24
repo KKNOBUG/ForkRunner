@@ -2,7 +2,7 @@
 import traceback
 from typing import Optional, List
 
-from fastapi import APIRouter, Body, Query, Depends
+from fastapi import APIRouter, Body, Query
 from tortoise import connections
 from tortoise.expressions import Q
 
@@ -13,6 +13,7 @@ from applications.autotest.schemas.autotest_project_schema import (
     AutoTestProjectSelect,
     AutoTestProjectDelete,
 )
+from applications.autotest.services.autotest_project_sync_service import SyncProjectsResult
 from configure import LOGGER
 from core.exceptions import (
     NotFoundException,
@@ -72,7 +73,7 @@ async def create_project(
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，恢复软删应用时要求创建人允许当前用户写入
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -111,7 +112,7 @@ async def delete_project(
     :param project_id: 应用主键ID
     :param project_code: 应用业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的应用
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -150,7 +151,7 @@ async def batch_delete_projects(
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的应用
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -180,7 +181,7 @@ async def update_project(
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的应用
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -223,7 +224,7 @@ async def get_project(
     :param project_id: 应用主键ID
     :param project_code: 应用业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验应用创建人可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -266,7 +267,7 @@ async def get_project_names(
     查询去重后的应用名称列表。
 
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅返回可见范围内的应用名称
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -358,3 +359,22 @@ async def search_projects(
     except Exception as e:
         LOGGER.error(f"根据条件分页查询应用列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
+
+
+@autotest_project.post("/sync", summary="API自动化测试-同步ATPM应用信息")
+async def sync_project_info(services: AutoTestServices = DependAutoTestServices):
+    """
+    同步ATPM应用信息。
+
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        result: SyncProjectsResult = await services.project_sync_service.sync_projects()
+    except Exception as e:
+        error_message: str = f"同步ATPM应用信息失败, 异常描述: {e}"
+        LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+        return FailureResponse(message=error_message)
+    if not result.success:
+        return FailureResponse(message=result.message, data=result.data)
+    return SuccessResponse(message=result.message, data=result.data, total=result.total)
