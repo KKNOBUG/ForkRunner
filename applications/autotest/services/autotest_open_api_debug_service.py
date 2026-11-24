@@ -29,11 +29,11 @@ class OpenApiStepDebugService(StepDebugService):
             scope: DataScope | None,
     ) -> dict:
         logger = cls.make_debug_logger(debug_in.step_name)
-        endpoint = await cls.resolve_env_config(
+        endpoint = await cls.resolve_env_config_by_mode(
             services,
             project_id=debug_in.request_project_id,
-            env_name=debug_in.env_name.strip(),
-            config_name=debug_in.request_config_name,
+            env_id=debug_in.env_id,
+            config_mode=debug_in.request_config_mode,
             config_type=AutoTestConfigNodeType.APP,
             label="openapi加解密调试失败",
             scope=scope,

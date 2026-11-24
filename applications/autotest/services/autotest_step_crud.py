@@ -153,7 +153,7 @@ def _step_config_reference_requirements(
     # HTTP/TCP 引用单个请求配置：require_request_mode=True 时必填并校验项目归属；
     # DB/Redis 逐条操作校验 config_mode（operates 未提交时列表为空，自然跳过）
     requirements: List[Tuple[str, Optional[int], str]] = []
-    if require_request_mode and step_type in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+    if require_request_mode and step_type in (AutoTestStepType.HTTP, AutoTestStepType.TCP, AutoTestStepType.OPEN_API):
         requirements.append((
             _normalize_config_mode(request_config_mode),
             request_project_id,

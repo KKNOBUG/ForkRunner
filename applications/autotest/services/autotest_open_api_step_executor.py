@@ -16,9 +16,10 @@ class OpenApiStepExecutor(HttpStepExecutor):
     excluded_defined_variable_keys = RELAY_SECRET_VARIABLES
 
     async def _execute(self, result: StepExecutionResult) -> None:
-        config = self.get_execute_config(expected_config_type=AutoTestConfigNodeType.APP)
-        if not config or not config.env_name:
-            raise StepExecutionError("openapi加解密缺少 APP 执行环境")
+        config = self.require_execute_config(
+            label="openapi加解密",
+            expected_config_type=AutoTestConfigNodeType.APP,
+        )
 
         dataset = await self.load_step_dataset(result)
         path = (self.step.request_url or "").strip()
