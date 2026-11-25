@@ -129,6 +129,8 @@ class ProjectConfig(BaseSettings):
     AUTH_JWT_ALGORITHM: str = "HS256"
     AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 2
     AUTH_SECRET_KEY: str = Field(..., min_length=64, description="JWT密钥")
+    # 传输加密RSA私钥
+    SECURITY_RSA_PRIVATE_KEY: str = Field(..., min_length=64, description="传输加密RSA私钥(PEM的单行base64)")
     # 第三方迁移用户的校验地址
     THIRD_PARTY_USER_AUTH_URL: str = Field(..., description="第三方迁移用户的校验地址")
     # 第三方应用信息的同步地址

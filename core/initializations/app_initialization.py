@@ -249,6 +249,7 @@ def register_routers(app: FastAPI) -> None:
 
     # 导入路由蓝图
     from applications.base.views import router_secure, menu_secure, role_secure, audit_secure, file_secure
+    from applications.base.views.security_view import security_self
     from applications.department.views.department_view import dept
     from applications.user.views.user_view import user_public, user_self, user_secure
     from applications.toolbox.views import toolbox
@@ -262,6 +263,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(router=role_secure, prefix="/yk/base", tags=[ResourceTag.ROLE.desc], dependencies=[DependPermission])
     app.include_router(router=audit_secure, prefix="/yk/base", tags=[ResourceTag.AUDIT.desc], dependencies=[DependPermission])
     app.include_router(router=file_secure, prefix="/yk/base", tags=[ResourceTag.FILE.desc], dependencies=[DependPermission])
+    app.include_router(router=security_self, prefix="/yk/base/security", tags=[ResourceTag.SECURITY.desc], dependencies=[DependAuth])
     app.include_router(router=user_public, prefix="/yk/user", tags=["系统管理:用户"])
     app.include_router(router=user_self, prefix="/yk/user", tags=["系统管理:用户"], dependencies=[DependAuth])
     app.include_router(router=user_secure, prefix="/yk/user", tags=["系统管理:用户"], dependencies=[DependPermission])
