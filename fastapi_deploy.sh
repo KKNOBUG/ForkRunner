@@ -149,7 +149,7 @@ pull_code() {
 
     print_info "拉取 ${GIT_BRANCH} 分支最新代码..."
 
-    # 交互认证拉取远端分支
+    # 交互认证fetch远端分支(fetch只更新远端ref、不碰工作区, 本地改动/分叉不会导致拒绝或冲突)
     expect <<EOF
 set timeout 60
 spawn git fetch origin "$GIT_BRANCH"
@@ -162,19 +162,20 @@ expect {
         send "${GIT_PASSWORD}\r"
         exp_continue
     }
+    timeout { exit 2 }
     eof
 }
-expect eof
+# expect 默认不透传子进程退出码, 用 wait 取 git 真实退出码
+lassign [wait] pid spawnid os_error status
+exit \$status
 EOF
-    pull_rc=$?
-
-    if [ "$pull_rc" -ne 0 ]; then
+    if [ $? -ne 0 ]; then
         handle_error "git fetch 失败, 请检查网络/凭证/远端分支后重试"
     fi
 
-    # 放弃本地改动, 由远端 GIT_BRANCH 最新代码覆盖
-    if ! git reset --hard FETCH_HEAD; then
-        handle_error "git reset --hard FETCH_HEAD 失败"
+    # 与手动部署一致: 放弃本地改动, 由 origin/$GIT_BRANCH 分支代码覆盖
+    if ! git reset --hard "origin/${GIT_BRANCH}"; then
+        handle_error "git reset --hard origin/${GIT_BRANCH} 失败, 请检查远端分支是否存在"
     fi
     print_info "代码更新成功(${GIT_BRANCH} 分支)"
 }

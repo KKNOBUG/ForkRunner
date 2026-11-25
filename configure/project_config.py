@@ -118,7 +118,7 @@ class ProjectConfig(BaseSettings):
         default="", validation_alias=AliasChoices("OPEN_API_RELAY_URL", "OPENAI_RELAY_URL")
     )
     # SERVER_HOST: str = ShellUtils.acquire_localhost()
-    SERVER_HOST: str = "192.168.94.76"
+    SERVER_HOST: str = "192.168.213.76"
     SERVER_SYSTEM: str = platform.system()
     # 服务启动端口：开发8520 / 测试8522 / 生产8521，由各环境文件提供
     SERVER_PORT: int = Field(..., ge=1, le=65535, description="服务启动端口")
