@@ -22,6 +22,7 @@ from applications.autotest.services.autotest_scope_guard import load_readable_pr
 from applications.autotest.services.autotest_task_crud import (
     extract_steps_execute_envs,
     extract_task_involve_envs,
+    extract_task_involve_env_ids,
 )
 from applications.base.services.scaffold import ScaffoldCrud, unique_identify
 from configure import GLOBAL_CONFIG, LOGGER
