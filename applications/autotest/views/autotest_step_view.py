@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Set
 
-from fastapi import APIRouter, Body, Query, Depends
+from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
@@ -547,8 +547,8 @@ async def batch_update_steps_tree(
                 #     递归收集，口径与 IF 分支子步骤"先删后建"一致；全程同一事务，任一步失败整体回滚。
                 deleted_step_count: int = 0
                 target_case_id: Optional[int] = (
-                    success_case_detail[0].get("case_id") if success_case_detail else None
-                ) or getattr(case_data, "case_id", None)
+                                                    success_case_detail[0].get("case_id") if success_case_detail else None
+                                                ) or getattr(case_data, "case_id", None)
                 if target_case_id:
                     retained_codes: Set[str] = set()
                     retained_ids: Set[int] = set()
@@ -741,7 +741,7 @@ async def debug_tcp_request(
     """
     try:
         data = await StepDebugService.debug_tcp(debug_in, services, scope)
-        return SuccessResponse(message="TCP请求调试完成", data=data)
+        return SuccessResponse(message=data.get("notice") or "TCP请求调试完成", data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -752,7 +752,7 @@ async def debug_tcp_request(
         return FailureResponse(message=e.message, data=e.data)
     except Exception as e:
         LOGGER.error(f"TCP请求调试失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"TCP请求调试失败，异常描述: {e}")
+        return FailureResponse(message="暂时无法调试TCP请求，请稍后重试")
 
 
 @autotest_step.post("/python_code_debugging", summary="调试Python代码", description="调试Python代码步骤")

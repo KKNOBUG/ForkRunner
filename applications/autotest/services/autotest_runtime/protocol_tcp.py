@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import codecs
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import Enum
@@ -9,6 +10,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 import orjson
 
 from common import TcpFrameMode
+from core.exceptions import ParameterException
 from enums import (
     AutoTestReqArgsType,
     AutoTestTcpConnectType,
@@ -124,6 +126,7 @@ def resolve_tcp_frame_config(step: Any) -> TcpFrameConfig:
 
     :param step: 步骤对象（容忍字段缺失，按缺省值处理）
     :return: 帧配置对象
+    :raises ParameterException: 编码不是有效字符集
     """
     radix_value = tcp_enum_value(getattr(step, "tcp_radix", None)) or AutoTestTcpRadix.NONE.value
     datagram_value = tcp_enum_value(getattr(step, "tcp_datagram_length", None)) or AutoTestTcpDatagramLength.EXCLUDE.value
@@ -132,6 +135,11 @@ def resolve_tcp_frame_config(step: Any) -> TcpFrameConfig:
     response_symbol_bytes = parse_response_end_symbol(getattr(step, "tcp_response_end_symbol", None))
     connect_type_value = tcp_enum_value(getattr(step, "tcp_connect_type", None)) or AutoTestTcpConnectType.SHORT.value
     encoding = (getattr(step, "tcp_encoding", None) or "utf-8").strip() or "utf-8"
+    # 编码在推导入口一次性校验，避免收发期LookupError被当作未知异常或静默吞掉
+    try:
+        codecs.lookup(encoding)
+    except LookupError:
+        raise ParameterException(message=f"TCP报文编码[{encoding}]不是有效的字符集, 请检查步骤编码配置")
 
     # 优先级：进制数≠不使用 → 长度前缀（请求结束符保留但不参与成帧）；
     # 否则请求结束符或响应结束符任一配置 → 结束符模式；均未配置 → RAW
